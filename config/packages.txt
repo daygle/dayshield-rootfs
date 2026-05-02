@@ -1,0 +1,56 @@
+# DayShield RootFS — deterministic package list
+# One package name per line.  Blank lines and lines starting with # are ignored.
+#
+# Core system
+base-files
+bash
+busybox-static
+ca-certificates
+coreutils
+dash
+dbus
+e2fsprogs
+iproute2
+iputils-ping
+kmod
+less
+libpam-runtime
+locales
+login
+passwd
+procps
+systemd
+systemd-sysv
+systemd-timesyncd
+udev
+util-linux
+vim-tiny
+wget
+
+# Networking
+iptables
+nftables
+isc-dhcp-client
+netbase
+net-tools
+wireguard
+wireguard-tools
+
+# DNS
+unbound
+dns-root-data
+
+# IDS
+suricata
+
+# Firewall / threat intelligence
+# crowdsec   # available via crowdsec APT repository, added post-build
+
+# TLS / certificates
+openssl
+certbot
+
+# Utilities needed by build scripts
+gzip
+tar
+zstd

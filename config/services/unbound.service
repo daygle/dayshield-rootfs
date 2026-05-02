@@ -1,0 +1,24 @@
+[Unit]
+Description=Unbound DNS Resolver
+Documentation=man:unbound(8)
+After=network-online.target
+Wants=network-online.target
+Before=nss-lookup.target
+
+[Service]
+Type=notify
+ExecStartPre=/usr/sbin/unbound-checkconf
+ExecStart=/usr/sbin/unbound -d
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5s
+RuntimeDirectory=unbound
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/unbound /run/unbound
+PrivateTmp=yes
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_SETUID CAP_SETGID
+
+[Install]
+WantedBy=multi-user.target
