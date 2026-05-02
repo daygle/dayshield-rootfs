@@ -1,0 +1,57 @@
+# /etc/crowdsec/config.yaml — DayShield CrowdSec configuration.
+# Standalone mode (no cloud calls, local decisions only).
+
+common:
+  daemonize: false
+  pid_dir: /run/crowdsec
+  log_media: file
+  log_level: info
+  log_dir: /var/log/crowdsec
+  working_dir: /var/lib/crowdsec
+
+config_paths:
+  config_dir: /etc/crowdsec
+  data_dir: /var/lib/crowdsec/data
+  simulation_path: /etc/crowdsec/simulation.yaml
+  hub_dir: /var/lib/crowdsec/hub
+  index_path: /var/lib/crowdsec/hub/.index.json
+  notification_dir: /etc/crowdsec/notifications
+  plugin_dir: /usr/lib/crowdsec/plugins
+
+crowdsec_service:
+  acquisition_path: /etc/crowdsec/acquis.yaml
+  acquisition_dir: /etc/crowdsec/acquis.d
+  console_context_path: /etc/crowdsec/console/context.yaml
+  parser_routines: 1
+
+cscli:
+  output: human
+  hub_branch: master
+  # Disable cloud enrollment — air-gapped / offline mode
+  allow_anonymous_usage_statistics: false
+
+db_config:
+  db_path: /var/lib/crowdsec/data/crowdsec.db
+  type: sqlite
+  max_open_conns: 10
+  flush:
+    max_items: 5000
+    max_age: 7d
+
+api:
+  client:
+    credentials_path: /etc/crowdsec/local_api_credentials.yaml
+  server:
+    log_level: info
+    listen_uri: 127.0.0.1:8081
+    profiles_path: /etc/crowdsec/profiles.yaml
+    use_forwarded_for_headers: false
+    online_client:
+      # Disable Central API (no cloud) — comment out credentials_path to enable
+      # credentials_path: /etc/crowdsec/online_api_credentials.yaml
+
+prometheus:
+  enabled: true
+  level: full
+  listen_addr: 127.0.0.1
+  listen_port: 6060

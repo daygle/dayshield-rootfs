@@ -1,0 +1,21 @@
+[Unit]
+Description=Suricata Intrusion Detection System
+Documentation=man:suricata(1)
+After=network-online.target nftables.service
+Wants=network-online.target
+
+[Service]
+Type=exec
+EnvironmentFile=-/etc/default/suricata
+ExecStartPre=/usr/bin/suricata -T -c /etc/suricata/suricata.yaml
+ExecStart=/usr/bin/suricata -c /etc/suricata/suricata.yaml --af-packet
+ExecReload=/bin/kill -USR2 $MAINPID
+PIDFile=/run/suricata.pid
+Restart=on-failure
+RestartSec=10s
+LimitNOFILE=65536
+NoNewPrivileges=no
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_SYS_NICE CAP_NET_BIND_SERVICE
+
+[Install]
+WantedBy=multi-user.target

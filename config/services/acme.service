@@ -1,0 +1,15 @@
+[Unit]
+Description=ACME Certificate Renewal (DayShield)
+Documentation=man:certbot(1)
+After=network-online.target
+Wants=network-online.target acme.timer
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/certbot renew --quiet --no-self-upgrade
+ExecStartPost=/bin/sh -c 'cp -r /etc/letsencrypt/live/. /etc/dayshield/certs/'
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
