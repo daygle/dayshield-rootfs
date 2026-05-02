@@ -1,0 +1,40 @@
+# DayShield — hardened sshd_config
+# Restrict SSH to key-based authentication for the admin account.
+
+Port 22
+AddressFamily any
+ListenAddress 0.0.0.0
+
+# ── Authentication ────────────────────────────────────────────────────────────
+# Disable root password login; allow root only with an authorised key
+# (operator can set one after install).
+PermitRootLogin prohibit-password
+
+# Require public-key authentication; disable password auth.
+PubkeyAuthentication yes
+AuthorizedKeysFile .ssh/authorized_keys
+PasswordAuthentication no
+PermitEmptyPasswords no
+
+# Disable PAM challenge-response (keyboard-interactive) fallback.
+ChallengeResponseAuthentication no
+KbdInteractiveAuthentication no
+
+UsePAM yes
+
+# ── Forwarding ────────────────────────────────────────────────────────────────
+AllowAgentForwarding no
+AllowTcpForwarding no
+GatewayPorts no
+X11Forwarding no
+PermitTunnel no
+
+# ── Session hardening ─────────────────────────────────────────────────────────
+LoginGraceTime 30
+MaxAuthTries 3
+MaxSessions 5
+ClientAliveInterval 300
+ClientAliveCountMax 2
+
+# ── Subsystems ────────────────────────────────────────────────────────────────
+Subsystem sftp /usr/lib/openssh/sftp-server

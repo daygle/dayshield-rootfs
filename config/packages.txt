@@ -19,6 +19,7 @@ locales
 login
 passwd
 procps
+sudo
 systemd
 systemd-sysv
 systemd-timesyncd
@@ -35,6 +36,10 @@ netbase
 net-tools
 wireguard
 wireguard-tools
+
+# SSH remote access
+openssh-server
+openssh-sftp-server
 
 # DNS
 unbound

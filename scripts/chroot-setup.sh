@@ -52,6 +52,10 @@ printf '  -> Installing crowdsec.yaml\n'
 mkdir -p "${ROOTFS_DIR}/etc/crowdsec"
 cp "${CONFIG_DIR}/crowdsec.yaml" "${ROOTFS_DIR}/etc/crowdsec/config.yaml"
 
+printf '  -> Installing hardened sshd_config\n'
+mkdir -p "${ROOTFS_DIR}/etc/ssh"
+cp "${CONFIG_DIR}/sshd_config" "${ROOTFS_DIR}/etc/ssh/sshd_config"
+
 # Copy DayShield config/certs placeholders
 printf '  -> Copying config/dayshield skeleton\n'
 cp -r "${CONFIG_DIR}/dayshield/config/." "${ROOTFS_DIR}/etc/dayshield/config/"

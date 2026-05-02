@@ -37,6 +37,7 @@ for svc in \
     unbound.service \
     suricata.service \
     crowdsec.service \
+    ssh.service \
     dayshield.service
 do
     enable_service multi-user.target "${svc}"
