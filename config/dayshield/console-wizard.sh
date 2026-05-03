@@ -108,11 +108,11 @@ dhcp-option=option:router,${LAN_IP}
 dhcp-option=option:dns-server,${LAN_IP}
 EOF
 
-        systemctl enable dnsmasq >/dev/null 2>&1 || true
-        systemctl restart dnsmasq >/dev/null 2>&1 || true
+        systemctl enable kea-dhcp4-server >/dev/null 2>&1 || true
+        systemctl restart kea-dhcp4-server >/dev/null 2>&1 || true
     else
         rm -f "${conf}"
-        systemctl restart dnsmasq >/dev/null 2>&1 || systemctl stop dnsmasq >/dev/null 2>&1 || true
+        systemctl restart kea-dhcp4-server >/dev/null 2>&1 || systemctl stop kea-dhcp4-server >/dev/null 2>&1 || true
     fi
 }
 
