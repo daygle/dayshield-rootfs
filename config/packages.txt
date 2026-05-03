@@ -34,6 +34,10 @@ live-config
 squashfs-tools
 zstd
 
+# Kernel — standard amd64 kernel (non-RT); RT pulled in by live-boot Recommends
+# is explicitly overridden here to ensure QEMU compatibility.
+linux-image-amd64
+
 # Networking
 iptables
 nftables
