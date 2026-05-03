@@ -200,6 +200,8 @@ _ssh_fingerprints() {
 _print_header() {
     local hostname
     hostname="$(hostname -f 2>/dev/null || hostname)"
+    local lan_ip4
+    lan_ip4=""
 
     local mode_line=""
     $LIVE_MODE && mode_line=" — LIVE INSTALLER SESSION"
@@ -228,6 +230,7 @@ _print_header() {
         if [[ -z "${lan_cidr}" ]] && [[ -n "${LAN_IP}" ]]; then
             lan_cidr="${LAN_IP}/${LAN_PREFIX}"
         fi
+        lan_ip4="${lan_cidr%%/*}"
         printf " LAN (%-8s) -> v4: %s\n" "${LAN_IFACE}" "${lan_cidr:-no address}"
     fi
     if [[ -z "${WAN_IFACE}" && -z "${LAN_IFACE}" ]]; then
@@ -236,14 +239,14 @@ _print_header() {
     echo ""
 
     if $LIVE_MODE; then
-        local lan_ip
-        lan_ip="$(_iface_ip4 "${LAN_IFACE:-}" 2>/dev/null | cut -d/ -f1 || true)"
-        if [[ -n "${lan_ip}" ]]; then
-            printf " Web Installer: http://%s:8080\n" "${lan_ip}"
+        if [[ -n "${lan_ip4}" ]] && [[ "${lan_ip4}" != "no address" ]]; then
+            printf " Management URL: http://%s:8080/\n" "${lan_ip4}"
         else
-            echo " Web Installer: assign LAN IP (option 2) to get URL"
+            echo " Management URL: assign LAN IP (option 2) to get URL"
         fi
         echo ""
+    elif [[ -n "${lan_ip4}" ]] && [[ "${lan_ip4}" != "no address" ]]; then
+        printf " LAN Management IP: %s\n\n" "${lan_ip4}"
     fi
 
     _ssh_fingerprints
