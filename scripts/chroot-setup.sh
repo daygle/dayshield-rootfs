@@ -66,6 +66,23 @@ printf '  -> Copying config/dayshield skeleton\n'
 cp -r "${CONFIG_DIR}/dayshield/config/." "${ROOTFS_DIR}/etc/dayshield/config/"
 cp -r "${CONFIG_DIR}/dayshield/certs/."  "${ROOTFS_DIR}/etc/dayshield/certs/"
 
+# ── systemd-networkd-wait-online — don't block boot ──────────────────────────
+# In installer mode there are no configured interfaces yet (wizard hasn't run),
+# so wait-online would hang forever.  On installed systems, only wait for ANY
+# one interface to come up (not all), with a 30-second cap.
+printf '  -> Dropping systemd-networkd-wait-online override\n'
+mkdir -p "${ROOTFS_DIR}/etc/systemd/system/systemd-networkd-wait-online.service.d"
+cat > "${ROOTFS_DIR}/etc/systemd/system/systemd-networkd-wait-online.service.d/dayshield.conf" <<'EOF'
+[Unit]
+# Skip entirely during installer live-boot — interfaces are unconfigured
+ConditionKernelCommandLine=!installer
+
+[Service]
+# On the installed system: wait for any one interface, give up after 30 s
+ExecStart=
+ExecStart=/usr/lib/systemd/systemd-networkd-wait-online --any --timeout=30
+EOF
+
 # ── systemd-networkd — deterministic interface naming ─────────────────────────
 printf '  -> Configuring systemd-networkd\n'
 mkdir -p "${ROOTFS_DIR}/etc/systemd/network"
