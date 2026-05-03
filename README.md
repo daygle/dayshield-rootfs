@@ -1,4 +1,4 @@
-# dayshield-rootfs
+# DayShield RootFS
 
 Deterministic, reproducible Debian-based root filesystem builder for the
 **DayShield Firewall OS**. The output is a `rootfs.tar.zst` archive suitable
@@ -45,7 +45,7 @@ for direct injection into the `dayshield-iso` build pipeline.
 
 | Tool | Version | Purpose |
 |------|---------|---------|
-| `mmdebstrap` | ≥ 0.8.4 | Bootstrap Debian filesystem without root |
+| `mmdebstrap` | ≥ 0.8.4 | Bootstrap deterministic Debian root filesystem |
 | `zstd` | ≥ 1.4 | Compress rootfs archive |
 | `tar` | GNU tar | Create deterministic archive |
 | `systemd-nspawn` | ≥ 247 | (optional) Test rootfs in a container |
@@ -80,7 +80,8 @@ The build pipeline:
 1. **mmdebstrap** bootstraps a minimal Debian `trixie` root with the
    packages listed in `config/packages.txt`. This includes `live-boot` and
    `live-config` so the rootfs can act as a squashfs live-root when booted
-   from the ISO.
+   from the ISO. APT sandboxing is explicitly set to `root` during this step
+   to avoid `_apt` permission warnings in temporary build directories.
 2. **chroot-setup.sh** sets the hostname, creates the DayShield directory
    tree, installs all config files, and configures systemd-networkd.
 3. **install-dayshield-core.sh** installs the `dayshield-core` binary (or a
