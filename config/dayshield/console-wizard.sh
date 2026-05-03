@@ -89,31 +89,90 @@ _default_dhcp_pool() {
 }
 
 _apply_lan_dhcp_config() {
-    local conf="/etc/dnsmasq.d/dayshield-lan.conf"
+    local kea_conf="/etc/kea/kea-dhcp4.conf"
 
     if [[ "${LAN_DHCP_ENABLE}" == "yes" ]] && [[ -n "${LAN_IFACE}" ]] && [[ -n "${LAN_IP}" ]] && [[ -n "${LAN_DHCP_START}" ]] && [[ -n "${LAN_DHCP_END}" ]]; then
-        if ! command -v dnsmasq >/dev/null 2>&1; then
-            echo "  WARNING: dnsmasq is not installed; DHCP server cannot be started."
-            return
-        fi
+        mkdir -p /etc/kea /var/log/kea /var/lib/kea
 
-        mkdir -p /etc/dnsmasq.d
-        cat > "${conf}" <<EOF
-interface=${LAN_IFACE}
-bind-interfaces
-port=0
-dhcp-authoritative
-dhcp-range=${LAN_DHCP_START},${LAN_DHCP_END},${LAN_DHCP_LEASE:-12h}
-dhcp-option=option:router,${LAN_IP}
-dhcp-option=option:dns-server,${LAN_IP}
+        # Compute network address for Kea subnet (e.g. 192.168.1.0/24)
+        local prefix="${LAN_PREFIX:-24}"
+        local o1 o2 o3 o4
+        IFS='.' read -r o1 o2 o3 o4 <<< "${LAN_IP}"
+        local mask=$(( (0xFFFFFFFF << (32 - prefix)) & 0xFFFFFFFF ))
+        local ip_int=$(( (o1 << 24) | (o2 << 16) | (o3 << 8) | o4 ))
+        local net_int=$(( ip_int & mask ))
+        local subnet_addr
+        subnet_addr="$(printf '%d.%d.%d.%d' \
+            "$(( (net_int >> 24) & 255 ))" \
+            "$(( (net_int >> 16) & 255 ))" \
+            "$(( (net_int >> 8)  & 255 ))" \
+            "$(( net_int & 255 ))")"
+        local subnet="${subnet_addr}/${prefix}"
+
+        # Convert lease time (e.g. 12h) to seconds for Kea
+        local lease_str="${LAN_DHCP_LEASE:-12h}"
+        local lease_val="${lease_str%[smhd]}"
+        local lease_unit="${lease_str: -1}"
+        local lease_secs
+        case "${lease_unit}" in
+            h) lease_secs=$(( lease_val * 3600 )) ;;
+            m) lease_secs=$(( lease_val * 60 ))   ;;
+            d) lease_secs=$(( lease_val * 86400 )) ;;
+            s) lease_secs="${lease_val}"           ;;
+            *) lease_secs=43200                    ;;
+        esac
+
+        cat > "${kea_conf}" <<EOF
+{
+  "Dhcp4": {
+    "interfaces-config": {
+      "interfaces": ["${LAN_IFACE}"]
+    },
+    "lease-database": {
+      "type": "memfile",
+      "persist": true,
+      "name": "/var/lib/kea/kea-leases4.csv"
+    },
+    "subnet4": [
+      {
+        "id": 1,
+        "subnet": "${subnet}",
+        "pools": [
+          { "pool": "${LAN_DHCP_START} - ${LAN_DHCP_END}" }
+        ],
+        "valid-lifetime": ${lease_secs},
+        "option-data": [
+          { "name": "routers",             "data": "${LAN_IP}" },
+          { "name": "domain-name-servers", "data": "${LAN_IP}" }
+        ]
+      }
+    ],
+    "loggers": [
+      {
+        "name": "kea-dhcp4",
+        "output_options": [
+          { "output": "/var/log/kea/kea-dhcp4.log" }
+        ],
+        "severity": "INFO"
+      }
+    ]
+  }
+}
 EOF
 
         systemctl enable kea-dhcp4-server >/dev/null 2>&1 || true
         systemctl restart kea-dhcp4-server >/dev/null 2>&1 || true
     else
-        rm -f "${conf}"
-        systemctl restart kea-dhcp4-server >/dev/null 2>&1 || systemctl stop kea-dhcp4-server >/dev/null 2>&1 || true
+        systemctl stop kea-dhcp4-server >/dev/null 2>&1 || true
     fi
+}
+
+_apply_nftables_config() {
+    local nft_ifaces="/etc/dayshield/config/nft-ifaces.conf"
+    mkdir -p /etc/dayshield/config
+    printf 'define WAN_IF = %s\ndefine LAN_IF = %s\n' \
+        "${WAN_IFACE:-lo}" "${LAN_IFACE:-lo}" > "${nft_ifaces}"
+    nft -f /etc/nftables.conf 2>/dev/null || true
 }
 
 _apply_network_config() {
@@ -178,6 +237,7 @@ EOF
     networkctl reload 2>/dev/null || true
     sleep 1
 
+    _apply_nftables_config
     _apply_lan_dhcp_config
 }
 
