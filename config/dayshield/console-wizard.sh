@@ -402,9 +402,8 @@ while true; do
     case "${opt}" in
         0)
             if [[ "${CONSOLE_MODE}" == "boot" ]]; then
-                echo "Opening shell …"
-                export DAYSHIELD_CONSOLE_SUPPRESS=1
-                exec /bin/bash --login
+                echo "Opening shell … (type 'exit' to return to menu)"
+                DAYSHIELD_CONSOLE_SUPPRESS=1 /bin/bash --login
             else
                 echo "Logout requested."
                 exit 0
