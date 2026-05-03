@@ -4,16 +4,16 @@ Documentation=https://github.com/daygle/dayshield
 # Run after the system is fully up so network interfaces are visible
 After=multi-user.target systemd-networkd.service
 Wants=multi-user.target
-# Take exclusive ownership of tty1; prevent getty from also binding it
-Conflicts=getty@tty1.service
+# Take exclusive ownership of the active console; prevent getty collisions.
+Conflicts=getty@tty1.service serial-getty@ttyS0.service
 
 [Service]
 Type=idle
 ExecStart=/usr/local/bin/dayshield-console
-StandardInput=tty
+StandardInput=tty-force
 StandardOutput=tty
 StandardError=tty
-TTYPath=/dev/tty1
+TTYPath=/dev/console
 TTYReset=yes
 TTYVHangup=yes
 TTYVTDisallocate=yes
