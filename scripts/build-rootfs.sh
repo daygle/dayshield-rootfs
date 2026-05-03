@@ -135,6 +135,6 @@ tar \
     -C "${ROOTFS_DIR}" \
     -cf - \
     . \
-    | zstd -T0 -19 -o "${OUTPUT_ABS}"
+    | zstd -T0 -19 --force -o "${OUTPUT_ABS}"
 
 printf '==> Done: %s\n' "${OUTPUT}"
