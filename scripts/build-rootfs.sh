@@ -11,7 +11,7 @@ CONFIG_DIR="${REPO_DIR}/config"
 
 # Defaults
 ARCH="amd64"
-SUITE="bookworm"
+SUITE="trixie"
 OUTPUT="rootfs.tar.zst"
 MIRROR="http://deb.debian.org/debian"
 

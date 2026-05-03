@@ -3,7 +3,7 @@
 
 SHELL        := /bin/sh
 ARCH         ?= amd64
-SUITE        ?= bookworm
+SUITE        ?= trixie
 OUTPUT       ?= rootfs.tar.zst
 MIRROR       ?= http://deb.debian.org/debian
 SCRIPTS_DIR  := scripts

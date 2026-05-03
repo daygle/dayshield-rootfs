@@ -61,23 +61,23 @@ sudo apt-get install mmdebstrap zstd systemd-container
 ## Building the RootFS
 
 ```sh
-# Default: amd64, bookworm, output rootfs.tar.zst
+# Default: amd64, trixie, output rootfs.tar.zst
 make rootfs
 
 # Custom parameters
-make rootfs ARCH=arm64 SUITE=bookworm OUTPUT=dayshield-arm64.tar.zst
+make rootfs ARCH=arm64 SUITE=trixie OUTPUT=dayshield-arm64.tar.zst
 
 # Or invoke the script directly
 ./scripts/build-rootfs.sh \
     --arch amd64 \
-    --suite bookworm \
+    --suite trixie \
     --output rootfs.tar.zst \
     --mirror http://deb.debian.org/debian
 ```
 
 The build pipeline:
 
-1. **mmdebstrap** bootstraps a minimal Debian `bookworm` root with the
+1. **mmdebstrap** bootstraps a minimal Debian `trixie` root with the
    packages listed in `config/packages.txt`. This includes `live-boot` and
    `live-config` so the rootfs can act as a squashfs live-root when booted
    from the ISO.
@@ -165,7 +165,7 @@ make -C ../dayshield-iso iso ROOTFS=$(pwd)/rootfs.tar.zst
 | `mmdebstrap` instead of `debootstrap` | Runs unprivileged; produces more reproducible output |
 | IPv4-only | Reduces attack surface; all services bind only to `127.0.0.1` or IPv4 |
 | `unbound` instead of `systemd-resolved` | Full DNSSEC, local recursion, no stub-listener conflicts |
-| `nftables` instead of `iptables` | Modern, performant, supported by Debian bookworm |
+| `nftables` instead of `iptables` | Modern, performant, supported by Debian trixie |
 | `tar --sort=name --mtime=@0` | Byte-for-byte reproducible archives across builds |
 | Timestamps normalised to epoch 0 | Eliminates build-time variation from file metadata |
 | Cleared `machine-id` | Forces unique ID generation on first boot |

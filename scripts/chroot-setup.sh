@@ -12,6 +12,11 @@ set -eu
 printf '  -> Setting hostname to dayshield\n'
 printf 'dayshield\n' > "${ROOTFS_DIR}/etc/hostname"
 
+# ── Root password (live/installer session only) ───────────────────────────────
+# Default: dayshield  —  must be changed after installation via the web UI.
+printf '  -> Setting default root password\n'
+printf 'root:dayshield\n' | chroot "${ROOTFS_DIR}" chpasswd
+
 # ── /etc/hosts ────────────────────────────────────────────────────────────────
 printf '  -> Writing /etc/hosts (IPv4 only)\n'
 cat > "${ROOTFS_DIR}/etc/hosts" <<'EOF'
