@@ -38,6 +38,10 @@ WAN_PPPOE_PASS=""
 LAN_IFACE=""
 LAN_IP=""
 LAN_PREFIX=""
+LAN_DHCP_ENABLE=""
+LAN_DHCP_START=""
+LAN_DHCP_END=""
+LAN_DHCP_LEASE="12h"
 FIRST_SETUP_DONE=""
 
 _load_state() {
@@ -48,9 +52,11 @@ _load_state() {
 
 _save_state() {
     mkdir -p /etc/dayshield
-    printf 'WAN_IFACE=%q\nWAN_TYPE=%q\nWAN_PPPOE_USER=%q\nWAN_PPPOE_PASS=%q\nLAN_IFACE=%q\nLAN_IP=%q\nLAN_PREFIX=%q\nFIRST_SETUP_DONE=%q\n' \
+    printf 'WAN_IFACE=%q\nWAN_TYPE=%q\nWAN_PPPOE_USER=%q\nWAN_PPPOE_PASS=%q\nLAN_IFACE=%q\nLAN_IP=%q\nLAN_PREFIX=%q\nLAN_DHCP_ENABLE=%q\nLAN_DHCP_START=%q\nLAN_DHCP_END=%q\nLAN_DHCP_LEASE=%q\nFIRST_SETUP_DONE=%q\n' \
         "${WAN_IFACE}" "${WAN_TYPE}" "${WAN_PPPOE_USER}" "${WAN_PPPOE_PASS}" \
-        "${LAN_IFACE}" "${LAN_IP}" "${LAN_PREFIX}" "${FIRST_SETUP_DONE}" \
+        "${LAN_IFACE}" "${LAN_IP}" "${LAN_PREFIX}" \
+        "${LAN_DHCP_ENABLE}" "${LAN_DHCP_START}" "${LAN_DHCP_END}" "${LAN_DHCP_LEASE}" \
+        "${FIRST_SETUP_DONE}" \
         > /etc/dayshield/console-state
 }
 
@@ -73,6 +79,41 @@ _iface_ip4() {
     # Returns CIDR (e.g. 192.168.1.1/24) or empty string
     ip -4 addr show "${1}" 2>/dev/null \
         | awk '/inet / {print $2}' | head -n1
+}
+
+_default_dhcp_pool() {
+    local ip="$1"
+    local o1 o2 o3 o4
+    IFS='.' read -r o1 o2 o3 o4 <<< "${ip}"
+    printf '%s.%s.%s.100 %s.%s.%s.199\n' "${o1}" "${o2}" "${o3}" "${o1}" "${o2}" "${o3}"
+}
+
+_apply_lan_dhcp_config() {
+    local conf="/etc/dnsmasq.d/dayshield-lan.conf"
+
+    if [[ "${LAN_DHCP_ENABLE}" == "yes" ]] && [[ -n "${LAN_IFACE}" ]] && [[ -n "${LAN_IP}" ]] && [[ -n "${LAN_DHCP_START}" ]] && [[ -n "${LAN_DHCP_END}" ]]; then
+        if ! command -v dnsmasq >/dev/null 2>&1; then
+            echo "  WARNING: dnsmasq is not installed; DHCP server cannot be started."
+            return
+        fi
+
+        mkdir -p /etc/dnsmasq.d
+        cat > "${conf}" <<EOF
+interface=${LAN_IFACE}
+bind-interfaces
+port=0
+dhcp-authoritative
+dhcp-range=${LAN_DHCP_START},${LAN_DHCP_END},${LAN_DHCP_LEASE:-12h}
+dhcp-option=option:router,${LAN_IP}
+dhcp-option=option:dns-server,${LAN_IP}
+EOF
+
+        systemctl enable dnsmasq >/dev/null 2>&1 || true
+        systemctl restart dnsmasq >/dev/null 2>&1 || true
+    else
+        rm -f "${conf}"
+        systemctl restart dnsmasq >/dev/null 2>&1 || systemctl stop dnsmasq >/dev/null 2>&1 || true
+    fi
 }
 
 _apply_network_config() {
@@ -136,6 +177,8 @@ EOF
 
     networkctl reload 2>/dev/null || true
     sleep 1
+
+    _apply_lan_dhcp_config
 }
 
 # Write /etc/ppp/peers/wan and restart pppd for PPPoE WAN.
@@ -371,6 +414,65 @@ _set_lan_ip() {
     read -rp "Press Enter to continue …"
 }
 
+_set_lan_dhcp() {
+    clear
+    echo "=== 3) Configure LAN DHCP Server ==="
+    echo ""
+
+    if [[ -z "${LAN_IFACE}" || -z "${LAN_IP}" ]]; then
+        echo "LAN interface/IP not configured. Use options 1 and 2 first."
+        read -rp "Press Enter to continue …"
+        return
+    fi
+
+    local pool_defaults start_default end_default
+    pool_defaults="$(_default_dhcp_pool "${LAN_IP}")"
+    start_default="${LAN_DHCP_START:-${pool_defaults%% *}}"
+    end_default="${LAN_DHCP_END:-${pool_defaults##* }}"
+    local lease_default="${LAN_DHCP_LEASE:-12h}"
+
+    read -rp "Enable LAN DHCP server? [Y/n]: " enable_dhcp
+    if [[ -n "${enable_dhcp}" && "${enable_dhcp,,}" != "y" ]]; then
+        LAN_DHCP_ENABLE="no"
+        LAN_DHCP_START=""
+        LAN_DHCP_END=""
+        _apply_lan_dhcp_config
+        _save_state
+        echo ""
+        echo "LAN DHCP server disabled."
+        echo ""
+        read -rp "Press Enter to continue …"
+        return
+    fi
+
+    read -rp "DHCP range start [${start_default}]: " new_start
+    new_start="${new_start:-${start_default}}"
+    read -rp "DHCP range end   [${end_default}]: " new_end
+    new_end="${new_end:-${end_default}}"
+    read -rp "Lease time [${lease_default}] (e.g. 12h): " new_lease
+    new_lease="${new_lease:-${lease_default}}"
+
+    if ! [[ "${new_start}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || \
+       ! [[ "${new_end}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        echo "Invalid DHCP range."
+        read -rp "Press Enter to continue …"
+        return
+    fi
+
+    LAN_DHCP_ENABLE="yes"
+    LAN_DHCP_START="${new_start}"
+    LAN_DHCP_END="${new_end}"
+    LAN_DHCP_LEASE="${new_lease}"
+
+    _apply_lan_dhcp_config
+    _save_state
+
+    echo ""
+    echo "LAN DHCP enabled on ${LAN_IFACE}: ${LAN_DHCP_START} - ${LAN_DHCP_END} (${LAN_DHCP_LEASE})"
+    echo ""
+    read -rp "Press Enter to continue …"
+}
+
 _change_password() {
     clear
     echo "=== 3) Change Root Password ==="
@@ -399,7 +501,8 @@ _run_guided_setup() {
     echo "This guided setup will walk through:"
     echo "  1) Interface assignment (WAN/LAN)"
     echo "  2) LAN IPv4 address"
-    echo "  3) Root password"
+    echo "  3) LAN DHCP server"
+    echo "  4) Root password"
     echo ""
     read -rp "Start guided setup now? [Y/n]: " start_wiz
     if [[ -n "${start_wiz}" && "${start_wiz,,}" != "y" ]]; then
@@ -433,9 +536,14 @@ _run_guided_setup() {
         done
     fi
 
-    # Step 3: Root password
+    # Step 3: LAN DHCP server
+    if [[ -n "${LAN_IFACE}" && -n "${LAN_IP}" ]]; then
+        _set_lan_dhcp
+    fi
+
+    # Step 4: Root password
     clear
-    echo "=== 3) Change Root Password ==="
+    echo "=== 4) Change Root Password ==="
     echo ""
     echo "Default password is 'dayshield'."
     read -rp "Change root password now? [Y/n]: " do_pw
@@ -473,10 +581,11 @@ while true; do
     fi
     echo "  1) Assign interfaces"
     echo "  2) Set LAN IP address"
-    echo "  3) Change root password"
-    echo "  4) Reboot system"
-    echo "  5) Power off system"
-    echo "  6) Run guided setup wizard"
+    echo "  3) Configure LAN DHCP server"
+    echo "  4) Change root password"
+    echo "  5) Reboot system"
+    echo "  6) Power off system"
+    echo "  7) Run guided setup wizard"
     echo ""
 
     read -rp "Enter an option: " opt
@@ -492,10 +601,11 @@ while true; do
             ;;
         1) _assign_interfaces ;;
         2) _set_lan_ip ;;
-        3) _change_password ;;
-        4) _reboot ;;
-        5) _shutdown ;;
-        6) _run_guided_setup ;;
+        3) _set_lan_dhcp ;;
+        4) _change_password ;;
+        5) _reboot ;;
+        6) _shutdown ;;
+        7) _run_guided_setup ;;
         *) ;;
     esac
 done

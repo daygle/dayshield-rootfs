@@ -42,6 +42,7 @@ linux-image-amd64
 iptables
 nftables
 isc-dhcp-client
+dnsmasq
 netbase
 net-tools
 wireguard
