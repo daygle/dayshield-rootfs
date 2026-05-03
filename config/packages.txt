@@ -43,6 +43,7 @@ iptables
 nftables
 isc-dhcp-client
 kea
+kea-dhcp4-server
 netbase
 net-tools
 wireguard
