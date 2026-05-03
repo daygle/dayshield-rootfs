@@ -19,7 +19,7 @@ for direct injection into the `dayshield-iso` build pipeline.
 │   ├── cleanup.sh               # Strip non-reproducible artefacts
 │   └── verify.sh                # Verify rootfs integrity
 ├── config/
-│   ├── packages.txt             # Deterministic package list
+│   ├── packages.txt             # Deterministic package list (includes live-boot)
 │   ├── services/
 │   │   ├── unbound.service
 │   │   ├── nftables.service
@@ -78,7 +78,9 @@ make rootfs ARCH=arm64 SUITE=bookworm OUTPUT=dayshield-arm64.tar.zst
 The build pipeline:
 
 1. **mmdebstrap** bootstraps a minimal Debian `bookworm` root with the
-   packages listed in `config/packages.txt`.
+   packages listed in `config/packages.txt`. This includes `live-boot` and
+   `live-config` so the rootfs can act as a squashfs live-root when booted
+   from the ISO.
 2. **chroot-setup.sh** sets the hostname, creates the DayShield directory
    tree, installs all config files, and configures systemd-networkd.
 3. **install-dayshield-core.sh** installs the `dayshield-core` binary (or a
