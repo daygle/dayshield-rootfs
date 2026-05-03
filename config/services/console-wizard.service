@@ -1,0 +1,25 @@
+[Unit]
+Description=DayShield Console Wizard
+Documentation=https://github.com/daygle/dayshield
+# Run after the system is fully up so network interfaces are visible
+After=multi-user.target systemd-networkd.service
+Wants=multi-user.target
+# Take exclusive ownership of tty1; prevent getty from also binding it
+Conflicts=getty@tty1.service
+
+[Service]
+Type=idle
+ExecStart=/usr/local/bin/dayshield-console
+StandardInput=tty
+StandardOutput=tty
+StandardError=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+# Restart automatically when the user exits the menu (e.g. Ctrl+C)
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target

@@ -99,9 +99,15 @@ EOF
 # ── Install systemd service units from config ─────────────────────────────────
 printf '  -> Installing service unit files\n'
 mkdir -p "${ROOTFS_DIR}/etc/systemd/system"
-for svc in unbound nftables suricata crowdsec wireguard acme; do
+for svc in unbound nftables suricata crowdsec wireguard acme console-wizard; do
     src="${CONFIG_DIR}/services/${svc}.service"
     if [ -f "${src}" ]; then
         cp "${src}" "${ROOTFS_DIR}/etc/systemd/system/${svc}.service"
     fi
 done
+
+# ── Install DayShield console wizard ─────────────────────────────────────────
+printf '  -> Installing dayshield-console\n'
+cp "${CONFIG_DIR}/dayshield/console-wizard.sh" \
+    "${ROOTFS_DIR}/usr/local/bin/dayshield-console"
+chmod 755 "${ROOTFS_DIR}/usr/local/bin/dayshield-console"

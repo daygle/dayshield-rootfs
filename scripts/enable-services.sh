@@ -38,7 +38,8 @@ for svc in \
     suricata.service \
     crowdsec.service \
     ssh.service \
-    dayshield.service
+    dayshield.service \
+    console-wizard.service
 do
     enable_service multi-user.target "${svc}"
 done
