@@ -35,6 +35,7 @@ WAN_IFACE=""
 LAN_IFACE=""
 LAN_IP=""
 LAN_PREFIX=""
+FIRST_SETUP_DONE=""
 
 _load_state() {
     local state_file="/etc/dayshield/console-state"
@@ -44,8 +45,8 @@ _load_state() {
 
 _save_state() {
     mkdir -p /etc/dayshield
-    printf 'WAN_IFACE=%q\nLAN_IFACE=%q\nLAN_IP=%q\nLAN_PREFIX=%q\n' \
-        "${WAN_IFACE}" "${LAN_IFACE}" "${LAN_IP}" "${LAN_PREFIX}" \
+    printf 'WAN_IFACE=%q\nLAN_IFACE=%q\nLAN_IP=%q\nLAN_PREFIX=%q\nFIRST_SETUP_DONE=%q\n' \
+        "${WAN_IFACE}" "${LAN_IFACE}" "${LAN_IP}" "${LAN_PREFIX}" "${FIRST_SETUP_DONE}" \
         > /etc/dayshield/console-state
 }
 
@@ -310,10 +311,75 @@ _shutdown() {
     [[ "${confirm,,}" == "y" ]] && systemctl poweroff
 }
 
+_run_guided_setup() {
+    clear
+    echo "=== DayShield Initial Setup Wizard ==="
+    echo ""
+    echo "This guided setup will walk through:"
+    echo "  1) Interface assignment (WAN/LAN)"
+    echo "  2) LAN IPv4 address"
+    echo "  3) Root password"
+    echo ""
+    read -rp "Start guided setup now? [Y/n]: " start_wiz
+    if [[ -n "${start_wiz}" && "${start_wiz,,}" != "y" ]]; then
+        return
+    fi
+
+    # Step 1: Interfaces
+    while [[ -z "${LAN_IFACE}" ]]; do
+        _assign_interfaces
+        if [[ -z "${LAN_IFACE}" ]]; then
+            echo ""
+            echo "A LAN interface is required for installer access."
+            read -rp "Assign interfaces again? [Y/n]: " retry_if
+            if [[ -n "${retry_if}" && "${retry_if,,}" != "y" ]]; then
+                break
+            fi
+        fi
+    done
+
+    # Step 2: LAN IP
+    if [[ -n "${LAN_IFACE}" ]]; then
+        while [[ -z "${LAN_IP}" || -z "${LAN_PREFIX}" ]]; do
+            _set_lan_ip
+            if [[ -z "${LAN_IP}" || -z "${LAN_PREFIX}" ]]; then
+                echo ""
+                read -rp "Set LAN IP now? [Y/n]: " retry_ip
+                if [[ -n "${retry_ip}" && "${retry_ip,,}" != "y" ]]; then
+                    break
+                fi
+            fi
+        done
+    fi
+
+    # Step 3: Root password
+    clear
+    echo "=== 3) Change Root Password ==="
+    echo ""
+    echo "Default password is 'dayshield'."
+    read -rp "Change root password now? [Y/n]: " do_pw
+    if [[ -z "${do_pw}" || "${do_pw,,}" == "y" ]]; then
+        _change_password
+    fi
+
+    FIRST_SETUP_DONE="yes"
+    _save_state
+
+    clear
+    _print_header
+    echo "Initial setup wizard completed."
+    echo ""
+    read -rp "Press Enter to continue to the main menu ..."
+}
+
 # ---------------------------------------------------------------------------
 # Main loop
 # ---------------------------------------------------------------------------
 _load_state
+
+if [[ "${CONSOLE_MODE}" == "boot" && "${FIRST_SETUP_DONE}" != "yes" ]]; then
+    _run_guided_setup
+fi
 
 while true; do
     clear
@@ -329,6 +395,7 @@ while true; do
     echo "  3) Change root password"
     echo "  4) Reboot system"
     echo "  5) Power off system"
+    echo "  6) Run guided setup wizard"
     echo ""
 
     read -rp "Enter an option: " opt
@@ -348,6 +415,7 @@ while true; do
         3) _change_password ;;
         4) _reboot ;;
         5) _shutdown ;;
+        6) _run_guided_setup ;;
         *) ;;
     esac
 done

@@ -3,6 +3,7 @@ Description=CrowdSec Security Engine
 Documentation=https://docs.crowdsec.net
 After=network-online.target nftables.service
 Wants=network-online.target
+ConditionKernelCommandLine=!installer
 
 [Service]
 Type=notify

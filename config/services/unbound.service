@@ -4,6 +4,7 @@ Documentation=man:unbound(8)
 After=network-online.target
 Wants=network-online.target
 Before=nss-lookup.target
+ConditionKernelCommandLine=!installer
 
 [Service]
 Type=notify

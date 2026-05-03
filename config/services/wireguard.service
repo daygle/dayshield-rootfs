@@ -4,6 +4,7 @@ Documentation=man:wg(8) man:wg-quick(8)
 After=network-online.target nftables.service
 Wants=network-online.target
 PartOf=network.target
+ConditionKernelCommandLine=!installer
 
 [Service]
 Type=oneshot

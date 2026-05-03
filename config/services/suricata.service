@@ -3,6 +3,7 @@ Description=Suricata Intrusion Detection System
 Documentation=man:suricata(1)
 After=network-online.target nftables.service
 Wants=network-online.target
+ConditionKernelCommandLine=!installer
 
 [Service]
 Type=exec
