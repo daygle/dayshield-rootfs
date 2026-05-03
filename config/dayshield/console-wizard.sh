@@ -32,6 +32,9 @@ fi
 # Persistent state
 # ---------------------------------------------------------------------------
 WAN_IFACE=""
+WAN_TYPE="dhcp"      # dhcp | pppoe
+WAN_PPPOE_USER=""
+WAN_PPPOE_PASS=""
 LAN_IFACE=""
 LAN_IP=""
 LAN_PREFIX=""
@@ -45,8 +48,9 @@ _load_state() {
 
 _save_state() {
     mkdir -p /etc/dayshield
-    printf 'WAN_IFACE=%q\nLAN_IFACE=%q\nLAN_IP=%q\nLAN_PREFIX=%q\nFIRST_SETUP_DONE=%q\n' \
-        "${WAN_IFACE}" "${LAN_IFACE}" "${LAN_IP}" "${LAN_PREFIX}" "${FIRST_SETUP_DONE}" \
+    printf 'WAN_IFACE=%q\nWAN_TYPE=%q\nWAN_PPPOE_USER=%q\nWAN_PPPOE_PASS=%q\nLAN_IFACE=%q\nLAN_IP=%q\nLAN_PREFIX=%q\nFIRST_SETUP_DONE=%q\n' \
+        "${WAN_IFACE}" "${WAN_TYPE}" "${WAN_PPPOE_USER}" "${WAN_PPPOE_PASS}" \
+        "${LAN_IFACE}" "${LAN_IP}" "${LAN_PREFIX}" "${FIRST_SETUP_DONE}" \
         > /etc/dayshield/console-state
 }
 
@@ -78,9 +82,22 @@ _apply_network_config() {
     # Remove the generic placeholder written by chroot-setup
     rm -f "${net_dir}/10-dayshield-eth.network"
 
-    # WAN — DHCP
+    # WAN
     if [[ -n "${WAN_IFACE}" ]]; then
-        cat > "${net_dir}/10-wan.network" <<EOF
+        if [[ "${WAN_TYPE}" == "pppoe" ]]; then
+            # Physical WAN interface: up with no address, PPPoE runs on top
+            cat > "${net_dir}/10-wan.network" <<EOF
+[Match]
+Name=${WAN_IFACE}
+
+[Network]
+DHCP=no
+IPv6AcceptRA=no
+LinkLocalAddressing=no
+EOF
+            _apply_pppoe_config
+        else
+            cat > "${net_dir}/10-wan.network" <<EOF
 [Match]
 Name=${WAN_IFACE}
 
@@ -89,6 +106,7 @@ DHCP=ipv4
 IPv6AcceptRA=no
 LinkLocalAddressing=no
 EOF
+        fi
     fi
 
     # LAN — static IP (if configured)
@@ -118,6 +136,39 @@ EOF
 
     networkctl reload 2>/dev/null || true
     sleep 1
+}
+
+# Write /etc/ppp/peers/wan and restart pppd for PPPoE WAN.
+_apply_pppoe_config() {
+    mkdir -p /etc/ppp
+    # Write peer config — rp-pppoe plugin runs over the physical WAN interface
+    cat > /etc/ppp/peers/wan <<EOF
+plugin rp-pppoe.so ${WAN_IFACE}
+user "${WAN_PPPOE_USER}"
+noauth
+defaultroute
+replacedefaultroute
+hide-password
+persist
+maxfail 0
+holdoff 5
+noipv6
+EOF
+    chmod 600 /etc/ppp/peers/wan
+
+    # Write credentials to chap-secrets and pap-secrets
+    local secrets_line="\"${WAN_PPPOE_USER}\" * \"${WAN_PPPOE_PASS}\" *"
+    printf '%s\n' "${secrets_line}" > /etc/ppp/chap-secrets
+    printf '%s\n' "${secrets_line}" > /etc/ppp/pap-secrets
+    chmod 600 /etc/ppp/chap-secrets /etc/ppp/pap-secrets
+
+    # Stop any existing pppd on this WAN
+    pkill -f "pppd call wan" 2>/dev/null || true
+    sleep 1
+
+    # Start pppd in background
+    pppd call wan &
+    printf '  PPPoE connection started (ppp0 will appear when ISP authenticates)\n'
 }
 
 # ---------------------------------------------------------------------------
@@ -160,9 +211,16 @@ _print_header() {
 
     # Interface status
     if [[ -n "${WAN_IFACE}" ]]; then
-        local wan_cidr
-        wan_cidr="$(_iface_ip4 "${WAN_IFACE}")"
-        printf " WAN (%-8s) -> v4: %s\n" "${WAN_IFACE}" "${wan_cidr:-no address}"
+        local wan_cidr wan_type_label
+        if [[ "${WAN_TYPE}" == "pppoe" ]]; then
+            # For PPPoE, show ppp0 address if up
+            wan_cidr="$(_iface_ip4 ppp0 2>/dev/null || true)"
+            wan_type_label="PPPoE"
+        else
+            wan_cidr="$(_iface_ip4 "${WAN_IFACE}")"
+            wan_type_label="DHCP"
+        fi
+        printf " WAN (%-8s) [%s] -> v4: %s\n" "${WAN_IFACE}" "${wan_type_label}" "${wan_cidr:-no address}"
     fi
     if [[ -n "${LAN_IFACE}" ]]; then
         local lan_cidr
@@ -227,6 +285,26 @@ _assign_interfaces() {
     if [[ "${wan_n}" =~ ^[0-9]+$ ]] && \
        [[ "${wan_n}" -ge 1 ]] && [[ "${wan_n}" -le "${#ifaces[@]}" ]]; then
         WAN_IFACE="${ifaces[$(( wan_n - 1 ))]}"
+
+        # WAN connection type
+        echo ""
+        echo "WAN connection type:"
+        echo "  1) DHCP  (automatic address from ISP)"
+        echo "  2) PPPoE (username/password — DSL/fibre)"
+        read -rp "Select type [1]: " wan_type_n
+        case "${wan_type_n}" in
+            2)
+                WAN_TYPE="pppoe"
+                read -rp "PPPoE username: " WAN_PPPOE_USER
+                read -rsp "PPPoE password: " WAN_PPPOE_PASS
+                echo ""
+                ;;
+            *)
+                WAN_TYPE="dhcp"
+                WAN_PPPOE_USER=""
+                WAN_PPPOE_PASS=""
+                ;;
+        esac
     fi
 
     read -rp "Select LAN interface number (Enter to skip): " lan_n

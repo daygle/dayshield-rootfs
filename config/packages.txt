@@ -46,6 +46,8 @@ netbase
 net-tools
 wireguard
 wireguard-tools
+ppp
+pppoe
 
 # SSH remote access
 openssh-server
