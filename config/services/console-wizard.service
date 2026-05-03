@@ -1,14 +1,17 @@
 [Unit]
-Description=DayShield Console Wizard
+Description=DayShield Console Wizard (Installer Session)
 Documentation=https://github.com/daygle/dayshield
 # Run after the system is fully up so network interfaces are visible
 After=multi-user.target systemd-networkd.service
 Wants=multi-user.target
+# Installer only: on installed system, menu is shown post-login via profile hook.
+ConditionKernelCommandLine=installer
 # Take exclusive ownership of the active console; prevent getty collisions.
 Conflicts=getty@tty1.service serial-getty@ttyS0.service
 
 [Service]
 Type=idle
+Environment=DAYSHIELD_CONSOLE_MODE=boot
 ExecStart=/usr/local/bin/dayshield-console
 StandardInput=tty-force
 StandardOutput=tty
@@ -17,8 +20,7 @@ TTYPath=/dev/console
 TTYReset=yes
 TTYVHangup=yes
 TTYVTDisallocate=yes
-# Restart automatically when the user exits the menu (e.g. Ctrl+C)
-Restart=always
+Restart=on-failure
 RestartSec=1
 
 [Install]

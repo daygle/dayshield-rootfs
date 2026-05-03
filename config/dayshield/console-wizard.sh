@@ -16,6 +16,18 @@ DAYSHIELD_SITE="https://github.com/daygle/dayshield"
 LIVE_MODE=false
 grep -qw 'installer' /proc/cmdline 2>/dev/null && LIVE_MODE=true
 
+# Invocation mode:
+#   boot  - started by systemd service during installer/live boot
+#   login - started from /etc/profile.d after root login
+CONSOLE_MODE="${DAYSHIELD_CONSOLE_MODE:-}"
+if [[ -z "${CONSOLE_MODE}" ]]; then
+    if $LIVE_MODE; then
+        CONSOLE_MODE="boot"
+    else
+        CONSOLE_MODE="login"
+    fi
+fi
+
 # ---------------------------------------------------------------------------
 # Persistent state
 # ---------------------------------------------------------------------------
@@ -307,7 +319,11 @@ while true; do
     clear
     _print_header
 
-    echo "  0) Logout (exit to shell)"
+    if [[ "${CONSOLE_MODE}" == "boot" ]]; then
+        echo "  0) Open shell"
+    else
+        echo "  0) Logout"
+    fi
     echo "  1) Assign interfaces"
     echo "  2) Set LAN IP address"
     echo "  3) Change root password"
@@ -317,7 +333,16 @@ while true; do
 
     read -rp "Enter an option: " opt
     case "${opt}" in
-        0) echo "Exiting to shell …"; exec /bin/bash --login ;;
+        0)
+            if [[ "${CONSOLE_MODE}" == "boot" ]]; then
+                echo "Opening shell …"
+                export DAYSHIELD_CONSOLE_SUPPRESS=1
+                exec /bin/bash --login
+            else
+                echo "Logout requested."
+                exit 0
+            fi
+            ;;
         1) _assign_interfaces ;;
         2) _set_lan_ip ;;
         3) _change_password ;;

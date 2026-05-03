@@ -111,3 +111,10 @@ printf '  -> Installing dayshield-console\n'
 cp "${CONFIG_DIR}/dayshield/console-wizard.sh" \
     "${ROOTFS_DIR}/usr/local/bin/dayshield-console"
 chmod 755 "${ROOTFS_DIR}/usr/local/bin/dayshield-console"
+
+# Post-login menu hook for installed system (root local console logins only)
+printf '  -> Installing console login profile hook\n'
+mkdir -p "${ROOTFS_DIR}/etc/profile.d"
+cp "${CONFIG_DIR}/dayshield/console-login-profile.sh" \
+    "${ROOTFS_DIR}/etc/profile.d/dayshield-console.sh"
+chmod 644 "${ROOTFS_DIR}/etc/profile.d/dayshield-console.sh"
