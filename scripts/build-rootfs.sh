@@ -89,6 +89,7 @@ mmdebstrap \
     --aptopt='Acquire::IPv6::Disable=true' \
     --aptopt='Acquire::Retries=0' \
     --aptopt='Acquire::http::Timeout=10' \
+    --aptopt='APT::Sandbox::User=root' \
     "${SUITE}" \
     "${ROOTFS_DIR}" \
     "${MIRROR}"
