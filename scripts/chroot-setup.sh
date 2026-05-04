@@ -53,6 +53,14 @@ cat > "${ROOTFS_DIR}/etc/systemd/system/systemd-remount-fs.service.d/dayshield-i
 ConditionKernelCommandLine=!installer
 EOF
 
+# Unbound is not required in installer-live mode and may fail before the final
+# installed network plan is applied. Skip it for installer boots.
+mkdir -p "${ROOTFS_DIR}/etc/systemd/system/unbound.service.d"
+cat > "${ROOTFS_DIR}/etc/systemd/system/unbound.service.d/dayshield-installer.conf" <<'EOF'
+[Unit]
+ConditionKernelCommandLine=!installer
+EOF
+
 # ── DayShield directory layout ───────────────────────────────────────────────
 printf '  -> Creating /etc/dayshield directory tree\n'
 mkdir -p \
