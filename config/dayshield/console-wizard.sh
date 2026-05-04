@@ -43,6 +43,22 @@ LAN_DHCP_START=""
 LAN_DHCP_END=""
 LAN_DHCP_LEASE="12h"
 FIRST_SETUP_DONE=""
+ORIG_CONSOLE_LOGLEVEL=""
+
+_console_quiet_enter() {
+    # Keep kernel printk output from disrupting interactive prompts on tty1.
+    if [[ -z "${ORIG_CONSOLE_LOGLEVEL}" ]] && [[ -r /proc/sys/kernel/printk ]] && [[ -w /proc/sys/kernel/printk ]]; then
+        ORIG_CONSOLE_LOGLEVEL="$(awk '{print $1}' /proc/sys/kernel/printk 2>/dev/null || true)"
+        # Show only emergency-level kernel messages on the console.
+        printf '1\n' > /proc/sys/kernel/printk 2>/dev/null || true
+    fi
+}
+
+_console_quiet_exit() {
+    if [[ -n "${ORIG_CONSOLE_LOGLEVEL}" ]] && [[ -w /proc/sys/kernel/printk ]]; then
+        printf '%s\n' "${ORIG_CONSOLE_LOGLEVEL}" > /proc/sys/kernel/printk 2>/dev/null || true
+    fi
+}
 
 _load_state() {
     local state_file="/etc/dayshield/console-state"
@@ -637,6 +653,8 @@ _run_guided_setup() {
 # Main loop
 # ---------------------------------------------------------------------------
 _load_state
+_console_quiet_enter
+trap _console_quiet_exit EXIT INT TERM
 
 if [[ "${CONSOLE_MODE}" == "boot" && "${FIRST_SETUP_DONE}" != "yes" ]]; then
     _run_guided_setup
@@ -665,7 +683,9 @@ while true; do
         0)
             if [[ "${CONSOLE_MODE}" == "boot" ]]; then
                 echo "Opening shell … (type 'exit' to return to menu)"
+                _console_quiet_exit
                 DAYSHIELD_CONSOLE_SUPPRESS=1 /bin/bash --login
+                _console_quiet_enter
             else
                 echo "Logout requested."
                 exit 0
