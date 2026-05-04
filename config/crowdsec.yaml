@@ -1,4 +1,4 @@
-# /etc/crowdsec/config.yaml — DayShield CrowdSec configuration.
+# /etc/crowdsec/config.yaml - DayShield CrowdSec configuration.
 # Standalone mode (no cloud calls, local decisions only).
 
 common:
@@ -27,7 +27,7 @@ crowdsec_service:
 cscli:
   output: human
   hub_branch: master
-  # Disable cloud enrollment — air-gapped / offline mode
+  # Disable cloud enrollment - air-gapped / offline mode
   allow_anonymous_usage_statistics: false
 
 db_config:
@@ -47,7 +47,7 @@ api:
     profiles_path: /etc/crowdsec/profiles.yaml
     use_forwarded_for_headers: false
     online_client:
-      # Disable Central API (no cloud) — comment out credentials_path to enable
+      # Disable Central API (no cloud) - comment out credentials_path to enable
       # credentials_path: /etc/crowdsec/online_api_credentials.yaml
 
 prometheus:

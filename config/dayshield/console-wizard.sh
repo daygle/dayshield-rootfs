@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# dayshield-console — DayShield interactive console management wizard.
+# dayshield-console - DayShield interactive console management wizard.
 #
 # Modelled after the OPNsense/pfSense console menu.  Runs on tty1 in both the
 # live installer session and the installed system.  Live mode is detected
@@ -177,6 +177,7 @@ _apply_nftables_config() {
 
 _apply_network_config() {
     local net_dir="/etc/systemd/network"
+    local old_console_loglevel=""
     mkdir -p "${net_dir}"
 
     # Remove the generic placeholder written by chroot-setup
@@ -209,7 +210,7 @@ EOF
         fi
     fi
 
-    # LAN — static IP (if configured)
+    # LAN - static IP (if configured)
     if [[ -n "${LAN_IFACE}" ]]; then
         if [[ -n "${LAN_IP}" && -n "${LAN_PREFIX}" ]]; then
             cat > "${net_dir}/20-lan.network" <<EOF
@@ -222,7 +223,7 @@ IPv6AcceptRA=no
 LinkLocalAddressing=no
 EOF
         else
-            # LAN assigned but no IP yet — bring it up without an address
+            # LAN assigned but no IP yet - bring it up without an address
             cat > "${net_dir}/20-lan.network" <<EOF
 [Match]
 Name=${LAN_IFACE}
@@ -234,8 +235,19 @@ EOF
         fi
     fi
 
+    # Keep kernel log spam off the interactive wizard console while we reload.
+    # Some drivers/services emit printk lines during interface reconfiguration.
+    if [[ -r /proc/sys/kernel/printk ]] && [[ -w /proc/sys/kernel/printk ]]; then
+        old_console_loglevel="$(awk '{print $1}' /proc/sys/kernel/printk 2>/dev/null || true)"
+        printf '1\n' > /proc/sys/kernel/printk 2>/dev/null || true
+    fi
+
     networkctl reload 2>/dev/null || true
     sleep 1
+
+    if [[ -n "${old_console_loglevel}" ]] && [[ -w /proc/sys/kernel/printk ]]; then
+        printf '%s\n' "${old_console_loglevel}" > /proc/sys/kernel/printk 2>/dev/null || true
+    fi
 
     _apply_nftables_config
     _apply_lan_dhcp_config
@@ -244,7 +256,7 @@ EOF
 # Write /etc/ppp/peers/wan and restart pppd for PPPoE WAN.
 _apply_pppoe_config() {
     mkdir -p /etc/ppp
-    # Write peer config — rp-pppoe plugin runs over the physical WAN interface
+    # Write peer config - rp-pppoe plugin runs over the physical WAN interface
     cat > /etc/ppp/peers/wan <<EOF
 plugin rp-pppoe.so ${WAN_IFACE}
 user "${WAN_PPPOE_USER}"
@@ -307,7 +319,7 @@ _print_header() {
     lan_ip4=""
 
     local mode_line=""
-    $LIVE_MODE && mode_line=" — LIVE INSTALLER SESSION"
+    $LIVE_MODE && mode_line=" - LIVE INSTALLER SESSION"
 
     printf "  DayShield %s (amd64)%s\n" "${DAYSHIELD_VERSION}" "${mode_line}"
     printf "  %s\n" "${DAYSHIELD_SITE}"
@@ -396,7 +408,7 @@ _assign_interfaces() {
         echo ""
         echo "WAN connection type:"
         echo "  1) DHCP  (automatic address from ISP)"
-        echo "  2) PPPoE (username/password — DSL/fibre)"
+        echo "  2) PPPoE (username/password - DSL/fibre)"
         read -rp "Select type [1]: " wan_type_n
         case "${wan_type_n}" in
             2)

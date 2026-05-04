@@ -1,4 +1,4 @@
-# DayShield — hardened sshd_config
+# DayShield - hardened sshd_config
 # Restrict SSH to key-based authentication for the admin account.
 
 Port 22

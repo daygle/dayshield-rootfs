@@ -1,6 +1,6 @@
 %YAML 1.1
 ---
-# /etc/suricata/suricata.yaml — DayShield Suricata IDS configuration.
+# /etc/suricata/suricata.yaml - DayShield Suricata IDS configuration.
 # IPv4 only, inline mode via nfqueue.
 
 vars:

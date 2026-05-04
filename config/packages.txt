@@ -70,6 +70,8 @@ openssl
 certbot
 
 # Utilities needed by build scripts
+gdisk
+parted
 gzip
 tar
 zstd
