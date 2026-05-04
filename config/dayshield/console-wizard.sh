@@ -1075,10 +1075,12 @@ EOF
 
     # Unbound DNS
     mkdir -p "${target}/etc/unbound" "${target}/var/lib/unbound"
+    # Pre-seed DNSSEC trust anchor (avoids first-boot Unbound failure)
+    chroot "${target}" /usr/sbin/unbound-anchor -a /var/lib/unbound/root.key >/dev/null 2>&1 || true
+    chroot "${target}" chown -R unbound:unbound /var/lib/unbound 2>/dev/null || true
     cat > "${target}/etc/unbound/unbound.conf" <<EOF
 server:
-  interface: 127.0.0.1
-  interface: ${lan_ip}
+  interface: 0.0.0.0
   port: 53
   do-ip4: yes
   do-ip6: no
