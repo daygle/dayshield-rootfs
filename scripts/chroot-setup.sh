@@ -120,32 +120,6 @@ ExecStart=
 ExecStart=/usr/lib/systemd/systemd-networkd-wait-online --any --timeout=30
 EOF
 
-# ── systemd-networkd — deterministic interface naming ─────────────────────────
-printf '  -> Configuring systemd-networkd\n'
-mkdir -p "${ROOTFS_DIR}/etc/systemd/network"
-# Match the legacy ethX naming used by QEMU/KVM and some bare-metal NICs.
-cat > "${ROOTFS_DIR}/etc/systemd/network/10-dayshield-eth.network" <<'EOF'
-[Match]
-Name=eth0
-
-[Network]
-DHCP=ipv4
-IPv6AcceptRA=no
-LinkLocalAddressing=no
-EOF
-# Match predictable interface names (enp*, ens*, enx*, …) used by udev on
-# modern kernels.  Without this the installed system has no matching network
-# config and systemd-networkd-wait-online stalls forever.
-cat > "${ROOTFS_DIR}/etc/systemd/network/10-dayshield-en.network" <<'EOF'
-[Match]
-Name=en*
-
-[Network]
-DHCP=ipv4
-IPv6AcceptRA=no
-LinkLocalAddressing=no
-EOF
-
 # ── Disable IPv6 system-wide via sysctl ───────────────────────────────────────
 printf '  -> Disabling IPv6 in sysctl\n'
 cat > "${ROOTFS_DIR}/etc/sysctl.d/99-disable-ipv6.conf" <<'EOF'
