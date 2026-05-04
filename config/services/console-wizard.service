@@ -6,6 +6,8 @@ After=multi-user.target systemd-networkd.service
 Wants=multi-user.target
 # Installer only: on installed system, menu is shown post-login via profile hook.
 ConditionKernelCommandLine=installer
+# Avoid duplicate setup flows: if web installer assets are present, use that UI.
+ConditionPathExists=!/installer-ui/index.html
 # Take exclusive ownership of the active console; prevent getty collisions.
 Conflicts=getty@tty1.service serial-getty@ttyS0.service
 

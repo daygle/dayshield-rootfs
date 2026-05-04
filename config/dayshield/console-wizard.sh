@@ -328,6 +328,14 @@ _ssh_fingerprints() {
 # ---------------------------------------------------------------------------
 # Header / status display
 # ---------------------------------------------------------------------------
+_hr() {
+    printf '  ------------------------------------------------------------\n'
+}
+
+_kv() {
+    printf '  %-20s %s\n' "$1" "$2"
+}
+
 _print_header() {
     local hostname
     hostname="$(hostname -f 2>/dev/null || hostname)"
@@ -337,10 +345,12 @@ _print_header() {
     local mode_line=""
     $LIVE_MODE && mode_line=" - LIVE INSTALLER SESSION"
 
-    printf "  DayShield %s (amd64)%s\n" "${DAYSHIELD_VERSION}" "${mode_line}"
-    printf "  %s\n" "${DAYSHIELD_SITE}"
-    printf "  Hostname: %s\n" "${hostname}"
-    echo ""
+    _hr
+    printf "  DayShield Console  v%s%s\n" "${DAYSHIELD_VERSION}" "${mode_line}"
+    _kv "Site" "${DAYSHIELD_SITE}"
+    _kv "Hostname" "${hostname}"
+    _hr
+    printf "  Network Summary\n"
 
     # Interface status
     if [[ -n "${WAN_IFACE}" ]]; then
@@ -353,7 +363,7 @@ _print_header() {
             wan_cidr="$(_iface_ip4 "${WAN_IFACE}")"
             wan_type_label="DHCP"
         fi
-        printf " WAN (%-8s) [%s] -> v4: %s\n" "${WAN_IFACE}" "${wan_type_label}" "${wan_cidr:-no address}"
+        _kv "WAN ${WAN_IFACE} (${wan_type_label})" "${wan_cidr:-no address}"
     fi
     if [[ -n "${LAN_IFACE}" ]]; then
         local lan_cidr
@@ -362,25 +372,28 @@ _print_header() {
             lan_cidr="${LAN_IP}/${LAN_PREFIX}"
         fi
         lan_ip4="${lan_cidr%%/*}"
-        printf " LAN (%-8s) -> v4: %s\n" "${LAN_IFACE}" "${lan_cidr:-no address}"
+        _kv "LAN ${LAN_IFACE}" "${lan_cidr:-no address}"
     fi
     if [[ -z "${WAN_IFACE}" && -z "${LAN_IFACE}" ]]; then
-        echo " (no interfaces assigned)"
+        _kv "Interfaces" "not assigned"
     fi
     echo ""
 
     if $LIVE_MODE; then
         if [[ -n "${lan_ip4}" ]] && [[ "${lan_ip4}" != "no address" ]]; then
-            printf " Management URL: http://%s:8080/\n" "${lan_ip4}"
+            _kv "Web Installer" "http://${lan_ip4}:8080/"
         else
-            echo " Management URL: assign LAN IP (option 2) to get URL"
+            _kv "Web Installer" "set LAN IP (option 2) to expose URL"
         fi
         echo ""
     elif [[ -n "${lan_ip4}" ]] && [[ "${lan_ip4}" != "no address" ]]; then
-        printf " LAN Management IP: %s\n\n" "${lan_ip4}"
+        _kv "LAN Management IP" "${lan_ip4}"
+        echo ""
     fi
 
+    printf "  SSH Host Key Fingerprints\n"
     _ssh_fingerprints
+    _hr
     echo ""
 }
 
@@ -389,7 +402,8 @@ _print_header() {
 # ---------------------------------------------------------------------------
 _assign_interfaces() {
     clear
-    echo "=== 1) Assign Interfaces ==="
+    echo "DayShield Console - Assign Interfaces"
+    echo "--------------------------------------"
     echo ""
 
     local ifaces=()
@@ -403,7 +417,7 @@ _assign_interfaces() {
         return
     fi
 
-    echo "Available interfaces:"
+    echo "Detected interfaces:"
     local i=1
     for iface in "${ifaces[@]}"; do
         local ip4
@@ -423,8 +437,8 @@ _assign_interfaces() {
         # WAN connection type
         echo ""
         echo "WAN connection type:"
-        echo "  1) DHCP  (automatic address from ISP)"
-        echo "  2) PPPoE (username/password - DSL/fibre)"
+        echo "  1) DHCP   - automatic address from ISP"
+        echo "  2) PPPoE  - username/password"
         read -rp "Select type [1]: " wan_type_n
         case "${wan_type_n}" in
             2)
@@ -451,15 +465,17 @@ _assign_interfaces() {
     _save_state
 
     echo ""
-    echo "  WAN : ${WAN_IFACE:-not assigned}"
-    echo "  LAN : ${LAN_IFACE:-not assigned}"
+    echo "Updated assignments:"
+    echo "  WAN: ${WAN_IFACE:-not assigned}"
+    echo "  LAN: ${LAN_IFACE:-not assigned}"
     echo ""
     read -rp "Press Enter to continue …"
 }
 
 _set_lan_ip() {
     clear
-    echo "=== 2) Set LAN IP Address ==="
+    echo "DayShield Console - Set LAN IP Address"
+    echo "---------------------------------------"
     echo ""
 
     if [[ -z "${LAN_IFACE}" ]]; then
@@ -504,7 +520,8 @@ _set_lan_ip() {
 
 _set_lan_dhcp() {
     clear
-    echo "=== 3) Configure LAN DHCP Server ==="
+    echo "DayShield Console - Configure LAN DHCP"
+    echo "---------------------------------------"
     echo ""
 
     if [[ -z "${LAN_IFACE}" || -z "${LAN_IP}" ]]; then
@@ -563,7 +580,8 @@ _set_lan_dhcp() {
 
 _change_password() {
     clear
-    echo "=== 3) Change Root Password ==="
+    echo "DayShield Console - Change Root Password"
+    echo "-----------------------------------------"
     echo ""
     passwd root
     echo ""
@@ -584,7 +602,8 @@ _shutdown() {
 
 _run_guided_setup() {
     clear
-    echo "=== DayShield Initial Setup Wizard ==="
+    echo "DayShield Initial Setup Wizard"
+    echo "------------------------------"
     echo ""
     echo "This guided setup will walk through:"
     echo "  1) Interface assignment (WAN/LAN)"
@@ -631,7 +650,8 @@ _run_guided_setup() {
 
     # Step 4: Root password
     clear
-    echo "=== 4) Change Root Password ==="
+    echo "Step 4 - Change Root Password"
+    echo "-----------------------------"
     echo ""
     echo "Default password is 'dayshield'."
     read -rp "Change root password now? [Y/n]: " do_pw
@@ -664,21 +684,23 @@ while true; do
     clear
     _print_header
 
+    echo "  Main Menu"
+    echo ""
     if [[ "${CONSOLE_MODE}" == "boot" ]]; then
-        echo "  0) Open shell"
+        echo "  [0] Open shell                 - local rescue shell"
     else
-        echo "  0) Logout"
+        echo "  [0] Logout                     - return to login prompt"
     fi
-    echo "  1) Assign interfaces"
-    echo "  2) Set LAN IP address"
-    echo "  3) Configure LAN DHCP server"
-    echo "  4) Change root password"
-    echo "  5) Reboot system"
-    echo "  6) Power off system"
-    echo "  7) Run guided setup wizard"
+    echo "  [1] Assign interfaces          - choose WAN and LAN adapters"
+    echo "  [2] Set LAN IP address         - configure LAN gateway address"
+    echo "  [3] Configure LAN DHCP server  - client address pool"
+    echo "  [4] Change root password       - local console/root password"
+    echo "  [5] Reboot system"
+    echo "  [6] Power off system"
+    echo "  [7] Run guided setup wizard"
     echo ""
 
-    read -rp "Enter an option: " opt
+    read -rp "Select option [0-7]: " opt
     case "${opt}" in
         0)
             if [[ "${CONSOLE_MODE}" == "boot" ]]; then
