@@ -45,6 +45,15 @@ cat > "${ROOTFS_DIR}/etc/initramfs-tools/conf.d/dayshield-rootfs.conf" <<'EOF'
 ROOTFSTYPE=ext4
 EOF
 
+# Skip remount-fs in installer live-boot mode. The live root uses
+# overlay/squashfs semantics and the placeholder fstab labels are intended for
+# the installed target where the installer writes final UUID-based entries.
+mkdir -p "${ROOTFS_DIR}/etc/systemd/system/systemd-remount-fs.service.d"
+cat > "${ROOTFS_DIR}/etc/systemd/system/systemd-remount-fs.service.d/dayshield-installer.conf" <<'EOF'
+[Unit]
+ConditionKernelCommandLine=!installer
+EOF
+
 # ── DayShield directory layout ───────────────────────────────────────────────
 printf '  -> Creating /etc/dayshield directory tree\n'
 mkdir -p \
