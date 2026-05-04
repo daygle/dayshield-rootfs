@@ -24,6 +24,20 @@ cat > "${ROOTFS_DIR}/etc/hosts" <<'EOF'
 127.0.1.1   dayshield
 EOF
 
+# ── /etc/fstab ────────────────────────────────────────────────────────────────
+# A minimal fstab must exist so systemd-remount-fs.service and local-fs.target
+# can operate correctly on the installed system.  The installer is expected to
+# replace the LABEL values with real partition UUIDs after partitioning.
+printf '  -> Writing placeholder /etc/fstab\n'
+cat > "${ROOTFS_DIR}/etc/fstab" <<'EOF'
+# /etc/fstab: static file system information.
+# NOTE: The installer replaces these LABEL entries with UUID= lines.
+#
+# <file system>         <mount point>  <type>  <options>          <dump>  <pass>
+LABEL=dayshield-root    /              ext4    errors=remount-ro  0       1
+LABEL=dayshield-boot    /boot          vfat    umask=0077         0       2
+EOF
+
 # ── DayShield directory layout ───────────────────────────────────────────────
 printf '  -> Creating /etc/dayshield directory tree\n'
 mkdir -p \
@@ -86,9 +100,22 @@ EOF
 # ── systemd-networkd — deterministic interface naming ─────────────────────────
 printf '  -> Configuring systemd-networkd\n'
 mkdir -p "${ROOTFS_DIR}/etc/systemd/network"
+# Match the legacy ethX naming used by QEMU/KVM and some bare-metal NICs.
 cat > "${ROOTFS_DIR}/etc/systemd/network/10-dayshield-eth.network" <<'EOF'
 [Match]
 Name=eth0
+
+[Network]
+DHCP=ipv4
+IPv6AcceptRA=no
+LinkLocalAddressing=no
+EOF
+# Match predictable interface names (enp*, ens*, enx*, …) used by udev on
+# modern kernels.  Without this the installed system has no matching network
+# config and systemd-networkd-wait-online stalls forever.
+cat > "${ROOTFS_DIR}/etc/systemd/network/10-dayshield-en.network" <<'EOF'
+[Match]
+Name=en*
 
 [Network]
 DHCP=ipv4

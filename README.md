@@ -78,20 +78,24 @@ make rootfs ARCH=arm64 SUITE=trixie OUTPUT=dayshield-arm64.tar.zst
 The build pipeline:
 
 1. **mmdebstrap** bootstraps a minimal Debian `trixie` root with the
-   packages listed in `config/packages.txt`. This includes `live-boot` and
-   `live-config` so the rootfs can act as a squashfs live-root when booted
-   from the ISO. APT sandboxing is explicitly set to `root` during this step
-   to avoid `_apt` permission warnings in temporary build directories.
-2. **chroot-setup.sh** sets the hostname, creates the DayShield directory
-   tree, installs all config files, and configures systemd-networkd.
+   packages listed in `config/packages.txt`.  APT sandboxing is explicitly set
+   to `root` during this step to avoid `_apt` permission warnings in temporary
+   build directories.
+2. **chroot-setup.sh** sets the hostname, writes a placeholder `/etc/fstab`,
+   creates the DayShield directory tree, installs all config files, and
+   configures systemd-networkd (matching both legacy `eth0` and predictable
+   `en*` interface names).
 3. **install-dayshield-core.sh** installs the `dayshield-core` binary (or a
    placeholder if the binary is absent) and its systemd unit.
 4. **enable-services.sh** creates `wants/` symlinks for all required services
    and masks `systemd-resolved` (replaced by unbound).
 5. **harden-ipv4.sh** disables IPv6 at every layer: sysctl, kernel module
    blacklist, `/etc/hosts`, `/etc/resolv.conf`, nftables, and unbound.
-6. **cleanup.sh** removes APT caches, clears `machine-id`, zeroes logs, and
-   normalises all timestamps to epoch 0 for reproducibility.
+   The initramfs is then (re)generated via `update-initramfs` with proc/dev/sys
+   bind-mounted into the chroot so module dependency resolution succeeds.
+6. **cleanup.sh** removes APT caches, clears `machine-id`, removes any
+   live-boot artifacts, zeroes logs, and normalises all timestamps to epoch 0
+   for reproducibility.
 7. The finished tree is archived with `tar --sort=name --mtime=@0` and
    compressed with `zstd -19` to produce the final `rootfs.tar.zst`.
 
@@ -128,6 +132,9 @@ The script checks:
 - All required directories exist
 - All required systemd service units are present
 - `dayshield-core` binary exists and is executable
+- Kernel image (`vmlinuz-*`) and initramfs (`initrd.img-*`) are present in `/boot`
+- `/etc/fstab` exists and contains a root (`/`) mount entry
+- `live-boot` and `live-config` are **not** installed (they must not be in the installed rootfs)
 - IPv6 is fully disabled (sysctl, module blacklist, `/etc/hosts`)
 - `nftables.conf` contains no `ip6`/`inet6` tables
 - `unbound.conf` has `do-ip6: no`
@@ -157,6 +164,19 @@ via the `ROOTFS` variable (or equivalent) in the ISO build configuration:
 make -C ../dayshield-iso iso ROOTFS=$(pwd)/rootfs.tar.zst
 ```
 
+> **Important — live-boot overlay:** `live-boot` and `live-config` are **not**
+> included in `rootfs.tar.zst`.  Embedding them in the base rootfs causes their
+> initramfs hooks to run on the installed system, where they stall boot waiting
+> for a squashfs live medium.  The `dayshield-iso` pipeline must install
+> `live-boot`, `live-config`, and `squashfs-tools` as an additional layer on
+> top of the extracted rootfs before building the squashfs image, e.g.:
+>
+> ```sh
+> # After extracting rootfs.tar.zst into ${SQUASHFS_ROOT}:
+> apt-get -o Dir="${SQUASHFS_ROOT}" install -y live-boot live-config squashfs-tools
+> # …then mksquashfs ${SQUASHFS_ROOT} filesystem.squashfs
+> ```
+
 ---
 
 ## Design decisions
@@ -170,3 +190,6 @@ make -C ../dayshield-iso iso ROOTFS=$(pwd)/rootfs.tar.zst
 | `tar --sort=name --mtime=@0` | Byte-for-byte reproducible archives across builds |
 | Timestamps normalised to epoch 0 | Eliminates build-time variation from file metadata |
 | Cleared `machine-id` | Forces unique ID generation on first boot |
+| `live-boot`/`live-config` excluded from base rootfs | Prevents live initramfs hooks from stalling the installed-system boot; injected by `dayshield-iso` as a separate layer for squashfs-live operation only |
+| Placeholder `/etc/fstab` | `systemd-remount-fs.service` and `local-fs.target` require a valid fstab; installer overwrites with real UUID entries |
+| Two networkd configs (`eth0` + `en*`) | Covers both legacy QEMU/KVM interface names and predictable udev names used by modern kernels; without the `en*` config `systemd-networkd-wait-online` stalls forever on physical hardware |

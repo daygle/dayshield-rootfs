@@ -15,6 +15,49 @@ fail() { printf '  [FAIL] %s\n' "$*" >&2; FAIL=$((FAIL + 1)); }
 
 banner() { printf '\n==> %s\n' "$*"; }
 
+# ── Boot files ────────────────────────────────────────────────────────────────
+banner "Boot files"
+if ls "${ROOTFS_DIR}"/boot/vmlinuz-* >/dev/null 2>&1; then
+    ok "kernel image found in /boot (vmlinuz-*)"
+else
+    fail "no kernel image in /boot — check that linux-image-amd64 was installed"
+fi
+if ls "${ROOTFS_DIR}"/boot/initrd.img-* >/dev/null 2>&1; then
+    ok "initramfs found in /boot (initrd.img-*)"
+else
+    fail "no initramfs in /boot — run update-initramfs inside the chroot"
+fi
+
+# ── /etc/fstab ────────────────────────────────────────────────────────────────
+banner "/etc/fstab"
+if [ -f "${ROOTFS_DIR}/etc/fstab" ]; then
+    ok "/etc/fstab exists"
+    if grep -qE '^[^#].*[[:space:]]+/[[:space:]]' "${ROOTFS_DIR}/etc/fstab"; then
+        ok "/etc/fstab has a root (/) mount entry"
+    else
+        fail "/etc/fstab is missing a root (/) mount entry — systemd will hang at local-fs.target"
+    fi
+else
+    fail "missing /etc/fstab — systemd-remount-fs.service will fail and hang boot"
+fi
+
+# ── live-boot absent ──────────────────────────────────────────────────────────
+# live-boot and live-config must NOT be installed in the rootfs that is
+# written to disk.  Their initramfs hooks stall the installed system while
+# searching for a live squashfs medium.  They are injected by dayshield-iso
+# as a separate squashfs overlay for live-boot operation only.
+banner "live-boot absent from installed rootfs"
+if [ -f "${ROOTFS_DIR}/var/lib/dpkg/info/live-boot.list" ]; then
+    fail "live-boot is installed — it will embed live hooks in the initramfs and stall boot"
+else
+    ok "live-boot not installed"
+fi
+if [ -f "${ROOTFS_DIR}/var/lib/dpkg/info/live-config.list" ]; then
+    fail "live-config is installed — its systemd units interfere with installed-system startup"
+else
+    ok "live-config not installed"
+fi
+
 # ── Required directories ──────────────────────────────────────────────────────
 banner "Required directories"
 for dir in \
