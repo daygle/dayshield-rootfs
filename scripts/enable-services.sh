@@ -32,7 +32,6 @@ enable_service() {
 
 # ── Multi-user services ───────────────────────────────────────────────────────
 for svc in \
-    systemd-networkd.service \
     nftables.service \
     unbound.service \
     suricata.service \
@@ -43,24 +42,6 @@ do
     enable_service multi-user.target "${svc}"
 done
 
-# ── Network-online services ───────────────────────────────────────────────────
-for svc in \
-    systemd-networkd.service \
-    systemd-networkd-wait-online.service
-do
-    enable_service network-online.target "${svc}" 2>/dev/null || true
-done
-
 # Optional services (acme, wireguard, crowdsec) are intentionally not enabled
 # by default. They should be enabled by DayShield only after valid runtime
 # configuration exists to avoid noisy failed states on first boot.
-
-# ── Disable systemd-resolved in favour of unbound ─────────────────────────────
-printf '  -> Masking systemd-resolved (replaced by unbound)\n'
-mkdir -p "${ROOTFS_DIR}/etc/systemd/system"
-ln -sf /dev/null \
-    "${ROOTFS_DIR}/etc/systemd/system/systemd-resolved.service" 2>/dev/null || true
-
-# ── Point /etc/resolv.conf at localhost (unbound) ─────────────────────────────
-printf '  -> Pointing /etc/resolv.conf at 127.0.0.1\n'
-printf 'nameserver 127.0.0.1\noptions edns0\n' > "${ROOTFS_DIR}/etc/resolv.conf"
