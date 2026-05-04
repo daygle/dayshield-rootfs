@@ -38,6 +38,13 @@ LABEL=dayshield-root    /              ext4    errors=remount-ro  0       1
 LABEL=dayshield-boot    /boot          vfat    umask=0077         0       2
 EOF
 
+# Help initramfs-tools resolve the root fs type while building inside chroot.
+# The installer always formats root as ext4.
+mkdir -p "${ROOTFS_DIR}/etc/initramfs-tools/conf.d"
+cat > "${ROOTFS_DIR}/etc/initramfs-tools/conf.d/dayshield-rootfs.conf" <<'EOF'
+ROOTFSTYPE=ext4
+EOF
+
 # ── DayShield directory layout ───────────────────────────────────────────────
 printf '  -> Creating /etc/dayshield directory tree\n'
 mkdir -p \

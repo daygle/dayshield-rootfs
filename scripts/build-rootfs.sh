@@ -143,7 +143,7 @@ env ROOTFS_DIR="${ROOTFS_DIR}" \
 printf '==> Step 5b: generating initramfs\n'
 if [ -d "${ROOTFS_DIR}/boot" ]; then
     chroot_mount
-    if chroot "${ROOTFS_DIR}" update-initramfs -c -k all; then
+    if chroot "${ROOTFS_DIR}" /usr/bin/env LC_ALL=C LANG=C LANGUAGE=C update-initramfs -c -k all; then
         printf '    Initramfs generated successfully\n'
     else
         printf '    WARNING: initramfs generation may have failed; checking for /boot/initrd.img*\n'
