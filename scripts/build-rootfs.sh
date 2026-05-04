@@ -144,6 +144,7 @@ printf '==> Step 5b: generating initramfs\n'
 if [ -d "${ROOTFS_DIR}/boot" ]; then
     FSTAB_PATH="${ROOTFS_DIR}/etc/fstab"
     FSTAB_BACKUP="${ROOTFS_DIR}/etc/fstab.dayshield-build.bak"
+    INITRAMFS_LOG="${BUILD_DIR}/update-initramfs.log"
 
     # initramfs-tools fsck hook can warn when root is a placeholder LABEL.
     # Use a build-only fstab root entry to keep logs clean, then restore.
@@ -156,9 +157,11 @@ EOF
     fi
 
     chroot_mount
-    if chroot "${ROOTFS_DIR}" /usr/bin/env LC_ALL=C LANG=C LANGUAGE=C update-initramfs -c -k all; then
+    if chroot "${ROOTFS_DIR}" /usr/bin/env LC_ALL=C LANG=C LANGUAGE=C update-initramfs -c -k all >"${INITRAMFS_LOG}" 2>&1; then
+        sed "/Couldn't identify type of root file system .* for fsck hook/d" "${INITRAMFS_LOG}"
         printf '    Initramfs generated successfully\n'
     else
+        sed "/Couldn't identify type of root file system .* for fsck hook/d" "${INITRAMFS_LOG}" >&2
         printf '    WARNING: initramfs generation may have failed; checking for /boot/initrd.img*\n'
         if ! ls "${ROOTFS_DIR}"/boot/initrd.img* >/dev/null 2>&1; then
             chroot_umount
