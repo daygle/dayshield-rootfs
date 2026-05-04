@@ -10,33 +10,33 @@ for direct injection into the `dayshield-iso` build pipeline.
 
 ```
 .
-├── scripts/
-│   ├── build-rootfs.sh          # Main entrypoint — mmdebstrap pipeline
-│   ├── chroot-setup.sh          # Configure chroot environment
-│   ├── install-dayshield-core.sh# Install dayshield-core binary & service
-│   ├── enable-services.sh       # Enable systemd services
-│   ├── harden-ipv4.sh           # IPv4-only hardening
-│   ├── cleanup.sh               # Strip non-reproducible artefacts
-│   └── verify.sh                # Verify rootfs integrity
-├── config/
-│   ├── packages.txt             # Deterministic package list (includes live-boot)
-│   ├── services/
-│   │   ├── unbound.service
-│   │   ├── nftables.service
-│   │   ├── suricata.service
-│   │   ├── crowdsec.service
-│   │   ├── wireguard.service
-│   │   └── acme.service
-│   ├── sysctl.conf              # Kernel hardening parameters
-│   ├── nftables.conf            # IPv4-only firewall ruleset
-│   ├── unbound.conf             # Local recursive DNS resolver
-│   ├── suricata.yaml            # Intrusion Detection System config
-│   ├── crowdsec.yaml            # CrowdSec security engine config
-│   └── dayshield/
-│       ├── config/              # DayShield runtime config skeleton
-│       └── certs/               # TLS certificate placeholder
-├── Makefile
-└── README.md
+|-- scripts/
+|   |-- build-rootfs.sh          # Main entrypoint - mmdebstrap pipeline
+|   |-- chroot-setup.sh          # Configure chroot environment
+|   |-- install-dayshield-core.sh# Install dayshield-core binary & service
+|   |-- enable-services.sh       # Enable systemd services
+|   |-- harden-ipv4.sh           # IPv4-only hardening
+|   |-- cleanup.sh               # Strip non-reproducible artifacts
+|   `-- verify.sh                # Verify rootfs integrity
+|-- config/
+|   |-- packages.txt             # Deterministic package list (includes live-boot)
+|   |-- services/
+|   |   |-- unbound.service
+|   |   |-- nftables.service
+|   |   |-- suricata.service
+|   |   |-- crowdsec.service
+|   |   |-- wireguard.service
+|   |   `-- acme.service
+|   |-- sysctl.conf              # Kernel hardening parameters
+|   |-- nftables.conf            # IPv4-only firewall ruleset
+|   |-- unbound.conf             # Local recursive DNS resolver
+|   |-- suricata.yaml            # Intrusion Detection System config
+|   |-- crowdsec.yaml            # CrowdSec security engine config
+|   `-- dayshield/
+|       |-- config/              # DayShield runtime config skeleton
+|       `-- certs/               # TLS certificate placeholder
+|-- Makefile
+`-- README.md
 ```
 
 ---
@@ -45,10 +45,10 @@ for direct injection into the `dayshield-iso` build pipeline.
 
 | Tool | Version | Purpose |
 |------|---------|---------|
-| `mmdebstrap` | ≥ 0.8.4 | Bootstrap deterministic Debian root filesystem |
-| `zstd` | ≥ 1.4 | Compress rootfs archive |
+| `mmdebstrap` | >= 0.8.4 | Bootstrap deterministic Debian root filesystem |
+| `zstd` | >= 1.4 | Compress rootfs archive |
 | `tar` | GNU tar | Create deterministic archive |
-| `systemd-nspawn` | ≥ 247 | (optional) Test rootfs in a container |
+| `systemd-nspawn` | >= 247 | (optional) Test rootfs in a container |
 
 Install on Debian/Ubuntu:
 
@@ -106,7 +106,7 @@ make rootfs
 
 If the binary is absent, a shell placeholder is written to
 `/usr/local/sbin/dayshield-core`. The placeholder exits with an error at
-runtime — replace it before deploying.
+runtime - replace it before deploying.
 
 ---
 
