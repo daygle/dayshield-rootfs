@@ -142,6 +142,20 @@ env ROOTFS_DIR="${ROOTFS_DIR}" \
 # ── 5b. Generate initramfs (required for boot) ──────────────────
 printf '==> Step 5b: generating initramfs\n'
 if [ -d "${ROOTFS_DIR}/boot" ]; then
+    FSTAB_PATH="${ROOTFS_DIR}/etc/fstab"
+    FSTAB_BACKUP="${ROOTFS_DIR}/etc/fstab.dayshield-build.bak"
+
+    # initramfs-tools fsck hook can warn when root is a placeholder LABEL.
+    # Use a build-only fstab root entry to keep logs clean, then restore.
+    if [ -f "${FSTAB_PATH}" ]; then
+        cp "${FSTAB_PATH}" "${FSTAB_BACKUP}"
+        cat > "${FSTAB_PATH}" <<'EOF'
+# build-only fstab for initramfs generation
+/dev/root            /              ext4    errors=remount-ro  0       1
+LABEL=dayshield-boot /boot          vfat    umask=0077         0       2
+EOF
+    fi
+
     chroot_mount
     if chroot "${ROOTFS_DIR}" /usr/bin/env LC_ALL=C LANG=C LANGUAGE=C update-initramfs -c -k all; then
         printf '    Initramfs generated successfully\n'
@@ -149,11 +163,18 @@ if [ -d "${ROOTFS_DIR}/boot" ]; then
         printf '    WARNING: initramfs generation may have failed; checking for /boot/initrd.img*\n'
         if ! ls "${ROOTFS_DIR}"/boot/initrd.img* >/dev/null 2>&1; then
             chroot_umount
+            if [ -f "${FSTAB_BACKUP}" ]; then
+                mv "${FSTAB_BACKUP}" "${FSTAB_PATH}"
+            fi
             printf '    ERROR: No initrd files found in /boot after update-initramfs\n'
             exit 1
         fi
     fi
     chroot_umount
+
+    if [ -f "${FSTAB_BACKUP}" ]; then
+        mv "${FSTAB_BACKUP}" "${FSTAB_PATH}"
+    fi
 else
     printf '    ERROR: /boot directory not found in rootfs\n'
     exit 1
