@@ -1149,6 +1149,7 @@ _run_install_wizard() {
     local wan_iface="" wan_type="dhcp" wan_pppoe_user="" wan_pppoe_pass=""
     local lan_iface="" lan_ip="192.168.1.1" lan_prefix="24"
     local dhcp_start="" dhcp_end=""
+    local confirm="" final_confirm="" do_reboot=""
     local total_steps=7
 
     clear
@@ -1157,7 +1158,11 @@ _run_install_wizard() {
     _inst_hr
     printf '\n  This wizard will install DayShield to a local disk.\n'
     printf '  All data on the selected disk will be erased.\n\n'
-    read -rp "  Continue? [y/N]: " confirm
+    if ! read -rp "  Continue? [y/N]: " confirm; then
+        printf '\n  Input is not available on this console right now.\n'
+        printf '  Returning to main menu.\n'
+        return
+    fi
     [[ "${confirm,,}" == "y" ]] || return
 
     # ── Step 1: Disk selection ─────────────────────────────────────
@@ -1185,7 +1190,11 @@ _run_install_wizard() {
     fi
     disk="${disk_names[$(( disk_n - 1 ))]}"
     printf '\n  WARNING: /dev/%s will be completely erased.\n' "${disk}"
-    read -rp "  Type YES to confirm: " final_confirm
+    if ! read -rp "  Type YES to confirm: " final_confirm; then
+        printf '\n  Input is not available on this console right now.\n'
+        printf '  Returning to main menu.\n'
+        return
+    fi
     [[ "${final_confirm}" == "YES" ]] || { printf '  Cancelled.\n'; sleep 1; return; }
 
     # ── Step 2: System configuration ──────────────────────────────
@@ -1294,8 +1303,8 @@ _run_install_wizard() {
     [[ -n "${wan_iface}" ]] && printf '  WAN      : %s  (%s)\n' "${wan_iface}" "${wan_type}"
     printf '  DHCP     : %s - %s\n' "${dhcp_start}" "${dhcp_end}"
     printf '\n'
-    read -rp "  Reboot now? [Y/n]: " do_reboot
-    if [[ -z "${do_reboot}" || "${do_reboot,,}" == "y" ]]; then
+    read -rp "  Reboot now? [Y/n]: " do_reboot || do_reboot=""
+    if [[ -z "${do_reboot:-}" || "${do_reboot,,}" == "y" ]]; then
         systemctl reboot
     fi
 }
