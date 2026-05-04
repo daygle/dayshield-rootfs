@@ -74,6 +74,11 @@ dosfstools
 gdisk
 parted
 
+# Bootloader tooling required by installer (BIOS + UEFI)
+grub2-common
+grub-pc-bin
+grub-efi-amd64-bin
+
 # Utilities needed by build scripts
 gzip
 tar
