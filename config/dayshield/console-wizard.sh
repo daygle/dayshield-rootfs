@@ -1096,7 +1096,6 @@ server:
   use-caps-for-id: yes
   hide-identity: yes
   hide-version: yes
-  qname-minimisation: yes
   cache-min-ttl: 300
   cache-max-ttl: 86400
   prefetch: yes
