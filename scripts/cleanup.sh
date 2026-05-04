@@ -40,7 +40,9 @@ fi
 # ── Temporary files ───────────────────────────────────────────────────────────
 printf '  -> Removing temporary files\n'
 rm -rf "${ROOTFS_DIR}/tmp"/*
-rm -rf "${ROOTFS_DIR}/run"/*
+rm -f "${ROOTFS_DIR}/run/"*.pid 2>/dev/null || true
+rm -f "${ROOTFS_DIR}/run/"*.lock 2>/dev/null || true
+rm -f "${ROOTFS_DIR}/run/"*.tmp 2>/dev/null || true
 rm -rf "${ROOTFS_DIR}/var/tmp"/*
 
 # ── Zero out logs ─────────────────────────────────────────────────────────────
