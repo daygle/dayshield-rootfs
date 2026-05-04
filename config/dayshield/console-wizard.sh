@@ -897,6 +897,17 @@ _inst_install_bootloader() {
         mount --bind "/${fs}" "${target}/${fs}" >/dev/null 2>&1 || true
     done
 
+    # Ensure kernel and initramfs exist
+    _inst_info "Checking for kernel and initramfs ..."
+    if [[ ! -f "${target}/boot/vmlinuz" ]] && ! ls "${target}"/boot/vmlinuz-* >/dev/null 2>&1; then
+        _inst_info "  Kernel/initramfs not found — generating ..."
+        if chroot "${target}" update-initramfs -c -k all >/dev/null 2>&1; then
+            _inst_info "  Initramfs generated successfully"
+        else
+            _inst_err "Initramfs generation may have failed"
+        fi
+    fi
+
     _inst_info "Installing GRUB BIOS (i386-pc) ..."
     if [[ -d "${target}/usr/lib/grub/i386-pc" ]] || [[ -d "/usr/lib/grub/i386-pc" ]]; then
         grub-install --target=i386-pc \

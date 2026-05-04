@@ -121,13 +121,28 @@ env ROOTFS_DIR="${ROOTFS_DIR}" \
 printf '==> Step 5: harden-ipv4\n'
 env ROOTFS_DIR="${ROOTFS_DIR}" \
     sh "${SCRIPT_DIR}/harden-ipv4.sh"
-
+# ── 5b. Generate initramfs (required for boot) ──────────────────
+printf '==> Step 5b: generating initramfs\n'
+if [ -d "${ROOTFS_DIR}/boot" ]; then
+    if chroot "${ROOTFS_DIR}" update-initramfs -c -k all >/dev/null 2>&1; then
+        printf '    Initramfs generated successfully\n'
+    else
+        printf '    WARNING: initramfs generation may have failed; checking for /boot/initrd.img*\n'
+        if ! ls "${ROOTFS_DIR}"/boot/initrd.img* >/dev/null 2>&1; then
+            printf '    ERROR: No initrd files found in /boot after update-initramfs\n'
+            exit 1
+        fi
+    fi
+else
+    printf '    ERROR: /boot directory not found in rootfs\n'
+    exit 1
+fi
 # ── 6. Run cleanup.sh ────────────────────────────────────────────────────────
 printf '==> Step 6: cleanup\n'
 env ROOTFS_DIR="${ROOTFS_DIR}" \
     sh "${SCRIPT_DIR}/cleanup.sh"
 
-# ── 7. Package the rootfs ────────────────────────────────────────────────────
+# ── 7. Package the rootfs ────────────────────────────────────────
 printf '==> Step 7: packaging rootfs -> %s\n' "${OUTPUT}"
 OUTPUT_ABS="$(cd "$(dirname "${OUTPUT}")" && pwd)/$(basename "${OUTPUT}")"
 tar \
