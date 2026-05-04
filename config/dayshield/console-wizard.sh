@@ -97,6 +97,18 @@ _iface_ip4() {
         | awk '/inet / {print $2}' | head -n1
 }
 
+_live_web_ifaces_with_ip() {
+    # Lists iface<TAB>ip for all global IPv4 addresses currently assigned.
+    ip -o -4 addr show scope global 2>/dev/null \
+        | while read -r _ iface _ cidr _; do
+            iface="${iface%%@*}"
+            local ip
+            ip="${cidr%%/*}"
+            [[ -n "${ip}" && "${ip}" != 127.* ]] || continue
+            printf '%s\t%s\n' "${iface}" "${ip}"
+        done
+}
+
 _default_dhcp_pool() {
     local ip="$1"
     local o1 o2 o3 o4
@@ -380,10 +392,21 @@ _print_header() {
     echo ""
 
     if $LIVE_MODE; then
-        if [[ -n "${lan_ip4}" ]] && [[ "${lan_ip4}" != "no address" ]]; then
-            _kv "Web Installer" "http://${lan_ip4}:8080/"
+        local web_rows=()
+        while IFS=$'\t' read -r iface ip; do
+            web_rows+=("http://${ip}:8080/ (${iface})")
+        done < <(_live_web_ifaces_with_ip)
+
+        if [[ ${#web_rows[@]} -gt 0 ]]; then
+            _kv "Web Installer" "${web_rows[0]}"
+            local idx
+            for idx in "${!web_rows[@]}"; do
+                [[ "${idx}" -eq 0 ]] && continue
+                _kv "" "${web_rows[${idx}]}"
+            done
         else
-            _kv "Web Installer" "set LAN IP (option 2) to expose URL"
+            _kv "Web Installer" "no IPv4 address detected yet"
+            _kv "Hint" "use option 9 to configure LAN for Web Installer"
         fi
         echo ""
     elif [[ -n "${lan_ip4}" ]] && [[ "${lan_ip4}" != "no address" ]]; then
@@ -404,6 +427,7 @@ _assign_interfaces() {
     clear
     echo "DayShield Console - Assign Interfaces"
     echo "--------------------------------------"
+    echo "Type 'q' at any prompt to cancel and return to the main menu."
     echo ""
 
     local ifaces=()
@@ -430,6 +454,12 @@ _assign_interfaces() {
 
     local wan_n lan_n
     read -rp "Select WAN interface number (Enter to skip): " wan_n
+    if [[ "${wan_n}" == "q" || "${wan_n}" == "Q" ]]; then
+        echo ""
+        echo "Cancelled. Returning to main menu."
+        read -rp "Press Enter to continue ..."
+        return
+    fi
     if [[ "${wan_n}" =~ ^[0-9]+$ ]] && \
        [[ "${wan_n}" -ge 1 ]] && [[ "${wan_n}" -le "${#ifaces[@]}" ]]; then
         WAN_IFACE="${ifaces[$(( wan_n - 1 ))]}"
@@ -439,11 +469,23 @@ _assign_interfaces() {
         echo "WAN connection type:"
         echo "  1) DHCP   - automatic address from ISP"
         echo "  2) PPPoE  - username/password"
-        read -rp "Select type [1]: " wan_type_n
+        read -rp "Select type [1] (or q to cancel): " wan_type_n
+        if [[ "${wan_type_n}" == "q" || "${wan_type_n}" == "Q" ]]; then
+            echo ""
+            echo "Cancelled. Returning to main menu."
+            read -rp "Press Enter to continue ..."
+            return
+        fi
         case "${wan_type_n}" in
             2)
                 WAN_TYPE="pppoe"
-                read -rp "PPPoE username: " WAN_PPPOE_USER
+                read -rp "PPPoE username (or q to cancel): " WAN_PPPOE_USER
+                if [[ "${WAN_PPPOE_USER}" == "q" || "${WAN_PPPOE_USER}" == "Q" ]]; then
+                    echo ""
+                    echo "Cancelled. Returning to main menu."
+                    read -rp "Press Enter to continue ..."
+                    return
+                fi
                 read -rsp "PPPoE password: " WAN_PPPOE_PASS
                 echo ""
                 ;;
@@ -456,6 +498,12 @@ _assign_interfaces() {
     fi
 
     read -rp "Select LAN interface number (Enter to skip): " lan_n
+    if [[ "${lan_n}" == "q" || "${lan_n}" == "Q" ]]; then
+        echo ""
+        echo "Cancelled. Returning to main menu."
+        read -rp "Press Enter to continue ..."
+        return
+    fi
     if [[ "${lan_n}" =~ ^[0-9]+$ ]] && \
        [[ "${lan_n}" -ge 1 ]] && [[ "${lan_n}" -le "${#ifaces[@]}" ]]; then
         LAN_IFACE="${ifaces[$(( lan_n - 1 ))]}"
@@ -476,6 +524,7 @@ _set_lan_ip() {
     clear
     echo "DayShield Console - Set LAN IP Address"
     echo "---------------------------------------"
+    echo "Type 'q' at any prompt to cancel and return to the main menu."
     echo ""
 
     if [[ -z "${LAN_IFACE}" ]]; then
@@ -488,9 +537,21 @@ _set_lan_ip() {
     local default_prefix="${LAN_PREFIX:-24}"
 
     read -rp "LAN IP address [${default_ip}]: " new_ip
+    if [[ "${new_ip}" == "q" || "${new_ip}" == "Q" ]]; then
+        echo ""
+        echo "Cancelled. Returning to main menu."
+        read -rp "Press Enter to continue ..."
+        return
+    fi
     new_ip="${new_ip:-${default_ip}}"
 
     read -rp "Subnet prefix length [${default_prefix}]: " new_prefix
+    if [[ "${new_prefix}" == "q" || "${new_prefix}" == "Q" ]]; then
+        echo ""
+        echo "Cancelled. Returning to main menu."
+        read -rp "Press Enter to continue ..."
+        return
+    fi
     new_prefix="${new_prefix:-${default_prefix}}"
 
     # Basic validation
@@ -522,6 +583,7 @@ _set_lan_dhcp() {
     clear
     echo "DayShield Console - Configure LAN DHCP"
     echo "---------------------------------------"
+    echo "Type 'q' at any prompt to cancel and return to the main menu."
     echo ""
 
     if [[ -z "${LAN_IFACE}" || -z "${LAN_IP}" ]]; then
@@ -537,6 +599,12 @@ _set_lan_dhcp() {
     local lease_default="${LAN_DHCP_LEASE:-12h}"
 
     read -rp "Enable LAN DHCP server? [Y/n]: " enable_dhcp
+    if [[ "${enable_dhcp}" == "q" || "${enable_dhcp}" == "Q" ]]; then
+        echo ""
+        echo "Cancelled. Returning to main menu."
+        read -rp "Press Enter to continue ..."
+        return
+    fi
     if [[ -n "${enable_dhcp}" && "${enable_dhcp,,}" != "y" ]]; then
         LAN_DHCP_ENABLE="no"
         LAN_DHCP_START=""
@@ -551,10 +619,28 @@ _set_lan_dhcp() {
     fi
 
     read -rp "DHCP range start [${start_default}]: " new_start
+    if [[ "${new_start}" == "q" || "${new_start}" == "Q" ]]; then
+        echo ""
+        echo "Cancelled. Returning to main menu."
+        read -rp "Press Enter to continue ..."
+        return
+    fi
     new_start="${new_start:-${start_default}}"
     read -rp "DHCP range end   [${end_default}]: " new_end
+    if [[ "${new_end}" == "q" || "${new_end}" == "Q" ]]; then
+        echo ""
+        echo "Cancelled. Returning to main menu."
+        read -rp "Press Enter to continue ..."
+        return
+    fi
     new_end="${new_end:-${end_default}}"
     read -rp "Lease time [${lease_default}] (e.g. 12h): " new_lease
+    if [[ "${new_lease}" == "q" || "${new_lease}" == "Q" ]]; then
+        echo ""
+        echo "Cancelled. Returning to main menu."
+        read -rp "Press Enter to continue ..."
+        return
+    fi
     new_lease="${new_lease:-${lease_default}}"
 
     if ! [[ "${new_start}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || \
@@ -1243,7 +1329,8 @@ while true; do
         echo "  [0] Logout                     - return to login prompt"
     fi
     if $LIVE_MODE; then
-        echo "  [8] Install DayShield          - run installation wizard"
+        echo "  [8] Install DayShield          - run disk installation wizard"
+        echo "  [9] Setup Web Installer LAN    - assign interface and LAN IP"
     else
         echo "  [1] Assign interfaces          - choose WAN and LAN adapters"
         echo "  [2] Set LAN IP address         - configure LAN gateway address"
@@ -1251,7 +1338,7 @@ while true; do
         echo "  [4] Change root password       - local console/root password"
         echo "  [5] Reboot system"
         echo "  [6] Power off system"
-        echo "  [7] Run guided setup wizard"
+        echo "  [7] Run management setup wizard"
     fi
     echo ""
 
@@ -1276,6 +1363,7 @@ while true; do
         6) ! $LIVE_MODE && _shutdown ;;
         7) ! $LIVE_MODE && _run_guided_setup ;;
         8) $LIVE_MODE && _run_install_wizard ;;
+        9) $LIVE_MODE && _assign_interfaces && _set_lan_ip ;;
         *) ;;
     esac
 done
