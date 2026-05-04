@@ -36,7 +36,6 @@ for svc in \
     nftables.service \
     unbound.service \
     suricata.service \
-    crowdsec.service \
     ssh.service \
     dayshield.service \
     console-wizard.service
@@ -52,16 +51,9 @@ do
     enable_service network-online.target "${svc}" 2>/dev/null || true
 done
 
-# ── Timers / oneshot services (acme renewal) ──────────────────────────────────
-if [ -f "${ROOTFS_DIR}/etc/systemd/system/acme.service" ] || \
-   [ -f "${ROOTFS_DIR}/usr/lib/systemd/system/acme.service" ]; then
-    enable_service multi-user.target acme.service
-fi
-
-# ── WireGuard — enable per the service unit placed in /etc/systemd/system ─────
-if [ -f "${ROOTFS_DIR}/etc/systemd/system/wireguard.service" ]; then
-    enable_service multi-user.target wireguard.service
-fi
+# Optional services (acme, wireguard, crowdsec) are intentionally not enabled
+# by default. They should be enabled by DayShield only after valid runtime
+# configuration exists to avoid noisy failed states on first boot.
 
 # ── Disable systemd-resolved in favour of unbound ─────────────────────────────
 printf '  -> Masking systemd-resolved (replaced by unbound)\n'

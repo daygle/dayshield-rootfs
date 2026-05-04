@@ -780,18 +780,21 @@ _inst_partition() {
     _inst_info "Wiping existing signatures on /dev/${dev} ..."
     wipefs -a "/dev/${dev}" >/dev/null 2>&1 || true
 
-    _inst_info "Creating GPT layout (512 MiB EFI + rest root) ..."
+    _inst_info "Creating GPT layout (1 MiB BIOS + 512 MiB EFI + rest root) ..."
     if command -v sgdisk >/dev/null 2>&1; then
         sgdisk --zap-all \
-            --new=1:0:+512M  --typecode=1:EF00 --change-name=1:"EFI System" \
-            --new=2:0:0       --typecode=2:8300 --change-name=2:"Linux Root" \
+            --new=1:1MiB:+1MiB --typecode=1:EF02 --change-name=1:"BIOS Boot" \
+            --new=2:0:+512M    --typecode=2:EF00 --change-name=2:"EFI System" \
+            --new=3:0:0        --typecode=3:8300 --change-name=3:"Linux Root" \
             "/dev/${dev}" >/dev/null 2>&1 || { _inst_err "sgdisk failed."; return 1; }
     elif command -v parted >/dev/null 2>&1; then
         parted -s "/dev/${dev}" \
             mklabel gpt \
-            mkpart primary fat32 1MiB 513MiB \
-            set 1 esp on \
-            mkpart primary ext4 513MiB 100% >/dev/null 2>&1 || { _inst_err "parted failed."; return 1; }
+            mkpart primary 1MiB 2MiB \
+            set 1 bios_grub on \
+            mkpart primary fat32 2MiB 514MiB \
+            set 2 esp on \
+            mkpart primary ext4 514MiB 100% >/dev/null 2>&1 || { _inst_err "parted failed."; return 1; }
     else
         _inst_err "Neither sgdisk nor parted found."
         return 1
@@ -802,7 +805,7 @@ _inst_partition() {
     local pfx
     case "$dev" in nvme*|mmcblk*) pfx="${dev}p" ;; *) pfx="${dev}" ;; esac
     local waited=0
-    while ! [[ -b "/dev/${pfx}1" ]] || ! [[ -b "/dev/${pfx}2" ]]; do
+    while ! [[ -b "/dev/${pfx}2" ]] || ! [[ -b "/dev/${pfx}3" ]]; do
         sleep 1; waited=$(( waited + 1 ))
         [[ ${waited} -ge 10 ]] && { _inst_err "Partition nodes did not appear."; return 1; }
     done
@@ -812,7 +815,7 @@ _inst_partition() {
 _inst_format() {
     local dev="$1" pfx
     case "$dev" in nvme*|mmcblk*) pfx="${dev}p" ;; *) pfx="${dev}" ;; esac
-    local efi="/dev/${pfx}1" root="/dev/${pfx}2"
+    local efi="/dev/${pfx}2" root="/dev/${pfx}3"
 
     _inst_info "Formatting ${efi} as FAT32 (EFI) ..."
     mkfs.fat -F32 -n "EFI" "${efi}" >/dev/null 2>&1 || { _inst_err "mkfs.fat failed."; return 1; }
@@ -853,7 +856,7 @@ _inst_find_rootfs() {
 _inst_install_rootfs() {
     local dev="$1" rootfs="$2" pfx target="/mnt/target"
     case "$dev" in nvme*|mmcblk*) pfx="${dev}p" ;; *) pfx="${dev}" ;; esac
-    local efi="/dev/${pfx}1" root="/dev/${pfx}2"
+    local efi="/dev/${pfx}2" root="/dev/${pfx}3"
 
     _inst_info "Mounting root partition ..."
     mkdir -p "${target}"
