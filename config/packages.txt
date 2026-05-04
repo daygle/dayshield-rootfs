@@ -28,14 +28,16 @@ util-linux
 vim-tiny
 wget
 
-# Live boot support (needed for squashfs live-root pivot in ISO mode)
-live-boot
-live-config
-squashfs-tools
+# squashfs-tools and zstd are needed on the HOST by the ISO builder, not in
+# the installed rootfs.  live-boot and live-config must be injected as an
+# overlay by the dayshield-iso pipeline so they are present in the squashfs
+# for live-boot operation but absent from the installed-system rootfs.
+# Installing them here causes the initramfs to embed live-boot hooks that
+# stall the installed system during boot (the hooks timeout looking for a
+# live squashfs medium and drop to an emergency shell).
 zstd
 
-# Kernel — standard amd64 kernel (non-RT); RT pulled in by live-boot Recommends
-# is explicitly overridden here to ensure QEMU compatibility.
+# Kernel — standard amd64 kernel (non-RT) for QEMU/bare-metal compatibility.
 linux-image-amd64
 
 # Networking

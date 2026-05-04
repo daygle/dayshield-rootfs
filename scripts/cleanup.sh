@@ -7,6 +7,20 @@ set -eu
 
 : "${ROOTFS_DIR:?ROOTFS_DIR must be set}"
 
+# ── Live-boot / live-config artifacts ────────────────────────────────────────
+# These directories are only meaningful inside a squashfs live-root.  If they
+# survived into the installed rootfs (e.g. from a previous build), remove them
+# so no live-environment behaviour is triggered on the installed system.
+printf '  -> Removing live-boot artifacts\n'
+rm -rf \
+    "${ROOTFS_DIR}/etc/live" \
+    "${ROOTFS_DIR}/lib/live" \
+    "${ROOTFS_DIR}/usr/lib/live" \
+    "${ROOTFS_DIR}/usr/share/initramfs-tools/hooks/live" \
+    "${ROOTFS_DIR}/usr/share/initramfs-tools/scripts/live" \
+    "${ROOTFS_DIR}/usr/share/initramfs-tools/scripts/live-bottom" \
+    "${ROOTFS_DIR}/usr/share/initramfs-tools/scripts/live-top"
+
 # ── APT caches ────────────────────────────────────────────────────────────────
 printf '  -> Removing APT caches\n'
 rm -rf "${ROOTFS_DIR}/var/cache/apt/archives"/*.deb \

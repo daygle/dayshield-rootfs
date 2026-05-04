@@ -68,7 +68,25 @@ mkdir -p "${ROOTFS_DIR}"
 # Without this, apt falls back to unsandboxed downloads and emits a warning.
 chmod 755 "${BUILD_DIR}" "${ROOTFS_DIR}" 2>/dev/null || true
 
+# Helper: bind-mount virtual filesystems into the chroot.
+# Required by update-initramfs / mkinitramfs (needs /proc for depmod and
+# /dev for device-node access).
+chroot_mount() {
+    mount -t proc  proc              "${ROOTFS_DIR}/proc"
+    mount -t sysfs sysfs             "${ROOTFS_DIR}/sys"
+    mount --bind   /dev              "${ROOTFS_DIR}/dev"
+    mount --bind   /dev/pts          "${ROOTFS_DIR}/dev/pts"
+}
+
+chroot_umount() {
+    umount "${ROOTFS_DIR}/dev/pts" 2>/dev/null || true
+    umount "${ROOTFS_DIR}/dev"     2>/dev/null || true
+    umount "${ROOTFS_DIR}/sys"     2>/dev/null || true
+    umount "${ROOTFS_DIR}/proc"    2>/dev/null || true
+}
+
 cleanup_build() {
+    chroot_umount
     printf 'Cleaning up build directory: %s\n' "${BUILD_DIR}"
     rm -rf "${BUILD_DIR}"
 }
@@ -124,15 +142,18 @@ env ROOTFS_DIR="${ROOTFS_DIR}" \
 # ── 5b. Generate initramfs (required for boot) ──────────────────
 printf '==> Step 5b: generating initramfs\n'
 if [ -d "${ROOTFS_DIR}/boot" ]; then
-    if chroot "${ROOTFS_DIR}" update-initramfs -c -k all >/dev/null 2>&1; then
+    chroot_mount
+    if chroot "${ROOTFS_DIR}" update-initramfs -c -k all; then
         printf '    Initramfs generated successfully\n'
     else
         printf '    WARNING: initramfs generation may have failed; checking for /boot/initrd.img*\n'
         if ! ls "${ROOTFS_DIR}"/boot/initrd.img* >/dev/null 2>&1; then
+            chroot_umount
             printf '    ERROR: No initrd files found in /boot after update-initramfs\n'
             exit 1
         fi
     fi
+    chroot_umount
 else
     printf '    ERROR: /boot directory not found in rootfs\n'
     exit 1
