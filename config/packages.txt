@@ -69,9 +69,12 @@ suricata
 openssl
 certbot
 
-# Utilities needed by build scripts
+# Disk partitioning and formatting
+dosfstools
 gdisk
 parted
+
+# Utilities needed by build scripts
 gzip
 tar
 zstd
