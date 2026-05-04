@@ -1,6 +1,6 @@
 #!/bin/sh
 # harden-ipv4.sh — Apply IPv4-only hardening to the rootfs.
-# Disables IPv6 at every layer: sysctl, kernel modules, hosts, resolv.conf,
+# Disables IPv6 at every layer: sysctl, kernel modules, hosts,
 # nftables, and unbound.
 # POSIX shell compatible.
 
@@ -30,11 +30,6 @@ if [ -f "${ROOTFS_DIR}/etc/hosts" ]; then
     # Remove lines containing "ip6-" hostnames written by Debian defaults
     sed -i '/ip6-/d' "${ROOTFS_DIR}/etc/hosts"
 fi
-
-# ── /etc/resolv.conf — ensure no IPv6 nameservers ────────────────────────────
-printf '  -> Ensuring /etc/resolv.conf has no IPv6 nameservers\n'
-# Already written by enable-services.sh; rewrite defensively
-printf 'nameserver 127.0.0.1\noptions edns0\n' > "${ROOTFS_DIR}/etc/resolv.conf"
 
 # ── nftables — verify no inet6 tables ────────────────────────────────────────
 printf '  -> Verifying nftables.conf contains no ip6/inet6 tables\n'
