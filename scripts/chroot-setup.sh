@@ -31,11 +31,10 @@ EOF
 printf '  -> Writing placeholder /etc/fstab\n'
 cat > "${ROOTFS_DIR}/etc/fstab" <<'EOF'
 # /etc/fstab: static file system information.
-# NOTE: The installer replaces these LABEL entries with UUID= lines.
+# NOTE: The installer replaces these entries with UUID= lines.
 #
 # <file system>         <mount point>  <type>  <options>          <dump>  <pass>
 LABEL=dayshield-root    /              ext4    errors=remount-ro  0       1
-LABEL=dayshield-boot    /boot          vfat    umask=0077         0       2
 EOF
 
 # Help initramfs-tools resolve the root fs type while building inside chroot.

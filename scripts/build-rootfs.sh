@@ -152,7 +152,6 @@ if [ -d "${ROOTFS_DIR}/boot" ]; then
         cat > "${FSTAB_PATH}" <<'EOF'
 # build-only fstab for initramfs generation
 /dev/root            /              ext4    errors=remount-ro  0       1
-LABEL=dayshield-boot /boot          vfat    umask=0077         0       2
 EOF
     fi
 
