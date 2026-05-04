@@ -64,6 +64,9 @@ PACKAGES="$(grep -v '^[[:space:]]*#' "${PACKAGES_FILE}" | grep -v '^[[:space:]]*
 BUILD_DIR="$(mktemp -d /tmp/dayshield-rootfs-XXXXXX)"
 ROOTFS_DIR="${BUILD_DIR}/rootfs"
 mkdir -p "${ROOTFS_DIR}"
+# Let the `_apt` sandbox user traverse the temp path used by mmdebstrap.
+# Without this, apt falls back to unsandboxed downloads and emits a warning.
+chmod 755 "${BUILD_DIR}" "${ROOTFS_DIR}" 2>/dev/null || true
 
 cleanup_build() {
     printf 'Cleaning up build directory: %s\n' "${BUILD_DIR}"
