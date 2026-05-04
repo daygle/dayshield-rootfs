@@ -953,6 +953,11 @@ _inst_write_config() {
 ::1         localhost ip6-localhost ip6-loopback
 EOF
 
+    # Remove the live-ISO default root password from the installed system.
+    if ! chroot "${target}" passwd -l root >/dev/null 2>&1; then
+        _inst_err "WARNING: could not lock root password — default password may still be active"
+    fi
+
     # Password hash
     local hash=""
     if command -v openssl >/dev/null 2>&1; then
@@ -961,7 +966,7 @@ EOF
         hash=$(python3 -c "import crypt,sys; print(crypt.crypt(sys.argv[1], crypt.mksalt(crypt.METHOD_SHA512)))" "${password}" 2>/dev/null)
     fi
     if [[ -z "${hash}" ]]; then
-        _inst_err "Password hashing failed — default password retained"
+        _inst_err "Password hashing failed — root password locked"
     elif [[ -f "${target}/etc/shadow" ]]; then
         local escaped
         escaped=$(printf '%s' "${hash}" | sed 's|[&/\\]|\\&|g')
