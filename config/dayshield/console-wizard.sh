@@ -670,14 +670,565 @@ _run_guided_setup() {
 }
 
 # ---------------------------------------------------------------------------
+# Installation pipeline (live-installer mode only)
+# ---------------------------------------------------------------------------
+
+_inst_hr()   { printf '  ============================================================\n'; }
+_inst_step() { printf '\n  [%d/%d] %s\n  ------------------------------------------------------------\n' "$1" "$2" "$3"; }
+_inst_ok()   { printf '  [OK]  %s\n' "$*"; }
+_inst_err()  { printf '  [ERR] %s\n' "$*"; }
+_inst_info() { printf '  ...   %s\n' "$*"; }
+
+_inst_list_disks() {
+    while IFS= read -r dev; do
+        [ -b "/dev/${dev}" ] || continue
+        local size type
+        size=$(lsblk -dno SIZE "/dev/${dev}" 2>/dev/null || printf '?')
+        type=$(lsblk -dno TYPE "/dev/${dev}" 2>/dev/null || printf 'disk')
+        printf '%s\t%s\t%s\n' "${dev}" "${size}" "${type}"
+    done < <(lsblk -dno NAME 2>/dev/null | grep -v '^loop' | grep -v '^sr')
+}
+
+_inst_partition() {
+    local dev="$1"
+    _inst_info "Wiping existing signatures on /dev/${dev} ..."
+    wipefs -a "/dev/${dev}" >/dev/null 2>&1 || true
+
+    _inst_info "Creating GPT layout (512 MiB EFI + rest root) ..."
+    if command -v sgdisk >/dev/null 2>&1; then
+        sgdisk --zap-all \
+            --new=1:0:+512M  --typecode=1:EF00 --change-name=1:"EFI System" \
+            --new=2:0:0       --typecode=2:8300 --change-name=2:"Linux Root" \
+            "/dev/${dev}" >/dev/null 2>&1 || { _inst_err "sgdisk failed."; return 1; }
+    elif command -v parted >/dev/null 2>&1; then
+        parted -s "/dev/${dev}" \
+            mklabel gpt \
+            mkpart primary fat32 1MiB 513MiB \
+            set 1 esp on \
+            mkpart primary ext4 513MiB 100% >/dev/null 2>&1 || { _inst_err "parted failed."; return 1; }
+    else
+        _inst_err "Neither sgdisk nor parted found."
+        return 1
+    fi
+
+    _inst_info "Waiting for partition nodes ..."
+    udevadm settle --timeout=10 >/dev/null 2>&1 || true
+    local pfx
+    case "$dev" in nvme*|mmcblk*) pfx="${dev}p" ;; *) pfx="${dev}" ;; esac
+    local waited=0
+    while ! [[ -b "/dev/${pfx}1" ]] || ! [[ -b "/dev/${pfx}2" ]]; do
+        sleep 1; waited=$(( waited + 1 ))
+        [[ ${waited} -ge 10 ]] && { _inst_err "Partition nodes did not appear."; return 1; }
+    done
+    return 0
+}
+
+_inst_format() {
+    local dev="$1" pfx
+    case "$dev" in nvme*|mmcblk*) pfx="${dev}p" ;; *) pfx="${dev}" ;; esac
+    local efi="/dev/${pfx}1" root="/dev/${pfx}2"
+
+    _inst_info "Formatting ${efi} as FAT32 (EFI) ..."
+    mkfs.fat -F32 -n "EFI" "${efi}" >/dev/null 2>&1 || { _inst_err "mkfs.fat failed."; return 1; }
+
+    _inst_info "Formatting ${root} as ext4 (root) ..."
+    mkfs.ext4 -F -L "dayshield-root" -O "^64bit,metadata_csum" -m 1 \
+        "${root}" >/dev/null 2>&1 || { _inst_err "mkfs.ext4 failed."; return 1; }
+    return 0
+}
+
+_inst_find_rootfs() {
+    for candidate in \
+        "/run/installer/rootfs.tar.zst" \
+        "/lib/live/mount/medium/installer/rootfs.tar.zst" \
+        "/run/live/medium/installer/rootfs.tar.zst" \
+        "/media/cdrom/installer/rootfs.tar.zst" \
+        "/media/live/installer/rootfs.tar.zst"
+    do
+        [[ -f "${candidate}" ]] && printf '%s' "${candidate}" && return 0
+    done
+    # Last resort: scan for DAYSHIELD-labelled block device
+    local bdev mp
+    bdev=$(blkid -t LABEL=DAYSHIELD -o device 2>/dev/null | head -n1)
+    if [[ -n "${bdev}" ]]; then
+        mp=$(mktemp -d)
+        if mount -o ro "${bdev}" "${mp}" 2>/dev/null; then
+            if [[ -f "${mp}/installer/rootfs.tar.zst" ]]; then
+                printf '%s' "${mp}/installer/rootfs.tar.zst"
+                return 0   # leave mounted; caller must umount $mp
+            fi
+            umount "${mp}" 2>/dev/null || true
+        fi
+        rmdir "${mp}" 2>/dev/null || true
+    fi
+    return 1
+}
+
+_inst_install_rootfs() {
+    local dev="$1" rootfs="$2" pfx target="/mnt/target"
+    case "$dev" in nvme*|mmcblk*) pfx="${dev}p" ;; *) pfx="${dev}" ;; esac
+    local efi="/dev/${pfx}1" root="/dev/${pfx}2"
+
+    _inst_info "Mounting root partition ..."
+    mkdir -p "${target}"
+    mount "${root}" "${target}" || { _inst_err "Failed to mount ${root}."; return 1; }
+
+    _inst_info "Mounting EFI partition ..."
+    mkdir -p "${target}/boot/efi"
+    mount "${efi}" "${target}/boot/efi" || {
+        umount "${target}" 2>/dev/null || true
+        _inst_err "Failed to mount EFI partition."; return 1
+    }
+
+    _inst_info "Extracting rootfs (this may take several minutes) ..."
+    if command -v zstd >/dev/null 2>&1; then
+        zstd -d --stdout "${rootfs}" | tar -xp -C "${target}" || {
+            umount "${target}/boot/efi" 2>/dev/null || true
+            umount "${target}" 2>/dev/null || true
+            _inst_err "Extraction failed."; return 1
+        }
+    elif tar --version 2>&1 | grep -q "GNU tar"; then
+        tar -xp --zstd -f "${rootfs}" -C "${target}" || {
+            umount "${target}/boot/efi" 2>/dev/null || true
+            umount "${target}" 2>/dev/null || true
+            _inst_err "Extraction failed (GNU tar)."; return 1
+        }
+    else
+        _inst_err "Neither zstd nor GNU tar available."; return 1
+    fi
+    return 0
+}
+
+_inst_install_bootloader() {
+    local dev="$1" target="/mnt/target"
+
+    _inst_info "Binding pseudo-filesystems ..."
+    for fs in proc sys dev dev/pts; do
+        mkdir -p "${target}/${fs}"
+        mount --bind "/${fs}" "${target}/${fs}" >/dev/null 2>&1 || true
+    done
+
+    _inst_info "Installing GRUB BIOS (i386-pc) ..."
+    if [[ -d "${target}/usr/lib/grub/i386-pc" ]] || [[ -d "/usr/lib/grub/i386-pc" ]]; then
+        grub-install --target=i386-pc \
+            --boot-directory="${target}/boot" \
+            --recheck "/dev/${dev}" >/dev/null 2>&1 || \
+            _inst_err "BIOS grub-install warning (may be non-fatal)"
+    fi
+
+    _inst_info "Installing GRUB UEFI (x86_64-efi) ..."
+    if [[ -d "${target}/usr/lib/grub/x86_64-efi" ]] || [[ -d "/usr/lib/grub/x86_64-efi" ]]; then
+        grub-install --target=x86_64-efi \
+            --efi-directory="${target}/boot/efi" \
+            --boot-directory="${target}/boot" \
+            --removable --recheck >/dev/null 2>&1 || \
+            _inst_err "UEFI grub-install warning (may be non-fatal)"
+    fi
+
+    _inst_info "Generating GRUB config ..."
+    chroot "${target}" grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1 || \
+        _inst_err "grub-mkconfig warning"
+
+    for fs in dev/pts dev sys proc; do
+        umount "${target}/${fs}" 2>/dev/null || true
+    done
+    return 0
+}
+
+_inst_write_config() {
+    local target="/mnt/target"
+    local hostname="$1" password="$2"
+    local wan_iface="$3" wan_type="$4" wan_pppoe_user="$5" wan_pppoe_pass="$6"
+    local lan_iface="$7" lan_ip="$8" lan_prefix="$9"
+    local dhcp_start="${10}" dhcp_end="${11}"
+    local lan_net subnet_cidr
+    lan_net="${lan_ip%.*}.0"
+    subnet_cidr="${lan_net}/${lan_prefix}"
+
+    # Hostname
+    printf '%s\n' "${hostname}" > "${target}/etc/hostname"
+    cat > "${target}/etc/hosts" <<EOF
+127.0.0.1   localhost
+127.0.1.1   ${hostname}
+::1         localhost ip6-localhost ip6-loopback
+EOF
+
+    # Password hash
+    local hash=""
+    if command -v openssl >/dev/null 2>&1; then
+        hash=$(openssl passwd -6 -- "${password}" 2>/dev/null)
+    elif command -v python3 >/dev/null 2>&1; then
+        hash=$(python3 -c "import crypt,sys; print(crypt.crypt(sys.argv[1], crypt.mksalt(crypt.METHOD_SHA512)))" "${password}" 2>/dev/null)
+    fi
+    if [[ -z "${hash}" ]]; then
+        _inst_err "Password hashing failed — default password retained"
+    elif [[ -f "${target}/etc/shadow" ]]; then
+        local escaped
+        escaped=$(printf '%s' "${hash}" | sed 's|[&/\\]|\\&|g')
+        sed -i "s|^root:[^:]*:|root:${escaped}:|" "${target}/etc/shadow"
+    fi
+
+    # nftables interface mapping
+    mkdir -p "${target}/etc/dayshield/config"
+    printf 'define WAN_IF = %s\ndefine LAN_IF = %s\n' \
+        "${wan_iface:-lo}" "${lan_iface}" \
+        > "${target}/etc/dayshield/config/nft-ifaces.conf"
+
+    # DayShield network.conf
+    mkdir -p "${target}/etc/dayshield"
+    cat > "${target}/etc/dayshield/network.conf" <<EOF
+LAN_IFACE=${lan_iface}
+LAN_IP=${lan_ip}
+LAN_PREFIX=${lan_prefix}
+LAN_DHCP_ENABLE=yes
+LAN_DHCP_START=${dhcp_start}
+LAN_DHCP_END=${dhcp_end}
+EOF
+
+    # systemd-networkd
+    local netdir="${target}/etc/systemd/network"
+    mkdir -p "${netdir}"
+    rm -f "${netdir}/10-dayshield-eth.network"
+    if [[ -n "${wan_iface}" ]]; then
+        if [[ "${wan_type}" == "pppoe" ]]; then
+            cat > "${netdir}/10-wan.network" <<EOF
+[Match]
+Name=${wan_iface}
+
+[Network]
+DHCP=no
+IPv6AcceptRA=no
+LinkLocalAddressing=no
+EOF
+            mkdir -p "${target}/etc/ppp"
+            cat > "${target}/etc/ppp/peers/wan" <<EOF
+plugin rp-pppoe.so ${wan_iface}
+user "${wan_pppoe_user}"
+noauth
+defaultroute
+replacedefaultroute
+hide-password
+persist
+maxfail 0
+holdoff 5
+noipv6
+EOF
+            chmod 600 "${target}/etc/ppp/peers/wan"
+            local sl="\"${wan_pppoe_user}\" * \"${wan_pppoe_pass}\" *"
+            printf '%s\n' "${sl}" > "${target}/etc/ppp/chap-secrets"
+            printf '%s\n' "${sl}" > "${target}/etc/ppp/pap-secrets"
+            chmod 600 "${target}/etc/ppp/chap-secrets" "${target}/etc/ppp/pap-secrets"
+        else
+            cat > "${netdir}/10-wan.network" <<EOF
+[Match]
+Name=${wan_iface}
+
+[Network]
+DHCP=ipv4
+IPv6AcceptRA=no
+LinkLocalAddressing=no
+EOF
+        fi
+    fi
+    cat > "${netdir}/20-lan.network" <<EOF
+[Match]
+Name=${lan_iface}
+
+[Network]
+Address=${lan_ip}/${lan_prefix}
+IPv6AcceptRA=no
+LinkLocalAddressing=no
+EOF
+
+    # Kea DHCPv4
+    mkdir -p "${target}/etc/kea" "${target}/var/lib/kea" "${target}/var/log/kea"
+    cat > "${target}/etc/kea/kea-dhcp4.conf" <<EOF
+{
+  "Dhcp4": {
+    "interfaces-config": {
+      "interfaces": ["${lan_iface}"],
+      "dhcp-socket-type": "raw"
+    },
+    "lease-database": {
+      "type": "memfile",
+      "persist": true,
+      "name": "/var/lib/kea/kea-leases4.csv"
+    },
+    "subnet4": [
+      {
+        "id": 1,
+        "subnet": "${subnet_cidr}",
+        "pools": [ { "pool": "${dhcp_start} - ${dhcp_end}" } ],
+        "valid-lifetime": 43200,
+        "option-data": [
+          { "name": "routers",             "data": "${lan_ip}" },
+          { "name": "domain-name-servers", "data": "${lan_ip}" }
+        ]
+      }
+    ],
+    "loggers": [
+      { "name": "kea-dhcp4", "output_options": [ { "output": "/var/log/kea/kea-dhcp4.log" } ], "severity": "INFO" }
+    ]
+  }
+}
+EOF
+
+    # Unbound DNS
+    mkdir -p "${target}/etc/unbound" "${target}/var/lib/unbound"
+    cat > "${target}/etc/unbound/unbound.conf" <<EOF
+server:
+  interface: 127.0.0.1
+  interface: ${lan_ip}
+  port: 53
+  do-ip4: yes
+  do-ip6: no
+  do-udp: yes
+  do-tcp: yes
+  access-control: 127.0.0.0/8 allow
+  access-control: ${subnet_cidr} allow
+  access-control: 0.0.0.0/0 refuse
+  auto-trust-anchor-file: "/var/lib/unbound/root.key"
+  root-hints: "/usr/share/dns/root.hints"
+  harden-glue: yes
+  harden-dnssec-stripped: yes
+  use-caps-for-id: yes
+  hide-identity: yes
+  hide-version: yes
+  qname-minimisation: yes
+  cache-min-ttl: 300
+  cache-max-ttl: 86400
+  prefetch: yes
+  num-threads: 2
+  rrset-cache-size: 256m
+  msg-cache-size: 128m
+  private-address: 10.0.0.0/8
+  private-address: 172.16.0.0/12
+  private-address: 192.168.0.0/16
+  private-address: 100.64.0.0/10
+  minimal-responses: yes
+  directory: "/etc/unbound"
+  chroot: ""
+  pidfile: "/run/unbound/unbound.pid"
+EOF
+
+    # DayShield core config.json
+    cat > "${target}/etc/dayshield/config/config.json" <<EOF
+{
+  "hostname": "${hostname}",
+  "domain": null,
+  "interfaces": [
+    {
+      "name": "${lan_iface}",
+      "description": "LAN",
+      "addresses": ["${lan_ip}/${lan_prefix}"],
+      "mtu": 1500,
+      "enabled": true,
+      "dhcp4": false,
+      "dhcp6": false,
+      "vlan": null,
+      "wan_mode": null,
+      "pppoe_username": null,
+      "pppoe_password": null,
+      "gateway": null
+    }
+  ],
+  "firewall_rules": [],
+  "nat": null,
+  "dns": null,
+  "dhcp": {
+    "enabled": true,
+    "interface": "${lan_iface}",
+    "scopes": [ { "start": "${dhcp_start}", "end": "${dhcp_end}", "lease_time": 43200 } ]
+  }
+}
+EOF
+}
+
+_inst_finalize() {
+    local target="/mnt/target"
+    _inst_info "Syncing writes ..."
+    sync
+    for fs in dev/pts dev sys proc; do
+        umount "${target}/${fs}" 2>/dev/null || true
+    done
+    _inst_info "Unmounting EFI partition ..."
+    umount "${target}/boot/efi" 2>/dev/null || _inst_err "EFI umount warning"
+    _inst_info "Unmounting root partition ..."
+    umount "${target}" 2>/dev/null || _inst_err "Root umount warning"
+    sync
+}
+
+_run_install_wizard() {
+    local disk="" rootfs="" hostname="dayshield" password="" password2=""
+    local wan_iface="" wan_type="dhcp" wan_pppoe_user="" wan_pppoe_pass=""
+    local lan_iface="" lan_ip="192.168.1.1" lan_prefix="24"
+    local dhcp_start="" dhcp_end=""
+    local total_steps=7
+
+    clear
+    _inst_hr
+    printf '  DayShield Installer - Console Setup\n'
+    _inst_hr
+    printf '\n  This wizard will install DayShield to a local disk.\n'
+    printf '  All data on the selected disk will be erased.\n\n'
+    read -rp "  Continue? [y/N]: " confirm
+    [[ "${confirm,,}" == "y" ]] || return
+
+    # ── Step 1: Disk selection ─────────────────────────────────────
+    clear; _inst_step 1 "${total_steps}" "Select Installation Disk"; printf '\n'
+    local disk_names=() disk_sizes=() disk_types=()
+    while IFS=$'\t' read -r dname dsize dtype; do
+        disk_names+=("${dname}"); disk_sizes+=("${dsize}"); disk_types+=("${dtype}")
+    done < <(_inst_list_disks)
+
+    if [[ ${#disk_names[@]} -eq 0 ]]; then
+        printf '  No disks found.\n'; read -rp "  Press Enter ..."; return
+    fi
+    local i=1
+    for idx in "${!disk_names[@]}"; do
+        printf '  %d) /dev/%-14s  %s  (%s)\n' \
+            "${i}" "${disk_names[${idx}]}" "${disk_sizes[${idx}]}" "${disk_types[${idx}]}"
+        (( i++ )) || true
+    done
+    printf '\n'
+    local disk_n
+    read -rp "  Select disk [1]: " disk_n; disk_n="${disk_n:-1}"
+    if ! [[ "${disk_n}" =~ ^[0-9]+$ ]] || \
+       [[ "${disk_n}" -lt 1 ]] || [[ "${disk_n}" -gt "${#disk_names[@]}" ]]; then
+        printf '  Invalid selection.\n'; read -rp "  Press Enter ..."; return
+    fi
+    disk="${disk_names[$(( disk_n - 1 ))]}"
+    printf '\n  WARNING: /dev/%s will be completely erased.\n' "${disk}"
+    read -rp "  Type YES to confirm: " final_confirm
+    [[ "${final_confirm}" == "YES" ]] || { printf '  Cancelled.\n'; sleep 1; return; }
+
+    # ── Step 2: System configuration ──────────────────────────────
+    clear; _inst_step 2 "${total_steps}" "System Configuration"; printf '\n'
+    read -rp "  Hostname [dayshield]: " hostname; hostname="${hostname:-dayshield}"
+    while true; do
+        read -rsp "  Root password (min 8 chars): " password; echo
+        if [[ ${#password} -lt 8 ]]; then printf '  Password must be at least 8 characters.\n'; continue; fi
+        read -rsp "  Confirm password: " password2; echo
+        [[ "${password}" == "${password2}" ]] && break
+        printf '  Passwords do not match.\n'
+    done
+
+    # ── Step 3: Interface assignment ──────────────────────────────
+    clear; _inst_step 3 "${total_steps}" "Network Interfaces"; printf '\n'
+    local ifaces=()
+    while IFS= read -r iface; do ifaces+=("${iface}"); done < <(_list_ifaces)
+    if [[ ${#ifaces[@]} -eq 0 ]]; then
+        printf '  No interfaces found. Cannot continue.\n'; read -rp "  Press Enter ..."; return
+    fi
+    local j=1
+    for iface in "${ifaces[@]}"; do
+        printf '  %d) %-14s [%s]  %s\n' \
+            "${j}" "${iface}" "$(_iface_state "${iface}")" "$(_iface_ip4 "${iface}")"
+        (( j++ )) || true
+    done
+    printf '\n'
+    local wan_n lan_n
+    read -rp "  Select WAN interface number (Enter to skip): " wan_n
+    if [[ "${wan_n}" =~ ^[0-9]+$ ]] && \
+       [[ "${wan_n}" -ge 1 ]] && [[ "${wan_n}" -le "${#ifaces[@]}" ]]; then
+        wan_iface="${ifaces[$(( wan_n - 1 ))]}"
+        printf '\n  WAN connection type:\n    1) DHCP\n    2) PPPoE\n'
+        read -rp "  Select [1]: " wan_type_n
+        case "${wan_type_n}" in
+            2) wan_type="pppoe"
+               read -rp "  PPPoE username: " wan_pppoe_user
+               read -rsp "  PPPoE password: " wan_pppoe_pass; echo ;;
+            *) wan_type="dhcp" ;;
+        esac
+    fi
+    read -rp "  Select LAN interface number: " lan_n
+    if [[ "${lan_n}" =~ ^[0-9]+$ ]] && \
+       [[ "${lan_n}" -ge 1 ]] && [[ "${lan_n}" -le "${#ifaces[@]}" ]]; then
+        lan_iface="${ifaces[$(( lan_n - 1 ))]}"
+    fi
+    if [[ -z "${lan_iface}" ]]; then
+        printf '\n  LAN interface is required.\n'; read -rp "  Press Enter ..."; return
+    fi
+
+    # ── Step 4: LAN addressing ─────────────────────────────────────
+    clear; _inst_step 4 "${total_steps}" "LAN Address and DHCP"; printf '\n'
+    read -rp "  LAN IP address [192.168.1.1]: " lan_ip;     lan_ip="${lan_ip:-192.168.1.1}"
+    read -rp "  Subnet prefix  [24]: "          lan_prefix; lan_prefix="${lan_prefix:-24}"
+    local octet="${lan_ip%.*}"
+    dhcp_start="${octet}.100"; dhcp_end="${octet}.199"
+    local ds_in de_in
+    read -rp "  DHCP pool start [${dhcp_start}]: " ds_in; dhcp_start="${ds_in:-${dhcp_start}}"
+    read -rp "  DHCP pool end   [${dhcp_end}]: "   de_in; dhcp_end="${de_in:-${dhcp_end}}"
+
+    # ── Step 5: Partition and format ───────────────────────────────
+    clear; _inst_step 5 "${total_steps}" "Partitioning and Formatting"; printf '\n'
+    _inst_partition "${disk}" || { read -rp "  Partitioning failed. Press Enter ..."; return; }
+    _inst_ok "Partitions created."
+    _inst_format "${disk}"    || { read -rp "  Formatting failed. Press Enter ...";   return; }
+    _inst_ok "Partitions formatted."
+
+    # ── Step 6: Install rootfs ─────────────────────────────────────
+    clear; _inst_step 6 "${total_steps}" "Installing Root Filesystem"; printf '\n'
+    _inst_info "Locating rootfs archive ..."
+    rootfs="$(_inst_find_rootfs || true)"
+    if [[ -z "${rootfs}" ]]; then
+        _inst_err "rootfs archive not found. Ensure ISO contains /installer/rootfs.tar.zst"
+        read -rp "  Press Enter ..."; return
+    fi
+    _inst_ok "Found: ${rootfs}"
+    _inst_install_rootfs "${disk}" "${rootfs}" || { read -rp "  rootfs install failed. Press Enter ..."; return; }
+    _inst_ok "Root filesystem extracted."
+    _inst_info "Writing system configuration ..."
+    _inst_write_config \
+        "${hostname}" "${password}" \
+        "${wan_iface}" "${wan_type}" "${wan_pppoe_user}" "${wan_pppoe_pass}" \
+        "${lan_iface}" "${lan_ip}" "${lan_prefix}" \
+        "${dhcp_start}" "${dhcp_end}"
+    _inst_ok "Configuration written."
+
+    # ── Step 7: Bootloader ─────────────────────────────────────────
+    clear; _inst_step 7 "${total_steps}" "Installing Bootloader"; printf '\n'
+    _inst_install_bootloader "${disk}" || { read -rp "  Bootloader install failed. Press Enter ..."; return; }
+    _inst_ok "GRUB installed."
+
+    # ── Finalize ───────────────────────────────────────────────────
+    _inst_finalize
+    _inst_ok "All done."
+
+    # ── Summary ────────────────────────────────────────────────────
+    printf '\n'
+    _inst_hr
+    printf '  DayShield installation complete.\n'
+    printf '  Remove the installation media and reboot.\n'
+    _inst_hr
+    printf '\n'
+    printf '  Disk     : /dev/%s\n' "${disk}"
+    printf '  Hostname : %s\n' "${hostname}"
+    printf '  LAN      : %s  %s/%s\n' "${lan_iface}" "${lan_ip}" "${lan_prefix}"
+    [[ -n "${wan_iface}" ]] && printf '  WAN      : %s  (%s)\n' "${wan_iface}" "${wan_type}"
+    printf '  DHCP     : %s - %s\n' "${dhcp_start}" "${dhcp_end}"
+    printf '\n'
+    read -rp "  Reboot now? [Y/n]: " do_reboot
+    if [[ -z "${do_reboot}" || "${do_reboot,,}" == "y" ]]; then
+        systemctl reboot
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # Main loop
 # ---------------------------------------------------------------------------
 _load_state
 _console_quiet_enter
 trap _console_quiet_exit EXIT INT TERM
 
-if [[ "${CONSOLE_MODE}" == "boot" && "${FIRST_SETUP_DONE}" != "yes" ]]; then
-    _run_guided_setup
+if [[ "${CONSOLE_MODE}" == "boot" ]]; then
+    if $LIVE_MODE; then
+        # Live installer session: run installation wizard automatically.
+        _run_install_wizard
+    elif [[ "${FIRST_SETUP_DONE}" != "yes" ]]; then
+        # Installed system first boot: run management guided setup.
+        _run_guided_setup
+    fi
 fi
 
 while true; do
@@ -691,16 +1242,20 @@ while true; do
     else
         echo "  [0] Logout                     - return to login prompt"
     fi
-    echo "  [1] Assign interfaces          - choose WAN and LAN adapters"
-    echo "  [2] Set LAN IP address         - configure LAN gateway address"
-    echo "  [3] Configure LAN DHCP server  - client address pool"
-    echo "  [4] Change root password       - local console/root password"
-    echo "  [5] Reboot system"
-    echo "  [6] Power off system"
-    echo "  [7] Run guided setup wizard"
+    if $LIVE_MODE; then
+        echo "  [8] Install DayShield          - run installation wizard"
+    else
+        echo "  [1] Assign interfaces          - choose WAN and LAN adapters"
+        echo "  [2] Set LAN IP address         - configure LAN gateway address"
+        echo "  [3] Configure LAN DHCP server  - client address pool"
+        echo "  [4] Change root password       - local console/root password"
+        echo "  [5] Reboot system"
+        echo "  [6] Power off system"
+        echo "  [7] Run guided setup wizard"
+    fi
     echo ""
 
-    read -rp "Select option [0-7]: " opt
+    read -rp "Select option: " opt
     case "${opt}" in
         0)
             if [[ "${CONSOLE_MODE}" == "boot" ]]; then
@@ -713,13 +1268,14 @@ while true; do
                 exit 0
             fi
             ;;
-        1) _assign_interfaces ;;
-        2) _set_lan_ip ;;
-        3) _set_lan_dhcp ;;
-        4) _change_password ;;
-        5) _reboot ;;
-        6) _shutdown ;;
-        7) _run_guided_setup ;;
+        1) ! $LIVE_MODE && _assign_interfaces ;;
+        2) ! $LIVE_MODE && _set_lan_ip ;;
+        3) ! $LIVE_MODE && _set_lan_dhcp ;;
+        4) ! $LIVE_MODE && _change_password ;;
+        5) ! $LIVE_MODE && _reboot ;;
+        6) ! $LIVE_MODE && _shutdown ;;
+        7) ! $LIVE_MODE && _run_guided_setup ;;
+        8) $LIVE_MODE && _run_install_wizard ;;
         *) ;;
     esac
 done
