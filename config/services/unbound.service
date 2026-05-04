@@ -11,7 +11,6 @@ Type=notify
 # Bootstrap DNSSEC trust anchor on first boot (noop if already present)
 ExecStartPre=/bin/sh -c 'mkdir -p /var/lib/unbound && /usr/sbin/unbound-anchor -a /var/lib/unbound/root.key || true'
 ExecStartPre=/bin/sh -c 'chown -R unbound:unbound /var/lib/unbound 2>/dev/null || true'
-ExecStartPre=/usr/sbin/unbound-checkconf
 ExecStart=/usr/sbin/unbound -d
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
