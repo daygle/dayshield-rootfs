@@ -1108,9 +1108,6 @@ server:
   private-address: 192.168.0.0/16
   private-address: 100.64.0.0/10
   minimal-responses: yes
-  directory: "/etc/unbound"
-  chroot: ""
-  pidfile: "/run/unbound/unbound.pid"
 EOF
 
     # DayShield core config.json
