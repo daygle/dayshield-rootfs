@@ -1,0 +1,96 @@
+name: Build RootFS
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout dayshield-rootfs
+        uses: actions/checkout@v4
+        with:
+          path: rootfs
+
+      - name: Checkout dayshield-core
+        uses: actions/checkout@v4
+        with:
+          repository: daygle/dayshield-core
+          path: dayshield-core-src
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.88.0"
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            dayshield-core-src/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('dayshield-core-src/**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Build dayshield-core binary
+        working-directory: dayshield-core-src
+        run: cargo build --release -p dayshield-core
+
+      - name: Copy binary to rootfs workspace
+        run: cp dayshield-core-src/target/release/dayshield-core rootfs/dayshield-core
+
+      - name: Install rootfs build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends mmdebstrap zstd
+
+      - name: Build rootfs
+        working-directory: rootfs
+        run: sudo make rootfs
+
+      - name: Verify rootfs artifacts
+        working-directory: rootfs
+        run: |
+          VERIFY_DIR="$(mktemp -d)"
+          sudo tar -C "${VERIFY_DIR}" -xf rootfs.tar.zst
+
+          FAIL=0
+
+          echo "==> Checking /usr/local/sbin/dayshield-core"
+          if sudo test -x "${VERIFY_DIR}/usr/local/sbin/dayshield-core"; then
+            echo "  [PASS] dayshield-core is present and executable"
+          else
+            echo "  [FAIL] dayshield-core missing or not executable" >&2
+            FAIL=1
+          fi
+
+          echo "==> Checking /etc/modprobe.d/disable-ipv6.conf"
+          if sudo grep -q 'blacklist ipv6' "${VERIFY_DIR}/etc/modprobe.d/disable-ipv6.conf" 2>/dev/null; then
+            echo "  [PASS] IPv6 kernel module blacklist entry present"
+          else
+            echo "  [FAIL] IPv6 modprobe blacklist missing or incorrect" >&2
+            FAIL=1
+          fi
+
+          sudo rm -rf "${VERIFY_DIR}"
+
+          if [ "${FAIL}" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Upload rootfs artifact
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dayshield-rootfs
+          path: rootfs/rootfs.tar.zst
+          retention-days: 30
