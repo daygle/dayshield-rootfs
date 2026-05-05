@@ -6,14 +6,13 @@ AddressFamily any
 ListenAddress 0.0.0.0
 
 # ── Authentication ────────────────────────────────────────────────────────────
-# Disable root password login; allow root only with an authorised key
-# (operator can set one after install).
-PermitRootLogin prohibit-password
+# Allow root password login on the installed system.
+PermitRootLogin yes
 
-# Require public-key authentication; disable password auth.
+# Allow password authentication for SSH.
 PubkeyAuthentication yes
 AuthorizedKeysFile .ssh/authorized_keys
-PasswordAuthentication no
+PasswordAuthentication yes
 PermitEmptyPasswords no
 
 # Disable PAM challenge-response (keyboard-interactive) fallback.
