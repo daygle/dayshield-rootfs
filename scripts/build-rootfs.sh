@@ -21,7 +21,7 @@ Usage: $0 [OPTIONS]
 
 Options:
   --arch ARCH       Target architecture (default: amd64)
-  --suite SUITE     Debian suite (default: bookworm)
+  --suite SUITE     Debian suite (default: trixie)
   --output FILE     Output file (default: rootfs.tar.zst)
   --mirror URL      Debian mirror URL (default: http://deb.debian.org/debian)
   --help            Show this help message
