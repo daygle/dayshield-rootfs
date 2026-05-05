@@ -958,19 +958,29 @@ EOF
         _inst_err "WARNING: could not lock root password — default password may still be active"
     fi
 
-    # Password hash
-    local hash=""
-    if command -v openssl >/dev/null 2>&1; then
-        hash=$(openssl passwd -6 -- "${password}" 2>/dev/null)
-    elif command -v python3 >/dev/null 2>&1; then
-        hash=$(python3 -c "import crypt,sys; print(crypt.crypt(sys.argv[1], crypt.mksalt(crypt.METHOD_SHA512)))" "${password}" 2>/dev/null)
+    # Password update
+    local use_chpasswd=0
+    if ! printf '%s' "${password}" | grep -q ':' && chroot "${target}" command -v chpasswd >/dev/null 2>&1; then
+        if printf '%s\n' "root:${password}" | chroot "${target}" chpasswd >/dev/null 2>&1; then
+            use_chpasswd=1
+        fi
     fi
-    if [[ -z "${hash}" ]]; then
-        _inst_err "Password hashing failed — root password locked"
-    elif [[ -f "${target}/etc/shadow" ]]; then
-        local escaped
-        escaped=$(printf '%s' "${hash}" | sed 's|[&/\\]|\\&|g')
-        sed -i "s|^root:[^:]*:|root:${escaped}:|" "${target}/etc/shadow"
+
+    if [ "${use_chpasswd}" -eq 0 ]; then
+        # Fall back to deterministic host-side hashing and direct shadow replacement.
+        local hash=""
+        if command -v openssl >/dev/null 2>&1; then
+            hash=$(openssl passwd -6 -- "${password}" 2>/dev/null)
+        elif command -v python3 >/dev/null 2>&1; then
+            hash=$(python3 -c "import crypt,sys; print(crypt.crypt(sys.argv[1], crypt.mksalt(crypt.METHOD_SHA512)))" "${password}" 2>/dev/null)
+        fi
+        if [[ -z "${hash}" ]]; then
+            _inst_err "Password hashing failed — root password locked"
+        elif [[ -f "${target}/etc/shadow" ]]; then
+            local escaped
+            escaped=$(printf '%s' "${hash}" | sed 's|[&/\\]|\\&|g')
+            sed -i "s|^root:[^:]*:|root:${escaped}:|" "${target}/etc/shadow"
+        fi
     fi
 
     # nftables interface mapping
