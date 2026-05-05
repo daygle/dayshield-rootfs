@@ -118,6 +118,12 @@ if [ -f "${BINARY}" ]; then
     else
         fail "binary is not executable: /usr/local/sbin/dayshield-core"
     fi
+    # Detect placeholder installed when the real binary was absent at build time
+    if grep -q 'not yet installed' "${BINARY}" 2>/dev/null; then
+        fail "dayshield-core is a placeholder — real binary was not provided at build time; dayshield.service will fail on boot"
+    else
+        ok "dayshield-core is not a placeholder"
+    fi
 else
     fail "missing binary: /usr/local/sbin/dayshield-core"
 fi
