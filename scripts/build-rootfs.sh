@@ -135,7 +135,9 @@ env ROOTFS_DIR="${ROOTFS_DIR}" \
 printf '==> Step 3: install-dayshield-core\n'
 env ROOTFS_DIR="${ROOTFS_DIR}" \
     CONFIG_DIR="${CONFIG_DIR}" \
-    REPO_DIR="${REPO_DIR}" \    DAYSHIELD_UI_DIR="${UI_DIR}" \    sh "${SCRIPT_DIR}/install-dayshield-core.sh"
+    REPO_DIR="${REPO_DIR}" \
+    DAYSHIELD_UI_DIR="${UI_DIR}" \
+    sh "${SCRIPT_DIR}/install-dayshield-core.sh"
 
 # ── 4. Run enable-services.sh ────────────────────────────────────────────────
 printf '==> Step 4: enable-services\n'
