@@ -112,6 +112,27 @@ If the binary is absent, a shell placeholder is written to
 `/usr/local/sbin/dayshield-core`. The placeholder exits with an error at
 runtime - replace it before deploying.
 
+### Providing the Management UI
+
+If you want the installed system to serve the Management UI from
+`dayshield-core`, build the UI and provide its `dist` directory when
+building the rootfs:
+
+```sh
+cd ../dayshield-ui
+npm install
+npm run build
+
+cd ../dayshield-rootfs
+make rootfs UI_DIR=../dayshield-ui/dist
+```
+
+This copies the UI output into `/usr/local/share/dayshield-ui` inside the
+rootfs, which is the path expected by `dayshield-core`.
+
+If `UI_DIR` is not set, the rootfs build continues normally, but the
+installed system will not serve the management interface.
+
 ---
 
 ## Verifying the RootFS

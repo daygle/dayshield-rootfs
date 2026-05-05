@@ -62,6 +62,23 @@ WantedBy=multi-user.target
 UNIT
 fi
 
+# ── Optional Management UI assets ───────────────────────────────────────────
+if [ -n "${DAYSHIELD_UI_DIR:-}" ]; then
+    if [ ! -d "${DAYSHIELD_UI_DIR}" ]; then
+        printf 'ERROR: DayShield UI build directory not found: %s\n' "${DAYSHIELD_UI_DIR}" >&2
+        exit 1
+    fi
+    if [ ! -f "${DAYSHIELD_UI_DIR}/index.html" ]; then
+        printf 'ERROR: DayShield UI build directory does not look like a Vite build output: %s\n' "${DAYSHIELD_UI_DIR}" >&2
+        exit 1
+    fi
+
+    printf '  -> Installing DayShield UI static assets from %s\n' "${DAYSHIELD_UI_DIR}"
+    mkdir -p "${ROOTFS_DIR}/usr/local/share/dayshield-ui"
+    cp -a "${DAYSHIELD_UI_DIR}/." "${ROOTFS_DIR}/usr/local/share/dayshield-ui/"
+    chmod -R a+rX "${ROOTFS_DIR}/usr/local/share/dayshield-ui"
+fi
+
 # ── Enable the service via symlink ────────────────────────────────────────────
 printf '  -> Enabling dayshield.service\n'
 mkdir -p "${ROOTFS_DIR}/etc/systemd/system/multi-user.target.wants"

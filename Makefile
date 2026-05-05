@@ -6,6 +6,7 @@ ARCH         ?= amd64
 SUITE        ?= trixie
 OUTPUT       ?= rootfs.tar.zst
 MIRROR       ?= http://deb.debian.org/debian
+UI_DIR       ?=
 SCRIPTS_DIR  := scripts
 ROOTFS_DIR   ?=
 
@@ -15,7 +16,7 @@ all: rootfs
 
 ## Build the root filesystem archive
 rootfs:
-	@sh $(SCRIPTS_DIR)/build-rootfs.sh \
+	@UI_DIR="$(UI_DIR)" sh $(SCRIPTS_DIR)/build-rootfs.sh \
 		--arch  "$(ARCH)"   \
 		--suite "$(SUITE)"  \
 		--output "$(OUTPUT)" \

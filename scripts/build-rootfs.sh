@@ -14,6 +14,7 @@ ARCH="amd64"
 SUITE="trixie"
 OUTPUT="rootfs.tar.zst"
 MIRROR="http://deb.debian.org/debian"
+UI_DIR=""
 
 usage() {
     cat <<EOF
@@ -24,6 +25,7 @@ Options:
   --suite SUITE     Debian suite (default: trixie)
   --output FILE     Output file (default: rootfs.tar.zst)
   --mirror URL      Debian mirror URL (default: http://deb.debian.org/debian)
+  --ui-dir PATH     Optional built UI output directory to install into /usr/local/share/dayshield-ui
   --help            Show this help message
 EOF
     exit 0
@@ -36,6 +38,7 @@ while [ $# -gt 0 ]; do
         --suite)   SUITE="$2";  shift 2 ;;
         --output)  OUTPUT="$2"; shift 2 ;;
         --mirror)  MIRROR="$2"; shift 2 ;;
+        --ui-dir)  UI_DIR="$2"; shift 2 ;;
         --help)    usage ;;
         *)
             printf 'Unknown option: %s\n' "$1" >&2
@@ -45,6 +48,11 @@ while [ $# -gt 0 ]; do
 done
 
 # Validate required tools
+if [ -n "${UI_DIR}" ] && [ ! -d "${UI_DIR}" ]; then
+    printf 'ERROR: UI build directory not found: %s\n' "${UI_DIR}" >&2
+    exit 1
+fi
+
 for tool in mmdebstrap zstd tar; do
     if ! command -v "${tool}" >/dev/null 2>&1; then
         printf 'ERROR: required tool not found: %s\n' "${tool}" >&2
@@ -98,6 +106,7 @@ printf '    Suite        : %s\n' "${SUITE}"
 printf '    Output       : %s\n' "${OUTPUT}"
 printf '    Mirror       : %s\n' "${MIRROR}"
 printf '    Packages     : %s\n' "${PACKAGES}"
+printf '    UI dir       : %s\n' "${UI_DIR:-<none>}"
 printf '\n'
 
 # ── 1. Run mmdebstrap ────────────────────────────────────────────────────────
@@ -126,8 +135,7 @@ env ROOTFS_DIR="${ROOTFS_DIR}" \
 printf '==> Step 3: install-dayshield-core\n'
 env ROOTFS_DIR="${ROOTFS_DIR}" \
     CONFIG_DIR="${CONFIG_DIR}" \
-    REPO_DIR="${REPO_DIR}" \
-    sh "${SCRIPT_DIR}/install-dayshield-core.sh"
+    REPO_DIR="${REPO_DIR}" \    DAYSHIELD_UI_DIR="${UI_DIR}" \    sh "${SCRIPT_DIR}/install-dayshield-core.sh"
 
 # ── 4. Run enable-services.sh ────────────────────────────────────────────────
 printf '==> Step 4: enable-services\n'
