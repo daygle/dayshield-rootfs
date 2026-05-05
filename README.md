@@ -164,7 +164,7 @@ via the `ROOTFS` variable (or equivalent) in the ISO build configuration:
 make -C ../dayshield-iso iso ROOTFS=$(pwd)/rootfs.tar.zst
 ```
 
-> **Important — live-boot overlay:** `live-boot` and `live-config` are **not**
+> **Important - live-boot overlay:** `live-boot` and `live-config` are **not**
 > included in `rootfs.tar.zst`.  Embedding them in the base rootfs causes their
 > initramfs hooks to run on the installed system, where they stall boot waiting
 > for a squashfs live medium.  The `dayshield-iso` pipeline must install
