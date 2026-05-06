@@ -77,6 +77,10 @@ if [ -n "${DAYSHIELD_UI_DIR:-}" ]; then
     mkdir -p "${ROOTFS_DIR}/usr/local/share/dayshield-ui"
     cp -a "${DAYSHIELD_UI_DIR}/." "${ROOTFS_DIR}/usr/local/share/dayshield-ui/"
     chmod -R a+rX "${ROOTFS_DIR}/usr/local/share/dayshield-ui"
+else
+    printf '  -> WARNING: No DayShield UI assets installed into rootfs.\n'
+    printf '     The installed system will not serve the management interface unless\n'
+    printf '     you build the UI and pass UI_DIR to make rootfs.\n'
 fi
 
 # ── Enable the service via symlink ────────────────────────────────────────────

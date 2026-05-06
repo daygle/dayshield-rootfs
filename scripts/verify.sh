@@ -128,6 +128,17 @@ else
     fail "missing binary: /usr/local/sbin/dayshield-core"
 fi
 
+# ── Management UI assets (optional) ──────────────────────────────────────────
+banner "Management UI assets"
+UI_INDEX="${ROOTFS_DIR}/usr/local/share/dayshield-ui/index.html"
+if [ -f "${UI_INDEX}" ]; then
+    ok "management UI assets installed"
+else
+    printf '  [WARN] Management UI assets not installed: /usr/local/share/dayshield-ui/index.html missing\n'
+    printf '         The installed system will not serve the management interface until\n'
+    printf '         the rootfs is rebuilt with UI_DIR pointing at dayshield-ui/dist.\n'
+fi
+
 # ── IPv6 disabled ─────────────────────────────────────────────────────────────
 banner "IPv6 disabled"
 

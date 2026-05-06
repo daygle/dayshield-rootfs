@@ -133,9 +133,13 @@ rootfs, which is the path expected by `dayshield-core`.
 If `UI_DIR` is not set, the rootfs build continues normally, but the
 installed system will not serve the management interface.
 
-When UI assets are installed, the `dayshield-core` service listens on port
-`3000` and the installed system also configures a port redirect so the
-management UI is reachable on port `8443`.
+The installed management UI is served over plain HTTP. When UI assets are
+installed, the `dayshield-core` service listens on port `3000` and the
+installed system also configures a port redirect so the management UI is
+reachable at `http://<host>:8443/`.
+
+If you want the installed system to serve the management UI, build the UI
+and pass its output directory into the rootfs builder.
 
 ---
 
