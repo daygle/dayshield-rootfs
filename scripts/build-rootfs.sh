@@ -1,5 +1,5 @@
 #!/bin/sh
-# build-rootfs.sh — Main entrypoint for the DayShield RootFS builder.
+# build-rootfs.sh - Main entrypoint for the DayShield RootFS builder.
 # Produces a deterministic, reproducible Debian-based root filesystem.
 # POSIX shell compatible.
 
