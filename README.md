@@ -53,7 +53,7 @@ for direct injection into the `dayshield-iso` build pipeline.
 Install on Debian/Ubuntu:
 
 ```sh
-sudo apt-get install mmdebstrap zstd systemd-container
+apt-get install mmdebstrap zstd systemd-container
 ```
 
 ---
