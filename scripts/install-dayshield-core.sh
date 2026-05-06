@@ -47,7 +47,6 @@ Requires=nftables.service
 
 [Service]
 Type=exec
-Environment=DAYSHIELD_PORT=8443
 ExecStart=/usr/local/sbin/dayshield-core
 Restart=on-failure
 RestartSec=5s
