@@ -394,7 +394,7 @@ _print_header() {
     if $LIVE_MODE; then
         local web_rows=()
         while IFS=$'\t' read -r iface ip; do
-            web_rows+=("http://${ip}:8080/ (${iface})")
+            web_rows+=("https://${ip}:8443/ (${iface})")
         done < <(_live_web_ifaces_with_ip)
 
         if [[ ${#web_rows[@]} -gt 0 ]]; then
