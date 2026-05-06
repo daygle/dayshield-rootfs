@@ -51,7 +51,7 @@ jobs:
       - name: Install rootfs build dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends mmdebstrap zstd
+          sudo apt-get install -y --no-install-recommends mmdebstrap zstd debian-archive-keyring
 
       - name: Build rootfs
         working-directory: rootfs
