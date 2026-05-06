@@ -1,4 +1,4 @@
-# DayShield RootFS — deterministic package list
+# DayShield RootFS - deterministic package list
 # One package name per line.  Blank lines and lines starting with # are ignored.
 #
 # Core system
@@ -37,7 +37,7 @@ wget
 # live squashfs medium and drop to an emergency shell).
 zstd
 
-# Kernel — standard amd64 kernel (non-RT) for QEMU/bare-metal compatibility.
+# Kernel - standard amd64 kernel (non-RT) for QEMU/bare-metal compatibility.
 linux-image-amd64
 
 # Networking

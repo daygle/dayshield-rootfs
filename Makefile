@@ -1,4 +1,4 @@
-# DayShield RootFS — Makefile
+# DayShield RootFS - Makefile
 # Targets: rootfs, verify, clean
 
 SHELL        := /bin/sh

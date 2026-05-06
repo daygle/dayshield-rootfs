@@ -1,5 +1,5 @@
 #!/bin/sh
-# verify.sh — Verify the integrity and correctness of a DayShield rootfs.
+# verify.sh - Verify the integrity and correctness of a DayShield rootfs.
 # Can be run against an extracted rootfs directory (ROOTFS_DIR) or against a
 # mounted/chroot target.
 # POSIX shell compatible.
@@ -20,12 +20,12 @@ banner "Boot files"
 if ls "${ROOTFS_DIR}"/boot/vmlinuz-* >/dev/null 2>&1; then
     ok "kernel image found in /boot (vmlinuz-*)"
 else
-    fail "no kernel image in /boot — check that linux-image-amd64 was installed"
+    fail "no kernel image in /boot - check that linux-image-amd64 was installed"
 fi
 if ls "${ROOTFS_DIR}"/boot/initrd.img-* >/dev/null 2>&1; then
     ok "initramfs found in /boot (initrd.img-*)"
 else
-    fail "no initramfs in /boot — run update-initramfs inside the chroot"
+    fail "no initramfs in /boot - run update-initramfs inside the chroot"
 fi
 
 # ── /etc/fstab ────────────────────────────────────────────────────────────────
@@ -35,10 +35,10 @@ if [ -f "${ROOTFS_DIR}/etc/fstab" ]; then
     if grep -qE '^[^#].*[[:space:]]+/[[:space:]]' "${ROOTFS_DIR}/etc/fstab"; then
         ok "/etc/fstab has a root (/) mount entry"
     else
-        fail "/etc/fstab is missing a root (/) mount entry — systemd will hang at local-fs.target"
+        fail "/etc/fstab is missing a root (/) mount entry - systemd will hang at local-fs.target"
     fi
 else
-    fail "missing /etc/fstab — systemd-remount-fs.service will fail and hang boot"
+    fail "missing /etc/fstab - systemd-remount-fs.service will fail and hang boot"
 fi
 
 # ── live-boot absent ──────────────────────────────────────────────────────────
@@ -48,12 +48,12 @@ fi
 # as a separate squashfs overlay for live-boot operation only.
 banner "live-boot absent from installed rootfs"
 if [ -f "${ROOTFS_DIR}/var/lib/dpkg/info/live-boot.list" ]; then
-    fail "live-boot is installed — it will embed live hooks in the initramfs and stall boot"
+    fail "live-boot is installed - it will embed live hooks in the initramfs and stall boot"
 else
     ok "live-boot not installed"
 fi
 if [ -f "${ROOTFS_DIR}/var/lib/dpkg/info/live-config.list" ]; then
-    fail "live-config is installed — its systemd units interfere with installed-system startup"
+    fail "live-config is installed - its systemd units interfere with installed-system startup"
 else
     ok "live-config not installed"
 fi
@@ -120,7 +120,7 @@ if [ -f "${BINARY}" ]; then
     fi
     # Detect placeholder installed when the real binary was absent at build time
     if grep -q 'not yet installed' "${BINARY}" 2>/dev/null; then
-        fail "dayshield-core is a placeholder — real binary was not provided at build time; dayshield.service will fail on boot"
+        fail "dayshield-core is a placeholder - real binary was not provided at build time; dayshield.service will fail on boot"
     else
         ok "dayshield-core is not a placeholder"
     fi

@@ -1,5 +1,5 @@
 #!/bin/sh
-# harden-ipv4.sh — Apply IPv4-only hardening to the rootfs.
+# harden-ipv4.sh - Apply IPv4-only hardening to the rootfs.
 # Disables IPv6 at every layer: sysctl, kernel modules, hosts,
 # nftables, and unbound.
 # POSIX shell compatible.
@@ -22,7 +22,7 @@ printf '  -> Blacklisting IPv6 kernel module\n'
 mkdir -p "${ROOTFS_DIR}/etc/modprobe.d"
 printf 'blacklist ipv6\n' > "${ROOTFS_DIR}/etc/modprobe.d/disable-ipv6.conf"
 
-# ── /etc/hosts — remove any IPv6 entries ─────────────────────────────────────
+# ── /etc/hosts - remove any IPv6 entries ─────────────────────────────────────
 printf '  -> Stripping IPv6 entries from /etc/hosts\n'
 if [ -f "${ROOTFS_DIR}/etc/hosts" ]; then
     # Remove lines starting with :: (IPv6 loopback and link-local)
@@ -31,7 +31,7 @@ if [ -f "${ROOTFS_DIR}/etc/hosts" ]; then
     sed -i '/ip6-/d' "${ROOTFS_DIR}/etc/hosts"
 fi
 
-# ── nftables — verify no inet6 tables ────────────────────────────────────────
+# ── nftables - verify no inet6 tables ────────────────────────────────────────
 printf '  -> Verifying nftables.conf contains no ip6/inet6 tables\n'
 NFTABLES_CONF="${ROOTFS_DIR}/etc/nftables.conf"
 if [ -f "${NFTABLES_CONF}" ]; then
@@ -41,7 +41,7 @@ if [ -f "${NFTABLES_CONF}" ]; then
     fi
 fi
 
-# ── unbound — ensure no IPv6 binds ───────────────────────────────────────────
+# ── unbound - ensure no IPv6 binds ───────────────────────────────────────────
 printf '  -> Ensuring unbound does not bind IPv6\n'
 UNBOUND_CONF="${ROOTFS_DIR}/etc/unbound/unbound.conf"
 if [ -f "${UNBOUND_CONF}" ]; then

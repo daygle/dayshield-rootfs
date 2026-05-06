@@ -900,7 +900,7 @@ _inst_install_bootloader() {
     # Ensure kernel and initramfs exist
     _inst_info "Checking for kernel and initramfs ..."
     if [[ ! -f "${target}/boot/vmlinuz" ]] && ! ls "${target}"/boot/vmlinuz-* >/dev/null 2>&1; then
-        _inst_info "  Kernel/initramfs not found — generating ..."
+        _inst_info "  Kernel/initramfs not found - generating ..."
         if chroot "${target}" update-initramfs -c -k all >/dev/null 2>&1; then
             _inst_info "  Initramfs generated successfully"
         else
@@ -955,7 +955,7 @@ EOF
 
     # Remove the live-ISO default root password from the installed system.
     if ! chroot "${target}" passwd -l root >/dev/null 2>&1; then
-        _inst_err "WARNING: could not lock root password — default password may still be active"
+        _inst_err "WARNING: could not lock root password - default password may still be active"
     fi
 
     # Password update
@@ -975,7 +975,7 @@ EOF
             hash=$(python3 -c "import crypt,sys; print(crypt.crypt(sys.argv[1], crypt.mksalt(crypt.METHOD_SHA512)))" "${password}" 2>/dev/null)
         fi
         if [[ -z "${hash}" ]]; then
-            _inst_err "Password hashing failed — root password locked"
+            _inst_err "Password hashing failed - root password locked"
         elif [[ -f "${target}/etc/shadow" ]]; then
             local escaped
             escaped=$(printf '%s' "${hash}" | sed 's|[&/\\]|\\&|g')

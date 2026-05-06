@@ -1,5 +1,5 @@
 #!/bin/sh
-# enable-services.sh — Enable required systemd services in the rootfs.
+# enable-services.sh - Enable required systemd services in the rootfs.
 # POSIX shell compatible.
 
 set -eu

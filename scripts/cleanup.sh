@@ -1,5 +1,5 @@
 #!/bin/sh
-# cleanup.sh — Strip non-reproducible artifacts from the rootfs.
+# cleanup.sh - Strip non-reproducible artifacts from the rootfs.
 # Removes caches, machine-id, logs, and normalises timestamps to epoch 0.
 # POSIX shell compatible.
 
@@ -30,7 +30,7 @@ rm -rf "${ROOTFS_DIR}/var/cache/apt/archives"/*.deb \
 # ── machine-id ────────────────────────────────────────────────────────────────
 printf '  -> Clearing machine-id\n'
 # An empty (or single-newline) machine-id causes systemd to generate a
-# transient one on first boot — this is the recommended approach for images.
+# transient one on first boot - this is the recommended approach for images.
 printf '\n' > "${ROOTFS_DIR}/etc/machine-id"
 # Also clear the D-Bus machine-id if present
 if [ -e "${ROOTFS_DIR}/var/lib/dbus/machine-id" ]; then

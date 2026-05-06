@@ -1,5 +1,5 @@
 #!/bin/sh
-# chroot-setup.sh — Configure the chroot environment for DayShield.
+# chroot-setup.sh - Configure the chroot environment for DayShield.
 # Must be run after mmdebstrap with ROOTFS_DIR and CONFIG_DIR set.
 # POSIX shell compatible.
 
@@ -13,7 +13,7 @@ printf '  -> Setting hostname to dayshield\n'
 printf 'dayshield\n' > "${ROOTFS_DIR}/etc/hostname"
 
 # ── Root password (live/installer session only) ───────────────────────────────
-# Default: dayshield  —  must be changed after installation via the web UI.
+# Default: dayshield  -  must be changed after installation via the web UI.
 printf '  -> Setting default root password\n'
 printf 'root:dayshield\n' | chroot "${ROOTFS_DIR}" chpasswd
 
@@ -103,7 +103,7 @@ printf '  -> Copying config/dayshield skeleton\n'
 cp -r "${CONFIG_DIR}/dayshield/config/." "${ROOTFS_DIR}/etc/dayshield/config/"
 cp -r "${CONFIG_DIR}/dayshield/certs/."  "${ROOTFS_DIR}/etc/dayshield/certs/"
 
-# ── systemd-networkd-wait-online — don't block boot ──────────────────────────
+# ── systemd-networkd-wait-online - don't block boot ──────────────────────────
 # In installer mode there are no configured interfaces yet (wizard hasn't run),
 # so wait-online would hang forever.  On installed systems, only wait for ANY
 # one interface to come up (not all), with a 30-second cap.
@@ -111,7 +111,7 @@ printf '  -> Dropping systemd-networkd-wait-online override\n'
 mkdir -p "${ROOTFS_DIR}/etc/systemd/system/systemd-networkd-wait-online.service.d"
 cat > "${ROOTFS_DIR}/etc/systemd/system/systemd-networkd-wait-online.service.d/dayshield.conf" <<'EOF'
 [Unit]
-# Skip entirely during installer live-boot — interfaces are unconfigured
+# Skip entirely during installer live-boot - interfaces are unconfigured
 ConditionKernelCommandLine=!installer
 
 [Service]

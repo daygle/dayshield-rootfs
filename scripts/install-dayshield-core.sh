@@ -1,5 +1,5 @@
 #!/bin/sh
-# install-dayshield-core.sh — Install the dayshield-core binary and service.
+# install-dayshield-core.sh - Install the dayshield-core binary and service.
 # POSIX shell compatible.
 
 set -eu
@@ -22,7 +22,7 @@ else
     # Create a placeholder script so the service can be enabled during build
     cat > "${ROOTFS_DIR}/usr/local/sbin/dayshield-core" <<'PLACEHOLDER'
 #!/bin/sh
-# Placeholder — replace with the real dayshield-core binary before deployment.
+# Placeholder - replace with the real dayshield-core binary before deployment.
 printf 'dayshield-core: not yet installed\n' >&2
 exit 1
 PLACEHOLDER
