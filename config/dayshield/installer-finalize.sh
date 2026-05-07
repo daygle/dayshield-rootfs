@@ -223,8 +223,12 @@ EOF
 
 # Unbound DNS
 mkdir -p "${target}/etc/unbound" "${target}/var/lib/unbound"
-chroot "${target}" /usr/sbin/unbound-anchor -a /var/lib/unbound/root.key >/dev/null 2>&1 || true
-chroot "${target}" chown -R unbound:unbound /var/lib/unbound 2>/dev/null || true
+if ! chroot "${target}" /usr/sbin/unbound-anchor -a /var/lib/unbound/root.key >/dev/null 2>&1; then
+    _fin_err "WARNING: unbound-anchor failed; DNSSEC trust anchor may be missing until first successful refresh"
+fi
+if ! chroot "${target}" chown -R unbound:unbound /var/lib/unbound 2>/dev/null; then
+    _fin_err "WARNING: failed to set unbound ownership for /var/lib/unbound"
+fi
 cat > "${target}/etc/unbound/unbound.conf" <<EOF
 server:
   interface: 0.0.0.0
@@ -293,6 +297,7 @@ _fin_info "Validating install-time criteria ..."
 
 if grep -qw installer /proc/cmdline 2>/dev/null; then
     if command -v ss >/dev/null 2>&1; then
+        # Prevent installer-live/service conflicts on the management redirect port.
         if IFS= read -r _ < <(ss -H -ltn 'sport = :8443' 2>/dev/null); then
             _fin_err "live installer has an active TCP listener on port 8443"
             exit 1

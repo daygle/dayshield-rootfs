@@ -1102,7 +1102,7 @@ _run_install_wizard() {
         "${hostname}" "${password}" \
         "${wan_iface}" "${wan_type}" "${wan_pppoe_user}" "${wan_pppoe_pass}" \
         "${lan_iface}" "${lan_ip}" "${lan_prefix}" \
-        "${dhcp_start}" "${dhcp_end}" || { read -rp "  Shared installer finalization failed; review [ERR] output above. Press Enter ..."; return; }
+        "${dhcp_start}" "${dhcp_end}" || { read -rp "  Shared installer finalization (/usr/local/lib/dayshield/installer-finalize.sh) failed; review preceding [ERR] lines. Press Enter ..."; return; }
     _inst_ok "Configuration written."
 
     # ── Step 7: Bootloader ─────────────────────────────────────────
