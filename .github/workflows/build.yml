@@ -26,6 +26,7 @@ jobs:
           path: dayshield-core-src
 
       - name: Set up Rust toolchain
+        # Pinned to dtolnay/rust-toolchain v1 ref as resolved on 2026-05-07.
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9
         with:
           toolchain: "1.88.0"

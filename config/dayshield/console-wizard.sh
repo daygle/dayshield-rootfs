@@ -421,9 +421,16 @@ EOF
     chmod 600 /etc/ppp/chap-secrets /etc/ppp/pap-secrets
 
     # Stop existing PPPoE session for this link name (if any)
-    local pidfile old_pid
+    local pidfile old_pid pid_perms
     for pidfile in /run/ppp-wan.pid /var/run/ppp-wan.pid; do
         [[ -f "${pidfile}" ]] || continue
+        if [[ "$(stat -c '%u' "${pidfile}" 2>/dev/null || true)" != "0" ]]; then
+            continue
+        fi
+        pid_perms="$(stat -c '%A' "${pidfile}" 2>/dev/null || true)"
+        if [[ "${#pid_perms}" -ge 10 ]] && { [[ "${pid_perms:5:1}" == "w" ]] || [[ "${pid_perms:8:1}" == "w" ]]; }; then
+            continue
+        fi
         old_pid="$(cat "${pidfile}" 2>/dev/null || true)"
         if [[ "${old_pid}" =~ ^[0-9]+$ ]] && kill -0 "${old_pid}" 2>/dev/null; then
             if [[ -r "/proc/${old_pid}/comm" ]] && [[ "$(cat "/proc/${old_pid}/comm" 2>/dev/null || true)" == "pppd" ]]; then
