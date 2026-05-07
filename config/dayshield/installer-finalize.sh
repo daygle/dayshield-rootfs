@@ -5,6 +5,7 @@
 set -euo pipefail
 
 _fin_info() { printf '  ...   %s\n' "$*"; }
+_fin_warn() { printf '  [WRN] %s\n' "$*"; }
 _fin_err()  { printf '  [ERR] %s\n' "$*" >&2; }
 
 if [[ "$#" -ne 12 ]]; then
@@ -40,7 +41,7 @@ if ! [[ "${lan_ip}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
     exit 1
 fi
 
-if ! [[ "${lan_prefix}" =~ ^[0-9]+$ ]] || [[ "${lan_prefix}" -lt 0 ]] || [[ "${lan_prefix}" -gt 32 ]]; then
+if ! [[ "${lan_prefix}" =~ ^[0-9]+$ ]] || [[ "${lan_prefix}" -gt 32 ]]; then
     _fin_err "invalid LAN prefix: ${lan_prefix}"
     exit 1
 fi
@@ -85,7 +86,7 @@ EOF
 
 # Remove the live-ISO default root password from the installed system.
 if ! chroot "${target}" passwd -l root >/dev/null 2>&1; then
-    _fin_err "WARNING: could not lock root password before update"
+    _fin_warn "could not lock root password before update"
 fi
 
 # Password update
@@ -153,7 +154,7 @@ DHCP=no
 IPv6AcceptRA=no
 LinkLocalAddressing=no
 EOF
-        mkdir -p "${target}/etc/ppp" "${target}/etc/ppp/peers"
+        mkdir -p "${target}/etc/ppp/peers"
         cat > "${target}/etc/ppp/peers/wan" <<EOF
 plugin rp-pppoe.so ${wan_iface}
 user "${wan_pppoe_user}"
@@ -229,10 +230,10 @@ EOF
 # Unbound DNS
 mkdir -p "${target}/etc/unbound" "${target}/var/lib/unbound"
 if ! chroot "${target}" /usr/sbin/unbound-anchor -a /var/lib/unbound/root.key >/dev/null 2>&1; then
-    _fin_err "WARNING: unbound-anchor failed; DNSSEC trust anchor may be missing until first successful refresh"
+    _fin_warn "unbound-anchor failed; DNSSEC trust anchor may be missing until first successful refresh"
 fi
 if ! chroot "${target}" chown -R unbound:unbound /var/lib/unbound 2>/dev/null; then
-    _fin_err "WARNING: failed to set unbound ownership for /var/lib/unbound"
+    _fin_warn "failed to set unbound ownership for /var/lib/unbound"
 fi
 cat > "${target}/etc/unbound/unbound.conf" <<EOF
 server:
