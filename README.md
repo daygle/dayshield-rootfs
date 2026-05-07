@@ -63,19 +63,32 @@ apt-get install mmdebstrap zstd systemd-container
 
 ## Building the RootFS
 
+Always build the management UI first, then pass its output to the rootfs builder:
+
 ```sh
-# Default: amd64, trixie, output rootfs.tar.zst
-make rootfs
+cd ../dayshield-ui
+npm install
+npm run build
 
-# Custom parameters
-make rootfs ARCH=arm64 SUITE=trixie OUTPUT=dayshield-arm64.tar.zst
+cd ../dayshield-rootfs
+make rootfs UI_DIR=../dayshield-ui/dist
+```
 
-# Or invoke the script directly
+Custom parameters:
+
+```sh
+make rootfs UI_DIR=../dayshield-ui/dist ARCH=arm64 SUITE=trixie OUTPUT=dayshield-arm64.tar.zst
+```
+
+Or invoke the script directly:
+
+```sh
 ./scripts/build-rootfs.sh \
     --arch amd64 \
     --suite trixie \
     --output rootfs.tar.zst \
-    --mirror https://deb.debian.org/debian
+    --mirror https://deb.debian.org/debian \
+    --ui-dir ../dayshield-ui/dist
 ```
 
 The build pipeline:
@@ -120,9 +133,8 @@ runtime - replace it before deploying.
 
 ### Providing the Management UI
 
-If you want the installed system to serve the Management UI from
-`dayshield-core`, build the UI and provide its `dist` directory when
-building the rootfs:
+The management UI is a required component. Always build it before building
+the rootfs and pass its `dist` directory via `UI_DIR`:
 
 ```sh
 cd ../dayshield-ui
@@ -136,8 +148,9 @@ make rootfs UI_DIR=../dayshield-ui/dist
 This copies the UI output into `/usr/local/share/dayshield-ui` inside the
 rootfs, which is the path expected by `dayshield-core`.
 
-If `UI_DIR` is not set, the rootfs build continues normally, but the
-installed system will not serve the management interface.
+> **Warning:** If `UI_DIR` is omitted, the build will complete but the
+> installed system will not serve the management interface. Do not deploy
+> a rootfs built without `UI_DIR`.
 
 The installed management UI is served by `dayshield-core`. When UI assets
 are installed, `dayshield-core` listens on port `3000`. Transport security for
