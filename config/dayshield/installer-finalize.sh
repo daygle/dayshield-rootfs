@@ -292,14 +292,16 @@ EOF
 _fin_info "Validating install-time criteria ..."
 
 if grep -qw installer /proc/cmdline 2>/dev/null; then
-    if command -v ss >/dev/null 2>&1 && ss -H -ltn 'sport = :8443' 2>/dev/null | grep -q .; then
-        _fin_err "live installer has an active TCP listener on port 8443"
-        exit 1
+    if command -v ss >/dev/null 2>&1; then
+        if IFS= read -r _ < <(ss -H -ltn 'sport = :8443' 2>/dev/null); then
+            _fin_err "live installer has an active TCP listener on port 8443"
+            exit 1
+        fi
     fi
 fi
 
 svc_condition_file="${target}/etc/systemd/system/dayshield.service.d/dayshield-installer.conf"
-if [[ ! -f "${svc_condition_file}" ]] || ! grep -q '^ConditionKernelCommandLine=!installer$' "${svc_condition_file}"; then
+if [[ ! -f "${svc_condition_file}" ]] || ! grep -Eq '^[[:space:]]*ConditionKernelCommandLine[[:space:]]*=[[:space:]]*!installer[[:space:]]*$' "${svc_condition_file}"; then
     _fin_err "dayshield.service missing installer guard ConditionKernelCommandLine=!installer in ${svc_condition_file}"
     exit 1
 fi
