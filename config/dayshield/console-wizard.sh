@@ -50,7 +50,19 @@ _is_valid_iface_name() {
 }
 
 _is_valid_ipv4() {
-    [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]
+    local ip="$1" IFS=. o1 o2 o3 o4 octet
+    [[ "${ip}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
+    read -r o1 o2 o3 o4 <<< "${ip}"
+    for octet in "${o1}" "${o2}" "${o3}" "${o4}"; do
+        [[ "${octet}" =~ ^[0-9]+$ ]] || return 1
+        (( octet >= 0 && octet <= 255 )) || return 1
+    done
+}
+
+_ipv4_to_int() {
+    local ip="$1" IFS=. o1 o2 o3 o4
+    read -r o1 o2 o3 o4 <<< "${ip}"
+    printf '%u' "$(( (o1 << 24) | (o2 << 16) | (o3 << 8) | o4 ))"
 }
 
 _is_safe_text() {
@@ -414,7 +426,9 @@ EOF
         [[ -f "${pidfile}" ]] || continue
         old_pid="$(cat "${pidfile}" 2>/dev/null || true)"
         if [[ "${old_pid}" =~ ^[0-9]+$ ]] && kill -0 "${old_pid}" 2>/dev/null; then
-            kill "${old_pid}" 2>/dev/null || true
+            if [[ -r "/proc/${old_pid}/comm" ]] && [[ "$(cat "/proc/${old_pid}/comm" 2>/dev/null || true)" == "pppd" ]]; then
+                kill "${old_pid}" 2>/dev/null || true
+            fi
         fi
     done
     sleep 1
@@ -754,8 +768,40 @@ _set_lan_dhcp() {
     new_lease="${new_lease:-${lease_default}}"
 
     if ! [[ "${new_start}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || \
-       ! [[ "${new_end}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+       ! [[ "${new_end}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || \
+       ! _is_valid_ipv4 "${new_start}" || ! _is_valid_ipv4 "${new_end}"; then
         echo "Invalid DHCP range."
+        read -rp "Press Enter to continue …"
+        return
+    fi
+
+    local prefix start_int end_int gw_int lan_mask lan_net start_net end_net
+    prefix="${LAN_PREFIX:-24}"
+    if ! [[ "${prefix}" =~ ^[0-9]+$ ]] || (( prefix < 1 || prefix > 32 )); then
+        echo "Invalid LAN prefix: ${prefix}"
+        read -rp "Press Enter to continue …"
+        return
+    fi
+    start_int="$(_ipv4_to_int "${new_start}")"
+    end_int="$(_ipv4_to_int "${new_end}")"
+    gw_int="$(_ipv4_to_int "${LAN_IP}")"
+    lan_mask=$(( (0xFFFFFFFF << (32 - prefix)) & 0xFFFFFFFF ))
+    lan_net=$(( gw_int & lan_mask ))
+    start_net=$(( start_int & lan_mask ))
+    end_net=$(( end_int & lan_mask ))
+
+    if (( start_int > end_int )); then
+        echo "Invalid DHCP range: start must be less than or equal to end."
+        read -rp "Press Enter to continue …"
+        return
+    fi
+    if (( start_net != lan_net || end_net != lan_net )); then
+        echo "Invalid DHCP range: addresses must be in LAN subnet ${LAN_IP}/${prefix}."
+        read -rp "Press Enter to continue …"
+        return
+    fi
+    if (( gw_int >= start_int && gw_int <= end_int )); then
+        echo "Invalid DHCP range: LAN gateway address ${LAN_IP} cannot be in the pool."
         read -rp "Press Enter to continue …"
         return
     fi
