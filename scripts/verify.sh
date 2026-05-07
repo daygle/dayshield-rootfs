@@ -108,6 +108,29 @@ do
     fi
 done
 
+# ── Installer/finalization contract ───────────────────────────────────────────
+banner "Installer/finalization contract"
+if [ -x "${ROOTFS_DIR}/usr/local/lib/dayshield/installer-finalize.sh" ]; then
+    ok "shared installer finalization script exists"
+else
+    fail "missing shared installer finalization script: /usr/local/lib/dayshield/installer-finalize.sh"
+fi
+
+DS_INSTALLER_GUARD="${ROOTFS_DIR}/etc/systemd/system/dayshield.service.d/dayshield-installer.conf"
+if [ -f "${DS_INSTALLER_GUARD}" ] && \
+   grep -Eq '^[[:space:]]*ConditionKernelCommandLine[[:space:]]*=[[:space:]]*!installer[[:space:]]*$' "${DS_INSTALLER_GUARD}"; then
+    ok "dayshield.service is guarded from installer-live boot"
+else
+    fail "dayshield.service missing installer-live guard ConditionKernelCommandLine=!installer"
+fi
+
+if [ -f "${ROOTFS_DIR}/etc/systemd/system/console-wizard.service" ] && \
+   grep -Eq '^[[:space:]]*ConditionPathExists[[:space:]]*=[[:space:]]*!/installer-ui/index.html[[:space:]]*$' "${ROOTFS_DIR}/etc/systemd/system/console-wizard.service"; then
+    ok "console/web installer mutual exclusion is configured"
+else
+    fail "console-wizard.service missing ConditionPathExists=!/installer-ui/index.html"
+fi
+
 # ── dayshield-core binary ─────────────────────────────────────────────────────
 banner "dayshield-core binary"
 BINARY="${ROOTFS_DIR}/usr/local/sbin/dayshield-core"

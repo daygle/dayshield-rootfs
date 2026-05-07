@@ -153,6 +153,13 @@ cp "${CONFIG_DIR}/dayshield/console-wizard.sh" \
     "${ROOTFS_DIR}/usr/local/bin/dayshield-console"
 chmod 755 "${ROOTFS_DIR}/usr/local/bin/dayshield-console"
 
+# Shared installer finalization path for console/web installers
+printf '  -> Installing shared installer finalization script\n'
+mkdir -p "${ROOTFS_DIR}/usr/local/lib/dayshield"
+cp "${CONFIG_DIR}/dayshield/installer-finalize.sh" \
+    "${ROOTFS_DIR}/usr/local/lib/dayshield/installer-finalize.sh"
+chmod 755 "${ROOTFS_DIR}/usr/local/lib/dayshield/installer-finalize.sh"
+
 # Post-login menu hook for installed system (root local console logins only)
 printf '  -> Installing console login profile hook\n'
 mkdir -p "${ROOTFS_DIR}/etc/profile.d"
