@@ -93,7 +93,6 @@ printf '%s\n' "${hostname}" > "${target}/etc/hostname"
 cat > "${target}/etc/hosts" <<EOF
 127.0.0.1   localhost
 127.0.1.1   ${hostname}
-::1         localhost ip6-localhost ip6-loopback
 EOF
 
 # Remove the live-ISO default root password from the installed system.
@@ -141,6 +140,22 @@ mkdir -p "${target}/etc/dayshield/config"
 printf 'define WAN_IF = %s\ndefine LAN_IF = %s\n' \
     "${wan_iface:-lo}" "${lan_iface}" \
     > "${target}/etc/dayshield/config/nft-ifaces.conf"
+
+# Suricata — update the IDS capture interface to the WAN interface.
+# The base rootfs ships with a 'lo' placeholder; replace it with the real
+# WAN interface so Suricata actually inspects inbound traffic.
+# Prefer WAN; fall back to LAN if no WAN interface was configured.
+_suricata_iface="${wan_iface:-${lan_iface}}"
+if [[ -f "${target}/etc/suricata/suricata.yaml" ]] && [[ -n "${_suricata_iface}" ]]; then
+    # Validate interface name contains only safe characters before use in sed.
+    if [[ "${_suricata_iface}" =~ ^[a-zA-Z0-9_.-]+$ ]]; then
+        sed -i "s/^\([[:space:]]*- interface:\)[[:space:]]*lo$/\1 ${_suricata_iface}/" \
+            "${target}/etc/suricata/suricata.yaml"
+        _fin_info "Suricata capture interface set to ${_suricata_iface}"
+    else
+        _fin_warn "Suricata interface name '${_suricata_iface}' contains unexpected characters; skipping suricata.yaml update"
+    fi
+fi
 
 # DayShield network.conf
 mkdir -p "${target}/etc/dayshield"

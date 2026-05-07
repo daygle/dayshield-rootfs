@@ -19,14 +19,16 @@ for direct injection into the `dayshield-iso` build pipeline.
 |   |-- cleanup.sh               # Strip non-reproducible artifacts
 |   `-- verify.sh                # Verify rootfs integrity
 |-- config/
-|   |-- packages.txt             # Deterministic package list (includes live-boot)
+|   |-- packages.txt             # Deterministic package list
 |   |-- services/
 |   |   |-- unbound.service
 |   |   |-- nftables.service
 |   |   |-- suricata.service
 |   |   |-- crowdsec.service
 |   |   |-- wireguard.service
-|   |   `-- acme.service
+|   |   |-- acme.service
+|   |   |-- acme.timer
+|   |   `-- console-wizard.service
 |   |-- sysctl.conf              # Kernel hardening parameters
 |   |-- nftables.conf            # IPv4-only firewall ruleset
 |   |-- unbound.conf             # Local recursive DNS resolver
@@ -79,9 +81,9 @@ make rootfs ARCH=arm64 SUITE=trixie OUTPUT=dayshield-arm64.tar.zst
 The build pipeline:
 
 1. **mmdebstrap** bootstraps a minimal Debian `trixie` root with the
-   packages listed in `config/packages.txt`.  APT sandboxing is explicitly set
-   to `root` during this step to avoid `_apt` permission warnings in temporary
-   build directories.
+   packages listed in `config/packages.txt`. The build directory is made
+   traversable for the `_apt` sandbox user so package downloads stay within
+   APT's default privilege boundary.
 2. **chroot-setup.sh** sets the hostname, writes a placeholder `/etc/fstab`,
    creates the DayShield directory tree, installs all config files, and
    configures systemd-networkd (matching both legacy `eth0` and predictable
@@ -137,13 +139,10 @@ rootfs, which is the path expected by `dayshield-core`.
 If `UI_DIR` is not set, the rootfs build continues normally, but the
 installed system will not serve the management interface.
 
-The installed management UI is served over plain HTTP. When UI assets are
-installed, the `dayshield-core` service listens on port `3000` and the
-installed system also configures a port redirect so the management UI is
-reachable at `http://<host>:8443/`.
-
-If you want the installed system to serve the management UI, build the UI
-and pass its output directory into the rootfs builder.
+The installed management UI is served by `dayshield-core`. When UI assets
+are installed, `dayshield-core` listens on port `3000`. Transport security for
+the management interface is controlled by the `dayshield-core` service
+configuration.
 
 ### Installer finalization contract (console + web)
 

@@ -4,6 +4,7 @@ Documentation=https://docs.crowdsec.net
 After=network-online.target nftables.service
 Wants=network-online.target
 ConditionKernelCommandLine=!installer
+ConditionPathExists=/usr/bin/crowdsec
 
 [Service]
 Type=notify
