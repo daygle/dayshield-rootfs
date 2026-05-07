@@ -35,7 +35,7 @@ for direct injection into the `dayshield-iso` build pipeline.
 |   `-- dayshield/
 |       |-- config/              # DayShield runtime config skeleton
 |       |-- certs/               # TLS certificate placeholder
-|       `-- installer-finalize.sh# Shared installer post-install finalization
+|       `-- installer-finalize.sh # Shared installer post-install finalization
 |-- Makefile
 `-- README.md
 ```

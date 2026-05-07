@@ -277,7 +277,7 @@ fi
 
 svc_condition_file="${target}/etc/systemd/system/dayshield.service.d/dayshield-installer.conf"
 if [[ ! -f "${svc_condition_file}" ]] || ! grep -q '^ConditionKernelCommandLine=!installer$' "${svc_condition_file}"; then
-    _fin_err "missing installer guard for dayshield.service: ${svc_condition_file}"
+    _fin_err "dayshield.service missing installer guard ConditionKernelCommandLine=!installer in ${svc_condition_file}"
     exit 1
 fi
 
