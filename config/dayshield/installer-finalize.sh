@@ -7,6 +7,18 @@ set -euo pipefail
 _fin_info() { printf '  ...   %s\n' "$*"; }
 _fin_warn() { printf '  [WRN] %s\n' "$*"; }
 _fin_err()  { printf '  [ERR] %s\n' "$*" >&2; }
+_fin_validate_ipv4() {
+    local ip="$1"
+    if command -v python3 >/dev/null 2>&1; then
+        python3 - "${ip}" <<'PY' >/dev/null 2>&1
+import ipaddress
+import sys
+ipaddress.IPv4Address(sys.argv[1])
+PY
+        return "$?"
+    fi
+    awk -F. 'NF==4{for(i=1;i<=4;i++) if($i !~ /^[0-9]+$/ || $i>255) exit 1; exit 0} {exit 1}' <<< "${ip}"
+}
 
 if [[ "$#" -ne 12 ]]; then
     _fin_err "usage: $0 <target> <hostname> <password> <wan_iface> <wan_type> <wan_pppoe_user> <wan_pppoe_pass> <lan_iface> <lan_ip> <lan_prefix> <dhcp_start> <dhcp_end>"
@@ -36,21 +48,9 @@ if [[ -z "${lan_iface}" || -z "${lan_ip}" || -z "${lan_prefix}" ]]; then
     exit 1
 fi
 
-if command -v python3 >/dev/null 2>&1; then
-    if ! python3 - "${lan_ip}" <<'PY' >/dev/null 2>&1
-import ipaddress
-import sys
-ipaddress.IPv4Address(sys.argv[1])
-PY
-    then
-        _fin_err "invalid LAN IPv4 address: ${lan_ip}"
-        exit 1
-    fi
-else
-    if ! awk -F. 'NF==4{for(i=1;i<=4;i++) if($i !~ /^[0-9]+$/ || $i>255) exit 1; exit 0} {exit 1}' <<< "${lan_ip}"; then
-        _fin_err "invalid LAN IPv4 address: ${lan_ip}"
-        exit 1
-    fi
+if ! _fin_validate_ipv4 "${lan_ip}"; then
+    _fin_err "invalid LAN IPv4 address: ${lan_ip}"
+    exit 1
 fi
 
 if ! [[ "${lan_prefix}" =~ ^[0-9]+$ ]] || [[ "${lan_prefix}" -gt 32 ]]; then
@@ -81,7 +81,7 @@ PY
     )"
 else
     if [[ "${lan_prefix}" != "24" ]]; then
-        _fin_err "python3 is required for non-/24 LAN prefix calculation"
+        _fin_err "python3 is required for calculating non-/24 LAN prefix (currently ${lan_prefix}); install python3 or use /24 prefix"
         exit 1
     fi
     lan_net="${lan_ip%.*}.0"
@@ -105,9 +105,11 @@ fi
 use_chpasswd=0
 # chpasswd uses "user:password" records; if the password contains ':' it cannot
 # be represented safely in that format, so fall back to direct shadow update.
-if ! printf '%s' "${password}" | grep -q ':' && chroot "${target}" command -v chpasswd >/dev/null 2>&1; then
-    if printf '%s\n' "root:${password}" | chroot "${target}" chpasswd >/dev/null 2>&1; then
-        use_chpasswd=1
+if ! printf '%s' "${password}" | grep -q ':'; then
+    if chroot "${target}" command -v chpasswd >/dev/null 2>&1; then
+        if printf '%s\n' "root:${password}" | chroot "${target}" chpasswd >/dev/null 2>&1; then
+            use_chpasswd=1
+        fi
     fi
 fi
 
@@ -313,7 +315,7 @@ EOF
 # Install-time validation criteria
 _fin_info "Validating install-time criteria ..."
 
-if grep -qw installer /proc/cmdline 2>/dev/null; then
+if grep -qE '(^|[[:space:]])installer([[:space:]]|$)' /proc/cmdline 2>/dev/null; then
     if command -v ss >/dev/null 2>&1; then
         # Prevent installer-live/service conflicts on the management redirect port.
         if ss -H -ltn 'sport = :8443' 2>/dev/null | grep -q '[0-9]'; then
