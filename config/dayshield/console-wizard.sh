@@ -169,6 +169,7 @@ _apply_lan_dhcp_config() {
         local prefix="${LAN_PREFIX:-24}"
         local o1 o2 o3 o4
         IFS='.' read -r o1 o2 o3 o4 <<< "${LAN_IP}"
+        # Calculate subnet mask from CIDR prefix (e.g. /24 -> 255.255.255.0 mask bits).
         local mask=$(( (0xFFFFFFFF << (32 - prefix)) & 0xFFFFFFFF ))
         local ip_int=$(( (o1 << 24) | (o2 << 16) | (o3 << 8) | o4 ))
         local net_int=$(( ip_int & mask ))
@@ -351,7 +352,7 @@ EOF
     # Stop any existing pppd on this WAN
     while IFS= read -r pid; do
         kill "${pid}" 2>/dev/null || true
-    done < <(pgrep -f '^pppd call wan$' 2>/dev/null || true)
+    done < <(pgrep -f '(^|/)pppd([[:space:]].*)?[[:space:]]call[[:space:]]wan([[:space:]]|$)' 2>/dev/null || true)
     sleep 1
 
     # Start pppd in background
