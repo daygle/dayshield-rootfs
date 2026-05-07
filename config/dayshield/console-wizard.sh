@@ -5,7 +5,7 @@
 # live installer session and the installed system.  Live mode is detected
 # automatically from /proc/cmdline.
 
-set -uo pipefail
+set -euo pipefail
 
 DAYSHIELD_VERSION="1.0"
 DAYSHIELD_SITE="https://github.com/daygle/dayshield"
@@ -45,6 +45,30 @@ LAN_DHCP_LEASE="12h"
 FIRST_SETUP_DONE=""
 ORIG_CONSOLE_LOGLEVEL=""
 
+_is_valid_iface_name() {
+    [[ "$1" =~ ^[a-zA-Z0-9_.-]+$ ]]
+}
+
+_is_valid_ipv4() {
+    local ip="$1" IFS=. o1 o2 o3 o4 octet
+    [[ "${ip}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
+    read -r o1 o2 o3 o4 <<< "${ip}"
+    for octet in "${o1}" "${o2}" "${o3}" "${o4}"; do
+        [[ "${octet}" =~ ^[0-9]+$ ]] || return 1
+        (( octet >= 0 && octet <= 255 )) || return 1
+    done
+}
+
+_ipv4_to_int() {
+    local ip="$1" IFS=. o1 o2 o3 o4
+    read -r o1 o2 o3 o4 <<< "${ip}"
+    printf '%u' "$(( (o1 << 24) | (o2 << 16) | (o3 << 8) | o4 ))"
+}
+
+_is_safe_text() {
+    [[ "$1" != *$'\n'* && "$1" != *$'\r'* ]]
+}
+
 _console_quiet_enter() {
     # Keep kernel printk output from disrupting interactive prompts on tty1.
     if [[ -z "${ORIG_CONSOLE_LOGLEVEL}" ]] && [[ -r /proc/sys/kernel/printk ]] && [[ -w /proc/sys/kernel/printk ]]; then
@@ -62,44 +86,108 @@ _console_quiet_exit() {
 
 _load_state() {
     local state_file="/etc/dayshield/console-state"
-    [[ -f "${state_file}" ]] || return
+    local owner perms key value_b64 value
+    if [[ ! -f "${state_file}" ]]; then
+        return
+    fi
     [[ -L "${state_file}" ]] && return
-
-    while IFS=$'\t' read -r key value; do
+    owner="$(stat -c '%u' "${state_file}" 2>/dev/null || true)"
+    perms="$(stat -c '%A' "${state_file}" 2>/dev/null || true)"
+    if [[ "${owner}" != "0" ]]; then
+        printf '  [WARN] ignoring unsafe state file owner: %s\n' "${state_file}" >&2
+        return
+    fi
+    if [[ "${#perms}" -ge 10 ]] && { [[ "${perms:5:1}" == "w" ]] || [[ "${perms:8:1}" == "w" ]]; }; then
+        printf '  [WARN] ignoring group/other writable state file: %s\n' "${state_file}" >&2
+        return
+    fi
+    while IFS='=' read -r key value_b64; do
+        [[ -n "${key}" ]] || continue
+        value="$(printf '%s' "${value_b64}" | base64 -d 2>/dev/null || true)"
+        if ! _is_safe_text "${value}"; then
+            continue
+        fi
         case "${key}" in
-            WAN_IFACE) WAN_IFACE="${value}" ;;
-            WAN_TYPE) WAN_TYPE="${value}" ;;
+            WAN_IFACE)
+                if [[ -z "${value}" ]] || _is_valid_iface_name "${value}"; then
+                    WAN_IFACE="${value}"
+                fi
+                ;;
+            WAN_TYPE)
+                if [[ "${value}" == "dhcp" || "${value}" == "pppoe" || -z "${value}" ]]; then
+                    WAN_TYPE="${value}"
+                fi
+                ;;
             WAN_PPPOE_USER) WAN_PPPOE_USER="${value}" ;;
             WAN_PPPOE_PASS) WAN_PPPOE_PASS="${value}" ;;
-            LAN_IFACE) LAN_IFACE="${value}" ;;
-            LAN_IP) LAN_IP="${value}" ;;
-            LAN_PREFIX) LAN_PREFIX="${value}" ;;
-            LAN_DHCP_ENABLE) LAN_DHCP_ENABLE="${value}" ;;
-            LAN_DHCP_START) LAN_DHCP_START="${value}" ;;
-            LAN_DHCP_END) LAN_DHCP_END="${value}" ;;
-            LAN_DHCP_LEASE) LAN_DHCP_LEASE="${value}" ;;
-            FIRST_SETUP_DONE) FIRST_SETUP_DONE="${value}" ;;
+            LAN_IFACE)
+                if [[ -z "${value}" ]] || _is_valid_iface_name "${value}"; then
+                    LAN_IFACE="${value}"
+                fi
+                ;;
+            LAN_IP)
+                if [[ -z "${value}" ]] || _is_valid_ipv4 "${value}"; then
+                    LAN_IP="${value}"
+                fi
+                ;;
+            LAN_PREFIX)
+                if [[ -z "${value}" ]] || ([[ "${value}" =~ ^[0-9]+$ ]] && (( value >= 1 && value <= 32 ))); then
+                    LAN_PREFIX="${value}"
+                fi
+                ;;
+            LAN_DHCP_ENABLE)
+                if [[ "${value}" == "yes" || "${value}" == "no" || -z "${value}" ]]; then
+                    LAN_DHCP_ENABLE="${value}"
+                fi
+                ;;
+            LAN_DHCP_START)
+                if [[ -z "${value}" ]] || _is_valid_ipv4 "${value}"; then
+                    LAN_DHCP_START="${value}"
+                fi
+                ;;
+            LAN_DHCP_END)
+                if [[ -z "${value}" ]] || _is_valid_ipv4 "${value}"; then
+                    LAN_DHCP_END="${value}"
+                fi
+                ;;
+            LAN_DHCP_LEASE)
+                if [[ -z "${value}" ]] || [[ "${value}" =~ ^[0-9]+[smhd]$ ]]; then
+                    LAN_DHCP_LEASE="${value}"
+                fi
+                ;;
+            FIRST_SETUP_DONE)
+                if [[ "${value}" == "yes" || -z "${value}" ]]; then
+                    FIRST_SETUP_DONE="${value}"
+                fi
+                ;;
         esac
     done < "${state_file}"
 }
 
 _save_state() {
+    local state_file tmp_file old_umask
+    state_file="/etc/dayshield/console-state"
     mkdir -p /etc/dayshield
+    tmp_file="$(mktemp /etc/dayshield/console-state.XXXXXX)"
+    old_umask="$(umask)"
+    umask 077
     {
-        printf 'WAN_IFACE\t%s\n' "${WAN_IFACE}"
-        printf 'WAN_TYPE\t%s\n' "${WAN_TYPE}"
-        printf 'WAN_PPPOE_USER\t%s\n' "${WAN_PPPOE_USER}"
-        printf 'WAN_PPPOE_PASS\t%s\n' "${WAN_PPPOE_PASS}"
-        printf 'LAN_IFACE\t%s\n' "${LAN_IFACE}"
-        printf 'LAN_IP\t%s\n' "${LAN_IP}"
-        printf 'LAN_PREFIX\t%s\n' "${LAN_PREFIX}"
-        printf 'LAN_DHCP_ENABLE\t%s\n' "${LAN_DHCP_ENABLE}"
-        printf 'LAN_DHCP_START\t%s\n' "${LAN_DHCP_START}"
-        printf 'LAN_DHCP_END\t%s\n' "${LAN_DHCP_END}"
-        printf 'LAN_DHCP_LEASE\t%s\n' "${LAN_DHCP_LEASE}"
-        printf 'FIRST_SETUP_DONE\t%s\n' "${FIRST_SETUP_DONE}"
-    } > /etc/dayshield/console-state
-    chmod 600 /etc/dayshield/console-state
+        printf 'WAN_IFACE=%s\n' "$(printf '%s' "${WAN_IFACE}" | base64 | tr -d '\n')"
+        printf 'WAN_TYPE=%s\n' "$(printf '%s' "${WAN_TYPE}" | base64 | tr -d '\n')"
+        printf 'WAN_PPPOE_USER=%s\n' "$(printf '%s' "${WAN_PPPOE_USER}" | base64 | tr -d '\n')"
+        printf 'WAN_PPPOE_PASS=%s\n' "$(printf '%s' "${WAN_PPPOE_PASS}" | base64 | tr -d '\n')"
+        printf 'LAN_IFACE=%s\n' "$(printf '%s' "${LAN_IFACE}" | base64 | tr -d '\n')"
+        printf 'LAN_IP=%s\n' "$(printf '%s' "${LAN_IP}" | base64 | tr -d '\n')"
+        printf 'LAN_PREFIX=%s\n' "$(printf '%s' "${LAN_PREFIX}" | base64 | tr -d '\n')"
+        printf 'LAN_DHCP_ENABLE=%s\n' "$(printf '%s' "${LAN_DHCP_ENABLE}" | base64 | tr -d '\n')"
+        printf 'LAN_DHCP_START=%s\n' "$(printf '%s' "${LAN_DHCP_START}" | base64 | tr -d '\n')"
+        printf 'LAN_DHCP_END=%s\n' "$(printf '%s' "${LAN_DHCP_END}" | base64 | tr -d '\n')"
+        printf 'LAN_DHCP_LEASE=%s\n' "$(printf '%s' "${LAN_DHCP_LEASE}" | base64 | tr -d '\n')"
+        printf 'FIRST_SETUP_DONE=%s\n' "$(printf '%s' "${FIRST_SETUP_DONE}" | base64 | tr -d '\n')"
+    } > "${tmp_file}"
+    chmod 600 "${tmp_file}"
+    mv -f "${tmp_file}" "${state_file}"
+    umask "${old_umask}"
 }
 
 # ---------------------------------------------------------------------------
@@ -332,6 +420,8 @@ _apply_pppoe_config() {
     cat > /etc/ppp/peers/wan <<EOF
 plugin rp-pppoe.so ${WAN_IFACE}
 user "${WAN_PPPOE_USER}"
+linkname wan
+pidfile /run/ppp-wan.pid
 noauth
 defaultroute
 replacedefaultroute
@@ -349,10 +439,24 @@ EOF
     printf '%s\n' "${secrets_line}" > /etc/ppp/pap-secrets
     chmod 600 /etc/ppp/chap-secrets /etc/ppp/pap-secrets
 
-    # Stop any existing pppd on this WAN
-    while IFS= read -r pid; do
-        kill "${pid}" 2>/dev/null || true
-    done < <(pgrep -f '(^|/)pppd([[:space:]].*)?[[:space:]]call[[:space:]]wan([[:space:]]|$)' 2>/dev/null || true)
+    # Stop existing PPPoE session for this link name (if any)
+    local pidfile old_pid pid_perms
+    for pidfile in /run/ppp-wan.pid /var/run/ppp-wan.pid; do
+        [[ -f "${pidfile}" ]] || continue
+        if [[ "$(stat -c '%u' "${pidfile}" 2>/dev/null || true)" != "0" ]]; then
+            continue
+        fi
+        pid_perms="$(stat -c '%A' "${pidfile}" 2>/dev/null || true)"
+        if [[ "${#pid_perms}" -ge 10 ]] && { [[ "${pid_perms:5:1}" == "w" ]] || [[ "${pid_perms:8:1}" == "w" ]]; }; then
+            continue
+        fi
+        old_pid="$(cat "${pidfile}" 2>/dev/null || true)"
+        if [[ "${old_pid}" =~ ^[0-9]+$ ]] && kill -0 "${old_pid}" 2>/dev/null; then
+            if [[ -r "/proc/${old_pid}/comm" ]] && [[ "$(cat "/proc/${old_pid}/comm" 2>/dev/null || true)" == "pppd" ]]; then
+                kill "${old_pid}" 2>/dev/null || true
+            fi
+        fi
+    done
     sleep 1
 
     # Start pppd in background
@@ -717,6 +821,37 @@ _set_lan_dhcp() {
     fi
     if (( lan_int >= start_int && lan_int <= end_int )); then
         echo "Invalid DHCP range: it must not include the LAN gateway IP (${LAN_IP})."
+        read -rp "Press Enter to continue …"
+        return
+    fi
+
+    local prefix start_int end_int gw_int lan_mask lan_net start_net end_net
+    prefix="${LAN_PREFIX:-24}"
+    if ! [[ "${prefix}" =~ ^[0-9]+$ ]] || (( prefix < 1 || prefix > 32 )); then
+        echo "Invalid LAN prefix: ${prefix}"
+        read -rp "Press Enter to continue …"
+        return
+    fi
+    start_int="$(_ipv4_to_int "${new_start}")"
+    end_int="$(_ipv4_to_int "${new_end}")"
+    gw_int="$(_ipv4_to_int "${LAN_IP}")"
+    lan_mask=$(( (0xFFFFFFFF << (32 - prefix)) & 0xFFFFFFFF ))
+    lan_net=$(( gw_int & lan_mask ))
+    start_net=$(( start_int & lan_mask ))
+    end_net=$(( end_int & lan_mask ))
+
+    if (( start_int > end_int )); then
+        echo "Invalid DHCP range: start must be less than or equal to end."
+        read -rp "Press Enter to continue …"
+        return
+    fi
+    if (( start_net != lan_net || end_net != lan_net )); then
+        echo "Invalid DHCP range: addresses must be in LAN subnet ${LAN_IP}/${prefix}."
+        read -rp "Press Enter to continue …"
+        return
+    fi
+    if (( gw_int >= start_int && gw_int <= end_int )); then
+        echo "Invalid DHCP range: LAN gateway address ${LAN_IP} cannot be in the pool."
         read -rp "Press Enter to continue …"
         return
     fi

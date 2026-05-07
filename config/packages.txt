@@ -32,9 +32,9 @@ wget
 # not in the installed rootfs.  live-boot and live-config must be injected as
 # an overlay by the dayshield-iso pipeline so they are present in the squashfs
 # for live-boot operation but absent from the installed-system rootfs.
-# Installing live-boot/live-config here causes the initramfs to embed live-boot
-# hooks that stall the installed system during boot.
-
+# Installing them here causes the initramfs to embed live-boot hooks that
+# stall the installed system during boot (the hooks timeout looking for a
+# live squashfs medium and drop to an emergency shell).
 # Kernel - standard amd64 kernel (non-RT) for QEMU/bare-metal compatibility.
 linux-image-amd64
 

@@ -35,13 +35,13 @@ EOF
 while [ $# -gt 0 ]; do
     case "$1" in
         --arch|--suite|--output|--mirror|--ui-dir)
-            if [ $# -lt 2 ]; then
-                printf 'ERROR: missing value for %s\n' "$1" >&2
+            if [ $# -lt 2 ] || [ -z "${2}" ] || [ "${2#--}" != "${2}" ]; then
+                printf 'ERROR: option %s requires a value\n' "$1" >&2
                 exit 1
             fi
             case "$1" in
-                --arch)   ARCH="$2" ;;
-                --suite)  SUITE="$2" ;;
+                --arch) ARCH="$2" ;;
+                --suite) SUITE="$2" ;;
                 --output) OUTPUT="$2" ;;
                 --mirror) MIRROR="$2" ;;
                 --ui-dir) UI_DIR="$2" ;;

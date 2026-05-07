@@ -7,6 +7,16 @@ set -euo pipefail
 _fin_info() { printf '  ...   %s\n' "$*"; }
 _fin_warn() { printf '  [WRN] %s\n' "$*"; }
 _fin_err()  { printf '  [ERR] %s\n' "$*" >&2; }
+_fin_validate_iface_name() {
+    local iface="$1"
+    [[ "${iface}" =~ ^[a-zA-Z0-9_.-]+$ ]]
+}
+_fin_validate_hostname() {
+    local host="$1"
+    [[ "${#host}" -ge 1 && "${#host}" -le 253 ]] || return 1
+    [[ "${host}" =~ ^[a-zA-Z0-9.-]+$ ]] || return 1
+    [[ "${host}" != .* && "${host}" != *..* && "${host}" != *- && "${host}" != -* && "${host}" != *. ]] || return 1
+}
 _fin_validate_ipv4() {
     local ip="$1"
     if command -v python3 >/dev/null 2>&1; then
@@ -43,6 +53,31 @@ if [[ ! -d "${target}" ]]; then
     exit 1
 fi
 
+if ! _fin_validate_hostname "${hostname}"; then
+    _fin_err "invalid hostname: ${hostname}"
+    exit 1
+fi
+
+if ! _fin_validate_iface_name "${lan_iface}"; then
+    _fin_err "invalid LAN interface name: ${lan_iface}"
+    exit 1
+fi
+
+if [[ -n "${wan_iface}" ]] && ! _fin_validate_iface_name "${wan_iface}"; then
+    _fin_err "invalid WAN interface name: ${wan_iface}"
+    exit 1
+fi
+
+if [[ "${wan_type}" != "dhcp" && "${wan_type}" != "pppoe" ]]; then
+    _fin_err "invalid WAN type: ${wan_type}"
+    exit 1
+fi
+
+if [[ "${wan_type}" == "pppoe" && ( -z "${wan_iface}" || -z "${wan_pppoe_user}" || -z "${wan_pppoe_pass}" ) ]]; then
+    _fin_err "PPPoE mode requires WAN interface and credentials"
+    exit 1
+fi
+
 if [[ -z "${lan_iface}" || -z "${lan_ip}" || -z "${lan_prefix}" ]]; then
     _fin_err "LAN interface/address/prefix are required"
     exit 1
@@ -53,8 +88,13 @@ if ! _fin_validate_ipv4 "${lan_ip}"; then
     exit 1
 fi
 
-if ! [[ "${lan_prefix}" =~ ^[0-9]+$ ]] || [[ "${lan_prefix}" -gt 32 ]]; then
+if ! [[ "${lan_prefix}" =~ ^[0-9]+$ ]] || [[ "${lan_prefix}" -lt 1 ]] || [[ "${lan_prefix}" -gt 32 ]]; then
     _fin_err "invalid LAN prefix: ${lan_prefix}"
+    exit 1
+fi
+
+if ! _fin_validate_ipv4 "${dhcp_start}" || ! _fin_validate_ipv4 "${dhcp_end}"; then
+    _fin_err "invalid DHCP pool addresses: ${dhcp_start} - ${dhcp_end}"
     exit 1
 fi
 
@@ -187,6 +227,8 @@ EOF
         cat > "${target}/etc/ppp/peers/wan" <<EOF
 plugin rp-pppoe.so ${wan_iface}
 user "${wan_pppoe_user}"
+linkname wan
+pidfile /run/ppp-wan.pid
 noauth
 defaultroute
 replacedefaultroute

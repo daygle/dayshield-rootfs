@@ -32,5 +32,5 @@ verify:
 
 ## Remove build artefacts
 clean:
-	rm -f $(OUTPUT)
+	rm -f "$(OUTPUT)"
 	@echo "Cleaned $(OUTPUT)"
