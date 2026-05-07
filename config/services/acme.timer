@@ -1,0 +1,13 @@
+[Unit]
+Description=Run DayShield ACME certificate renewal
+Documentation=man:systemd.timer(5)
+ConditionKernelCommandLine=!installer
+
+[Timer]
+OnBootSec=15m
+OnUnitActiveSec=12h
+Persistent=true
+Unit=acme.service
+
+[Install]
+WantedBy=timers.target

@@ -93,7 +93,6 @@ printf '%s\n' "${hostname}" > "${target}/etc/hostname"
 cat > "${target}/etc/hosts" <<EOF
 127.0.0.1   localhost
 127.0.1.1   ${hostname}
-::1         localhost ip6-localhost ip6-loopback
 EOF
 
 # Remove the live-ISO default root password from the installed system.

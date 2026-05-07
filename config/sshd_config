@@ -1,5 +1,6 @@
-# DayShield - hardened sshd_config
-# Restrict SSH to key-based authentication for the admin account.
+# DayShield - sshd_config
+# Allows root login with password authentication so users can access the
+# appliance via the root account and password set during installation.
 
 Port 22
 AddressFamily any
