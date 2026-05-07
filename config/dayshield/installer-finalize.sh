@@ -141,6 +141,16 @@ printf 'define WAN_IF = %s\ndefine LAN_IF = %s\n' \
     "${wan_iface:-lo}" "${lan_iface}" \
     > "${target}/etc/dayshield/config/nft-ifaces.conf"
 
+# Suricata — update the IDS capture interface to the WAN interface.
+# The base rootfs ships with a 'lo' placeholder; replace it with the real
+# WAN interface so Suricata actually inspects inbound traffic.
+_suricata_iface="${wan_iface:-${lan_iface}}"
+if [[ -f "${target}/etc/suricata/suricata.yaml" ]] && [[ -n "${_suricata_iface}" ]]; then
+    sed -i "s/^\([[:space:]]*- interface:\)[[:space:]]*lo$/\1 ${_suricata_iface}/" \
+        "${target}/etc/suricata/suricata.yaml"
+    _fin_info "Suricata capture interface set to ${_suricata_iface}"
+fi
+
 # DayShield network.conf
 mkdir -p "${target}/etc/dayshield"
 cat > "${target}/etc/dayshield/network.conf" <<EOF
