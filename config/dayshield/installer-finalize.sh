@@ -144,11 +144,17 @@ printf 'define WAN_IF = %s\ndefine LAN_IF = %s\n' \
 # Suricata — update the IDS capture interface to the WAN interface.
 # The base rootfs ships with a 'lo' placeholder; replace it with the real
 # WAN interface so Suricata actually inspects inbound traffic.
+# Prefer WAN; fall back to LAN if no WAN interface was configured.
 _suricata_iface="${wan_iface:-${lan_iface}}"
 if [[ -f "${target}/etc/suricata/suricata.yaml" ]] && [[ -n "${_suricata_iface}" ]]; then
-    sed -i "s/^\([[:space:]]*- interface:\)[[:space:]]*lo$/\1 ${_suricata_iface}/" \
-        "${target}/etc/suricata/suricata.yaml"
-    _fin_info "Suricata capture interface set to ${_suricata_iface}"
+    # Validate interface name contains only safe characters before use in sed.
+    if [[ "${_suricata_iface}" =~ ^[a-zA-Z0-9_.:@-]+$ ]]; then
+        sed -i "s/^\([[:space:]]*- interface:\)[[:space:]]*lo$/\1 ${_suricata_iface}/" \
+            "${target}/etc/suricata/suricata.yaml"
+        _fin_info "Suricata capture interface set to ${_suricata_iface}"
+    else
+        _fin_warn "Suricata interface name '${_suricata_iface}' contains unexpected characters; skipping suricata.yaml update"
+    fi
 fi
 
 # DayShield network.conf

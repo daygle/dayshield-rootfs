@@ -4,7 +4,7 @@ Documentation=man:certbot(1)
 After=network-online.target
 Wants=network-online.target acme.timer
 ConditionKernelCommandLine=!installer
-ConditionPathExists=/etc/letsencrypt/live
+ConditionPathExists=/etc/letsencrypt
 
 [Service]
 Type=oneshot
