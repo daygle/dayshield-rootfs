@@ -34,7 +34,8 @@ for direct injection into the `dayshield-iso` build pipeline.
 |   |-- crowdsec.yaml            # CrowdSec security engine config
 |   `-- dayshield/
 |       |-- config/              # DayShield runtime config skeleton
-|       `-- certs/               # TLS certificate placeholder
+|       |-- certs/               # TLS certificate placeholder
+|       `-- installer-finalize.sh# Shared installer post-install finalization
 |-- Makefile
 `-- README.md
 ```
@@ -84,9 +85,12 @@ The build pipeline:
 2. **chroot-setup.sh** sets the hostname, writes a placeholder `/etc/fstab`,
    creates the DayShield directory tree, installs all config files, and
    configures systemd-networkd (matching both legacy `eth0` and predictable
-   `en*` interface names).
+   `en*` interface names). It also installs the shared installer finalization
+   script at `/usr/local/lib/dayshield/installer-finalize.sh`.
 3. **install-dayshield-core.sh** installs the `dayshield-core` binary (or a
-   placeholder if the binary is absent) and its systemd unit.
+   placeholder if the binary is absent) and its systemd unit, with an
+   installer-live guard (`ConditionKernelCommandLine=!installer`) so it only
+   starts on installed-system boot.
 4. **enable-services.sh** creates `wants/` symlinks for all required services
    and masks `systemd-resolved` (replaced by unbound).
 5. **harden-ipv4.sh** disables IPv6 at every layer: sysctl, kernel module
@@ -140,6 +144,23 @@ reachable at `http://<host>:8443/`.
 
 If you want the installed system to serve the management UI, build the UI
 and pass its output directory into the rootfs builder.
+
+### Installer finalization contract (console + web)
+
+Both installer entry points must use the same post-install finalization script:
+
+- Path: `/usr/local/lib/dayshield/installer-finalize.sh`
+- Purpose: write installed-system credentials + network config into the mounted
+  target rootfs (including root password lock/update in target `/etc/shadow`).
+- Validation criteria enforced by the script:
+  - root password entry in target `/etc/shadow` must change from the pre-finalize state
+  - no installer-live listener on TCP port `8443`
+  - installed target must include `dayshield.service` guard
+    (`ConditionKernelCommandLine=!installer`) so service startup is deferred to
+    installed-system boot
+
+The console installer already calls this path, and the web installer must call
+the same script with equivalent inputs.
 
 ---
 
