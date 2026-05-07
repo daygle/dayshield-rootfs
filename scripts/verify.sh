@@ -116,8 +116,9 @@ else
     fail "missing shared installer finalization script: /usr/local/lib/dayshield/installer-finalize.sh"
 fi
 
-if [ -f "${ROOTFS_DIR}/etc/systemd/system/dayshield.service.d/dayshield-installer.conf" ] && \
-   grep -Eq '^[[:space:]]*ConditionKernelCommandLine[[:space:]]*=[[:space:]]*!installer[[:space:]]*$' "${ROOTFS_DIR}/etc/systemd/system/dayshield.service.d/dayshield-installer.conf"; then
+DS_INSTALLER_GUARD="${ROOTFS_DIR}/etc/systemd/system/dayshield.service.d/dayshield-installer.conf"
+if [ -f "${DS_INSTALLER_GUARD}" ] && \
+   grep -Eq '^[[:space:]]*ConditionKernelCommandLine[[:space:]]*=[[:space:]]*!installer[[:space:]]*$' "${DS_INSTALLER_GUARD}"; then
     ok "dayshield.service is guarded from installer-live boot"
 else
     fail "dayshield.service missing installer-live guard ConditionKernelCommandLine=!installer"

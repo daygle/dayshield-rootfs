@@ -35,6 +35,11 @@ if [[ -z "${lan_iface}" || -z "${lan_ip}" || -z "${lan_prefix}" ]]; then
     exit 1
 fi
 
+if ! [[ "${lan_ip}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+    _fin_err "invalid LAN IPv4 address format: ${lan_ip}"
+    exit 1
+fi
+
 if ! [[ "${lan_prefix}" =~ ^[0-9]+$ ]] || [[ "${lan_prefix}" -lt 0 ]] || [[ "${lan_prefix}" -gt 32 ]]; then
     _fin_err "invalid LAN prefix: ${lan_prefix}"
     exit 1
@@ -148,7 +153,7 @@ DHCP=no
 IPv6AcceptRA=no
 LinkLocalAddressing=no
 EOF
-        mkdir -p "${target}/etc/ppp/peers"
+        mkdir -p "${target}/etc/ppp" "${target}/etc/ppp/peers"
         cat > "${target}/etc/ppp/peers/wan" <<EOF
 plugin rp-pppoe.so ${wan_iface}
 user "${wan_pppoe_user}"
@@ -298,7 +303,7 @@ _fin_info "Validating install-time criteria ..."
 if grep -qw installer /proc/cmdline 2>/dev/null; then
     if command -v ss >/dev/null 2>&1; then
         # Prevent installer-live/service conflicts on the management redirect port.
-        if IFS= read -r _ < <(ss -H -ltn 'sport = :8443' 2>/dev/null); then
+        if ss -H -ltn 'sport = :8443' 2>/dev/null | grep -q '[0-9]'; then
             _fin_err "live installer has an active TCP listener on port 8443"
             exit 1
         fi
