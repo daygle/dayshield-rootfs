@@ -686,7 +686,7 @@ _set_lan_ip() {
     new_prefix="${new_prefix:-${default_prefix}}"
 
     # Basic validation
-    if ! [[ "${new_ip}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    if ! _is_valid_ipv4 "${new_ip}"; then
         echo "Invalid IP address: ${new_ip}"
         read -rp "Press Enter to continue …"
         return
