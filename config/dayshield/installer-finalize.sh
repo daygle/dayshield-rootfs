@@ -36,9 +36,21 @@ if [[ -z "${lan_iface}" || -z "${lan_ip}" || -z "${lan_prefix}" ]]; then
     exit 1
 fi
 
-if ! [[ "${lan_ip}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
-    _fin_err "invalid LAN IPv4 address format: ${lan_ip}"
-    exit 1
+if command -v python3 >/dev/null 2>&1; then
+    if ! python3 - "${lan_ip}" <<'PY' >/dev/null 2>&1
+import ipaddress
+import sys
+ipaddress.IPv4Address(sys.argv[1])
+PY
+    then
+        _fin_err "invalid LAN IPv4 address: ${lan_ip}"
+        exit 1
+    fi
+else
+    if ! awk -F. 'NF==4{for(i=1;i<=4;i++) if($i !~ /^[0-9]+$/ || $i>255) exit 1; exit 0} {exit 1}' <<< "${lan_ip}"; then
+        _fin_err "invalid LAN IPv4 address: ${lan_ip}"
+        exit 1
+    fi
 fi
 
 if ! [[ "${lan_prefix}" =~ ^[0-9]+$ ]] || [[ "${lan_prefix}" -gt 32 ]]; then
@@ -168,9 +180,9 @@ holdoff 5
 noipv6
 EOF
         chmod 600 "${target}/etc/ppp/peers/wan"
-        sl="\"${wan_pppoe_user}\" * \"${wan_pppoe_pass}\" *"
-        printf '%s\n' "${sl}" > "${target}/etc/ppp/chap-secrets"
-        printf '%s\n' "${sl}" > "${target}/etc/ppp/pap-secrets"
+        ppp_auth_line="\"${wan_pppoe_user}\" * \"${wan_pppoe_pass}\" *"
+        printf '%s\n' "${ppp_auth_line}" > "${target}/etc/ppp/chap-secrets"
+        printf '%s\n' "${ppp_auth_line}" > "${target}/etc/ppp/pap-secrets"
         chmod 600 "${target}/etc/ppp/chap-secrets" "${target}/etc/ppp/pap-secrets"
     else
         cat > "${netdir}/10-wan.network" <<EOF
