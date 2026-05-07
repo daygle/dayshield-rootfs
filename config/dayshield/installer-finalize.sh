@@ -9,7 +9,7 @@ _fin_warn() { printf '  [WRN] %s\n' "$*"; }
 _fin_err()  { printf '  [ERR] %s\n' "$*" >&2; }
 _fin_validate_iface_name() {
     local iface="$1"
-    [[ "${iface}" =~ ^[a-zA-Z0-9_.:-]+$ ]]
+    [[ "${iface}" =~ ^[a-zA-Z0-9_.-]+$ ]]
 }
 _fin_validate_hostname() {
     local host="$1"

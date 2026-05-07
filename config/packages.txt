@@ -35,8 +35,6 @@ wget
 # Installing them here causes the initramfs to embed live-boot hooks that
 # stall the installed system during boot (the hooks timeout looking for a
 # live squashfs medium and drop to an emergency shell).
-zstd
-
 # Kernel - standard amd64 kernel (non-RT) for QEMU/bare-metal compatibility.
 linux-image-amd64
 

@@ -2,7 +2,7 @@
 Description=ACME Certificate Renewal (DayShield)
 Documentation=man:certbot(1)
 After=network-online.target
-Wants=network-online.target acme.timer
+Wants=network-online.target
 ConditionKernelCommandLine=!installer
 
 [Service]

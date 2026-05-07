@@ -45,6 +45,18 @@ LAN_DHCP_LEASE="12h"
 FIRST_SETUP_DONE=""
 ORIG_CONSOLE_LOGLEVEL=""
 
+_is_valid_iface_name() {
+    [[ "$1" =~ ^[a-zA-Z0-9_.-]+$ ]]
+}
+
+_is_valid_ipv4() {
+    [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]
+}
+
+_is_safe_text() {
+    [[ "$1" != *$'\n'* && "$1" != *$'\r'* ]]
+}
+
 _console_quiet_enter() {
     # Keep kernel printk output from disrupting interactive prompts on tty1.
     if [[ -z "${ORIG_CONSOLE_LOGLEVEL}" ]] && [[ -r /proc/sys/kernel/printk ]] && [[ -w /proc/sys/kernel/printk ]]; then
@@ -62,7 +74,7 @@ _console_quiet_exit() {
 
 _load_state() {
     local state_file="/etc/dayshield/console-state"
-    local owner perms
+    local owner perms key value_b64 value
     if [[ ! -f "${state_file}" ]]; then
         return
     fi
@@ -76,8 +88,67 @@ _load_state() {
         printf '  [WARN] ignoring group/other writable state file: %s\n' "${state_file}" >&2
         return
     fi
-    # shellcheck source=/dev/null
-    . "${state_file}"
+    while IFS='=' read -r key value_b64; do
+        [[ -n "${key}" ]] || continue
+        value="$(printf '%s' "${value_b64}" | base64 -d 2>/dev/null || true)"
+        if ! _is_safe_text "${value}"; then
+            continue
+        fi
+        case "${key}" in
+            WAN_IFACE)
+                if [[ -z "${value}" ]] || _is_valid_iface_name "${value}"; then
+                    WAN_IFACE="${value}"
+                fi
+                ;;
+            WAN_TYPE)
+                if [[ "${value}" == "dhcp" || "${value}" == "pppoe" || -z "${value}" ]]; then
+                    WAN_TYPE="${value}"
+                fi
+                ;;
+            WAN_PPPOE_USER) WAN_PPPOE_USER="${value}" ;;
+            WAN_PPPOE_PASS) WAN_PPPOE_PASS="${value}" ;;
+            LAN_IFACE)
+                if [[ -z "${value}" ]] || _is_valid_iface_name "${value}"; then
+                    LAN_IFACE="${value}"
+                fi
+                ;;
+            LAN_IP)
+                if [[ -z "${value}" ]] || _is_valid_ipv4 "${value}"; then
+                    LAN_IP="${value}"
+                fi
+                ;;
+            LAN_PREFIX)
+                if [[ -z "${value}" ]] || ([[ "${value}" =~ ^[0-9]+$ ]] && (( value >= 1 && value <= 32 ))); then
+                    LAN_PREFIX="${value}"
+                fi
+                ;;
+            LAN_DHCP_ENABLE)
+                if [[ "${value}" == "yes" || "${value}" == "no" || -z "${value}" ]]; then
+                    LAN_DHCP_ENABLE="${value}"
+                fi
+                ;;
+            LAN_DHCP_START)
+                if [[ -z "${value}" ]] || _is_valid_ipv4 "${value}"; then
+                    LAN_DHCP_START="${value}"
+                fi
+                ;;
+            LAN_DHCP_END)
+                if [[ -z "${value}" ]] || _is_valid_ipv4 "${value}"; then
+                    LAN_DHCP_END="${value}"
+                fi
+                ;;
+            LAN_DHCP_LEASE)
+                if [[ -z "${value}" ]] || [[ "${value}" =~ ^[0-9]+[smhd]$ ]]; then
+                    LAN_DHCP_LEASE="${value}"
+                fi
+                ;;
+            FIRST_SETUP_DONE)
+                if [[ "${value}" == "yes" || -z "${value}" ]]; then
+                    FIRST_SETUP_DONE="${value}"
+                fi
+                ;;
+        esac
+    done < "${state_file}"
 }
 
 _save_state() {
@@ -87,12 +158,20 @@ _save_state() {
     tmp_file="$(mktemp /etc/dayshield/console-state.XXXXXX)"
     old_umask="$(umask)"
     umask 077
-    printf 'WAN_IFACE=%q\nWAN_TYPE=%q\nWAN_PPPOE_USER=%q\nWAN_PPPOE_PASS=%q\nLAN_IFACE=%q\nLAN_IP=%q\nLAN_PREFIX=%q\nLAN_DHCP_ENABLE=%q\nLAN_DHCP_START=%q\nLAN_DHCP_END=%q\nLAN_DHCP_LEASE=%q\nFIRST_SETUP_DONE=%q\n' \
-        "${WAN_IFACE}" "${WAN_TYPE}" "${WAN_PPPOE_USER}" "${WAN_PPPOE_PASS}" \
-        "${LAN_IFACE}" "${LAN_IP}" "${LAN_PREFIX}" \
-        "${LAN_DHCP_ENABLE}" "${LAN_DHCP_START}" "${LAN_DHCP_END}" "${LAN_DHCP_LEASE}" \
-        "${FIRST_SETUP_DONE}" \
-        > "${tmp_file}"
+    {
+        printf 'WAN_IFACE=%s\n' "$(printf '%s' "${WAN_IFACE}" | base64 | tr -d '\n')"
+        printf 'WAN_TYPE=%s\n' "$(printf '%s' "${WAN_TYPE}" | base64 | tr -d '\n')"
+        printf 'WAN_PPPOE_USER=%s\n' "$(printf '%s' "${WAN_PPPOE_USER}" | base64 | tr -d '\n')"
+        printf 'WAN_PPPOE_PASS=%s\n' "$(printf '%s' "${WAN_PPPOE_PASS}" | base64 | tr -d '\n')"
+        printf 'LAN_IFACE=%s\n' "$(printf '%s' "${LAN_IFACE}" | base64 | tr -d '\n')"
+        printf 'LAN_IP=%s\n' "$(printf '%s' "${LAN_IP}" | base64 | tr -d '\n')"
+        printf 'LAN_PREFIX=%s\n' "$(printf '%s' "${LAN_PREFIX}" | base64 | tr -d '\n')"
+        printf 'LAN_DHCP_ENABLE=%s\n' "$(printf '%s' "${LAN_DHCP_ENABLE}" | base64 | tr -d '\n')"
+        printf 'LAN_DHCP_START=%s\n' "$(printf '%s' "${LAN_DHCP_START}" | base64 | tr -d '\n')"
+        printf 'LAN_DHCP_END=%s\n' "$(printf '%s' "${LAN_DHCP_END}" | base64 | tr -d '\n')"
+        printf 'LAN_DHCP_LEASE=%s\n' "$(printf '%s' "${LAN_DHCP_LEASE}" | base64 | tr -d '\n')"
+        printf 'FIRST_SETUP_DONE=%s\n' "$(printf '%s' "${FIRST_SETUP_DONE}" | base64 | tr -d '\n')"
+    } > "${tmp_file}"
     chmod 600 "${tmp_file}"
     mv -f "${tmp_file}" "${state_file}"
     umask "${old_umask}"

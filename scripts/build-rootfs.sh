@@ -34,11 +34,20 @@ EOF
 # Parse arguments
 while [ $# -gt 0 ]; do
     case "$1" in
-        --arch)    ARCH="$2";   shift 2 ;;
-        --suite)   SUITE="$2";  shift 2 ;;
-        --output)  OUTPUT="$2"; shift 2 ;;
-        --mirror)  MIRROR="$2"; shift 2 ;;
-        --ui-dir)  UI_DIR="$2"; shift 2 ;;
+        --arch|--suite|--output|--mirror|--ui-dir)
+            if [ $# -lt 2 ] || [ -z "${2}" ] || [ "${2#--}" != "${2}" ]; then
+                printf 'ERROR: option %s requires a value\n' "$1" >&2
+                exit 1
+            fi
+            case "$1" in
+                --arch) ARCH="$2" ;;
+                --suite) SUITE="$2" ;;
+                --output) OUTPUT="$2" ;;
+                --mirror) MIRROR="$2" ;;
+                --ui-dir) UI_DIR="$2" ;;
+            esac
+            shift 2
+            ;;
         --help)    usage ;;
         *)
             printf 'Unknown option: %s\n' "$1" >&2
