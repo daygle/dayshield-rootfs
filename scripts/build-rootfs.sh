@@ -13,7 +13,7 @@ CONFIG_DIR="${REPO_DIR}/config"
 ARCH="amd64"
 SUITE="trixie"
 OUTPUT="rootfs.tar.zst"
-MIRROR="http://deb.debian.org/debian"
+MIRROR="https://deb.debian.org/debian"
 UI_DIR=""
 
 usage() {
@@ -24,7 +24,7 @@ Options:
   --arch ARCH       Target architecture (default: amd64)
   --suite SUITE     Debian suite (default: trixie)
   --output FILE     Output file (default: rootfs.tar.zst)
-  --mirror URL      Debian mirror URL (default: http://deb.debian.org/debian)
+  --mirror URL      Debian mirror URL (default: https://deb.debian.org/debian)
   --ui-dir PATH     Optional built UI output directory to install into /usr/local/share/dayshield-ui
   --help            Show this help message
 EOF

@@ -5,7 +5,7 @@ SHELL        := /bin/sh
 ARCH         ?= amd64
 SUITE        ?= trixie
 OUTPUT       ?= rootfs.tar.zst
-MIRROR       ?= http://deb.debian.org/debian
+MIRROR       ?= https://deb.debian.org/debian
 UI_DIR       ?=
 SCRIPTS_DIR  := scripts
 ROOTFS_DIR   ?=
@@ -32,5 +32,5 @@ verify:
 
 ## Remove build artefacts
 clean:
-	rm -f $(OUTPUT)
+	rm -f "$(OUTPUT)"
 	@echo "Cleaned $(OUTPUT)"

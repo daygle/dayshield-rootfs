@@ -8,7 +8,7 @@ ConditionKernelCommandLine=!installer
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/certbot renew --quiet --no-self-upgrade
-ExecStartPost=/bin/sh -c 'cp -r /etc/letsencrypt/live/. /etc/dayshield/certs/'
+ExecStartPost=/bin/sh -c 'install -d -m 700 /etc/dayshield/certs && cp -a /etc/letsencrypt/live/. /etc/dayshield/certs/ && chmod -R go-rwx /etc/dayshield/certs'
 StandardOutput=journal
 StandardError=journal
 

@@ -67,6 +67,7 @@ mkdir -p \
     "${ROOTFS_DIR}/etc/dayshield/config" \
     "${ROOTFS_DIR}/etc/dayshield/certs" \
     "${ROOTFS_DIR}/etc/dayshield/logs"
+chmod 700 "${ROOTFS_DIR}/etc/dayshield/certs"
 
 printf '  -> Creating /var/lib/dayshield directory tree\n'
 mkdir -p \

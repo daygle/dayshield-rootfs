@@ -5,7 +5,7 @@
 # live installer session and the installed system.  Live mode is detected
 # automatically from /proc/cmdline.
 
-set -uo pipefail
+set -euo pipefail
 
 DAYSHIELD_VERSION="1.0"
 DAYSHIELD_SITE="https://github.com/daygle/dayshield"
@@ -62,18 +62,40 @@ _console_quiet_exit() {
 
 _load_state() {
     local state_file="/etc/dayshield/console-state"
+    local owner perms
+    if [[ ! -f "${state_file}" ]]; then
+        return
+    fi
+    owner="$(stat -c '%u' "${state_file}" 2>/dev/null || true)"
+    perms="$(stat -c '%A' "${state_file}" 2>/dev/null || true)"
+    if [[ "${owner}" != "0" ]]; then
+        printf '  [WARN] ignoring unsafe state file owner: %s\n' "${state_file}" >&2
+        return
+    fi
+    if [[ "${#perms}" -ge 10 ]] && { [[ "${perms:5:1}" == "w" ]] || [[ "${perms:8:1}" == "w" ]]; }; then
+        printf '  [WARN] ignoring group/other writable state file: %s\n' "${state_file}" >&2
+        return
+    fi
     # shellcheck source=/dev/null
-    [[ -f "${state_file}" ]] && . "${state_file}"
+    . "${state_file}"
 }
 
 _save_state() {
+    local state_file tmp_file old_umask
+    state_file="/etc/dayshield/console-state"
     mkdir -p /etc/dayshield
+    tmp_file="$(mktemp /etc/dayshield/console-state.XXXXXX)"
+    old_umask="$(umask)"
+    umask 077
     printf 'WAN_IFACE=%q\nWAN_TYPE=%q\nWAN_PPPOE_USER=%q\nWAN_PPPOE_PASS=%q\nLAN_IFACE=%q\nLAN_IP=%q\nLAN_PREFIX=%q\nLAN_DHCP_ENABLE=%q\nLAN_DHCP_START=%q\nLAN_DHCP_END=%q\nLAN_DHCP_LEASE=%q\nFIRST_SETUP_DONE=%q\n' \
         "${WAN_IFACE}" "${WAN_TYPE}" "${WAN_PPPOE_USER}" "${WAN_PPPOE_PASS}" \
         "${LAN_IFACE}" "${LAN_IP}" "${LAN_PREFIX}" \
         "${LAN_DHCP_ENABLE}" "${LAN_DHCP_START}" "${LAN_DHCP_END}" "${LAN_DHCP_LEASE}" \
         "${FIRST_SETUP_DONE}" \
-        > /etc/dayshield/console-state
+        > "${tmp_file}"
+    chmod 600 "${tmp_file}"
+    mv -f "${tmp_file}" "${state_file}"
+    umask "${old_umask}"
 }
 
 # ---------------------------------------------------------------------------
@@ -288,6 +310,8 @@ _apply_pppoe_config() {
     cat > /etc/ppp/peers/wan <<EOF
 plugin rp-pppoe.so ${WAN_IFACE}
 user "${WAN_PPPOE_USER}"
+linkname wan
+pidfile /run/ppp-wan.pid
 noauth
 defaultroute
 replacedefaultroute
@@ -305,8 +329,15 @@ EOF
     printf '%s\n' "${secrets_line}" > /etc/ppp/pap-secrets
     chmod 600 /etc/ppp/chap-secrets /etc/ppp/pap-secrets
 
-    # Stop any existing pppd on this WAN
-    pkill -f "pppd call wan" 2>/dev/null || true
+    # Stop existing PPPoE session for this link name (if any)
+    local pidfile old_pid
+    for pidfile in /run/ppp-wan.pid /var/run/ppp-wan.pid; do
+        [[ -f "${pidfile}" ]] || continue
+        old_pid="$(cat "${pidfile}" 2>/dev/null || true)"
+        if [[ "${old_pid}" =~ ^[0-9]+$ ]] && kill -0 "${old_pid}" 2>/dev/null; then
+            kill "${old_pid}" 2>/dev/null || true
+        fi
+    done
     sleep 1
 
     # Start pppd in background
