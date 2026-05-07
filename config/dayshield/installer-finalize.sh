@@ -148,7 +148,7 @@ printf 'define WAN_IF = %s\ndefine LAN_IF = %s\n' \
 _suricata_iface="${wan_iface:-${lan_iface}}"
 if [[ -f "${target}/etc/suricata/suricata.yaml" ]] && [[ -n "${_suricata_iface}" ]]; then
     # Validate interface name contains only safe characters before use in sed.
-    if [[ "${_suricata_iface}" =~ ^[a-zA-Z0-9_.:@-]+$ ]]; then
+    if [[ "${_suricata_iface}" =~ ^[a-zA-Z0-9_.-]+$ ]]; then
         sed -i "s/^\([[:space:]]*- interface:\)[[:space:]]*lo$/\1 ${_suricata_iface}/" \
             "${target}/etc/suricata/suricata.yaml"
         _fin_info "Suricata capture interface set to ${_suricata_iface}"
