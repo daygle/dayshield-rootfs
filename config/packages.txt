@@ -83,4 +83,3 @@ grub-efi-amd64-bin
 # Utilities needed by build scripts
 gzip
 tar
-zstd

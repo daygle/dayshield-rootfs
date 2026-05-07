@@ -62,18 +62,44 @@ _console_quiet_exit() {
 
 _load_state() {
     local state_file="/etc/dayshield/console-state"
-    # shellcheck source=/dev/null
-    [[ -f "${state_file}" ]] && . "${state_file}"
+    [[ -f "${state_file}" ]] || return
+    [[ -L "${state_file}" ]] && return
+
+    while IFS=$'\t' read -r key value; do
+        case "${key}" in
+            WAN_IFACE) WAN_IFACE="${value}" ;;
+            WAN_TYPE) WAN_TYPE="${value}" ;;
+            WAN_PPPOE_USER) WAN_PPPOE_USER="${value}" ;;
+            WAN_PPPOE_PASS) WAN_PPPOE_PASS="${value}" ;;
+            LAN_IFACE) LAN_IFACE="${value}" ;;
+            LAN_IP) LAN_IP="${value}" ;;
+            LAN_PREFIX) LAN_PREFIX="${value}" ;;
+            LAN_DHCP_ENABLE) LAN_DHCP_ENABLE="${value}" ;;
+            LAN_DHCP_START) LAN_DHCP_START="${value}" ;;
+            LAN_DHCP_END) LAN_DHCP_END="${value}" ;;
+            LAN_DHCP_LEASE) LAN_DHCP_LEASE="${value}" ;;
+            FIRST_SETUP_DONE) FIRST_SETUP_DONE="${value}" ;;
+        esac
+    done < "${state_file}"
 }
 
 _save_state() {
     mkdir -p /etc/dayshield
-    printf 'WAN_IFACE=%q\nWAN_TYPE=%q\nWAN_PPPOE_USER=%q\nWAN_PPPOE_PASS=%q\nLAN_IFACE=%q\nLAN_IP=%q\nLAN_PREFIX=%q\nLAN_DHCP_ENABLE=%q\nLAN_DHCP_START=%q\nLAN_DHCP_END=%q\nLAN_DHCP_LEASE=%q\nFIRST_SETUP_DONE=%q\n' \
-        "${WAN_IFACE}" "${WAN_TYPE}" "${WAN_PPPOE_USER}" "${WAN_PPPOE_PASS}" \
-        "${LAN_IFACE}" "${LAN_IP}" "${LAN_PREFIX}" \
-        "${LAN_DHCP_ENABLE}" "${LAN_DHCP_START}" "${LAN_DHCP_END}" "${LAN_DHCP_LEASE}" \
-        "${FIRST_SETUP_DONE}" \
-        > /etc/dayshield/console-state
+    {
+        printf 'WAN_IFACE\t%s\n' "${WAN_IFACE}"
+        printf 'WAN_TYPE\t%s\n' "${WAN_TYPE}"
+        printf 'WAN_PPPOE_USER\t%s\n' "${WAN_PPPOE_USER}"
+        printf 'WAN_PPPOE_PASS\t%s\n' "${WAN_PPPOE_PASS}"
+        printf 'LAN_IFACE\t%s\n' "${LAN_IFACE}"
+        printf 'LAN_IP\t%s\n' "${LAN_IP}"
+        printf 'LAN_PREFIX\t%s\n' "${LAN_PREFIX}"
+        printf 'LAN_DHCP_ENABLE\t%s\n' "${LAN_DHCP_ENABLE}"
+        printf 'LAN_DHCP_START\t%s\n' "${LAN_DHCP_START}"
+        printf 'LAN_DHCP_END\t%s\n' "${LAN_DHCP_END}"
+        printf 'LAN_DHCP_LEASE\t%s\n' "${LAN_DHCP_LEASE}"
+        printf 'FIRST_SETUP_DONE\t%s\n' "${FIRST_SETUP_DONE}"
+    } > /etc/dayshield/console-state
+    chmod 600 /etc/dayshield/console-state
 }
 
 # ---------------------------------------------------------------------------
@@ -114,6 +140,23 @@ _default_dhcp_pool() {
     local o1 o2 o3 o4
     IFS='.' read -r o1 o2 o3 o4 <<< "${ip}"
     printf '%s.%s.%s.100 %s.%s.%s.199\n' "${o1}" "${o2}" "${o3}" "${o1}" "${o2}" "${o3}"
+}
+
+_is_valid_ipv4() {
+    local ip="$1"
+    local o1 o2 o3 o4
+    [[ "${ip}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
+    IFS='.' read -r o1 o2 o3 o4 <<< "${ip}"
+    for octet in "${o1}" "${o2}" "${o3}" "${o4}"; do
+        [[ "${octet}" =~ ^[0-9]+$ ]] || return 1
+        (( octet >= 0 && octet <= 255 )) || return 1
+    done
+}
+
+_ipv4_to_int() {
+    local o1 o2 o3 o4
+    IFS='.' read -r o1 o2 o3 o4 <<< "$1"
+    printf '%u' "$(( (o1 << 24) | (o2 << 16) | (o3 << 8) | o4 ))"
 }
 
 _apply_lan_dhcp_config() {
@@ -306,7 +349,9 @@ EOF
     chmod 600 /etc/ppp/chap-secrets /etc/ppp/pap-secrets
 
     # Stop any existing pppd on this WAN
-    pkill -f "pppd call wan" 2>/dev/null || true
+    while IFS= read -r pid; do
+        kill "${pid}" 2>/dev/null || true
+    done < <(pgrep -f '^pppd call wan$' 2>/dev/null || true)
     sleep 1
 
     # Start pppd in background
@@ -555,7 +600,7 @@ _set_lan_ip() {
     new_prefix="${new_prefix:-${default_prefix}}"
 
     # Basic validation
-    if ! [[ "${new_ip}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    if ! _is_valid_ipv4 "${new_ip}"; then
         echo "Invalid IP address: ${new_ip}"
         read -rp "Press Enter to continue …"
         return
@@ -643,9 +688,34 @@ _set_lan_dhcp() {
     fi
     new_lease="${new_lease:-${lease_default}}"
 
-    if ! [[ "${new_start}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || \
-       ! [[ "${new_end}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    if ! _is_valid_ipv4 "${new_start}" || ! _is_valid_ipv4 "${new_end}" || ! _is_valid_ipv4 "${LAN_IP}"; then
         echo "Invalid DHCP range."
+        read -rp "Press Enter to continue …"
+        return
+    fi
+    if ! [[ "${new_lease}" =~ ^[0-9]+[smhd]$ ]]; then
+        echo "Invalid lease time format (expected number + one of s/m/h/d)."
+        read -rp "Press Enter to continue …"
+        return
+    fi
+    local prefix="${LAN_PREFIX:-24}"
+    local mask=$(( (0xFFFFFFFF << (32 - prefix)) & 0xFFFFFFFF ))
+    local lan_int start_int end_int
+    lan_int="$(_ipv4_to_int "${LAN_IP}")"
+    start_int="$(_ipv4_to_int "${new_start}")"
+    end_int="$(_ipv4_to_int "${new_end}")"
+    if (( start_int > end_int )); then
+        echo "Invalid DHCP range: start must be <= end."
+        read -rp "Press Enter to continue …"
+        return
+    fi
+    if (( (lan_int & mask) != (start_int & mask) || (lan_int & mask) != (end_int & mask) )); then
+        echo "Invalid DHCP range: values must be in the LAN subnet."
+        read -rp "Press Enter to continue …"
+        return
+    fi
+    if (( lan_int >= start_int && lan_int <= end_int )); then
+        echo "Invalid DHCP range: it must not include the LAN gateway IP (${LAN_IP})."
         read -rp "Press Enter to continue …"
         return
     fi

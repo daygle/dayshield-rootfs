@@ -11,7 +11,6 @@ Type=oneshot
 RemainAfterExit=yes
 ExecStart=/usr/bin/wg-quick up wg0
 ExecStop=/usr/bin/wg-quick down wg0
-ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=5s
 Environment=WG_COLOR_MODE=never WG_HIDE_KEYS=always LOG_LEVEL=verbose

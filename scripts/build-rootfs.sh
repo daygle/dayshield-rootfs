@@ -13,7 +13,7 @@ CONFIG_DIR="${REPO_DIR}/config"
 ARCH="amd64"
 SUITE="trixie"
 OUTPUT="rootfs.tar.zst"
-MIRROR="http://deb.debian.org/debian"
+MIRROR="https://deb.debian.org/debian"
 UI_DIR=""
 
 usage() {
@@ -24,7 +24,7 @@ Options:
   --arch ARCH       Target architecture (default: amd64)
   --suite SUITE     Debian suite (default: trixie)
   --output FILE     Output file (default: rootfs.tar.zst)
-  --mirror URL      Debian mirror URL (default: http://deb.debian.org/debian)
+  --mirror URL      Debian mirror URL (default: https://deb.debian.org/debian)
   --ui-dir PATH     Optional built UI output directory to install into /usr/local/share/dayshield-ui
   --help            Show this help message
 EOF
@@ -34,11 +34,20 @@ EOF
 # Parse arguments
 while [ $# -gt 0 ]; do
     case "$1" in
-        --arch)    ARCH="$2";   shift 2 ;;
-        --suite)   SUITE="$2";  shift 2 ;;
-        --output)  OUTPUT="$2"; shift 2 ;;
-        --mirror)  MIRROR="$2"; shift 2 ;;
-        --ui-dir)  UI_DIR="$2"; shift 2 ;;
+        --arch|--suite|--output|--mirror|--ui-dir)
+            if [ $# -lt 2 ]; then
+                printf 'ERROR: missing value for %s\n' "$1" >&2
+                exit 1
+            fi
+            case "$1" in
+                --arch)   ARCH="$2" ;;
+                --suite)  SUITE="$2" ;;
+                --output) OUTPUT="$2" ;;
+                --mirror) MIRROR="$2" ;;
+                --ui-dir) UI_DIR="$2" ;;
+            esac
+            shift 2
+            ;;
         --help)    usage ;;
         *)
             printf 'Unknown option: %s\n' "$1" >&2

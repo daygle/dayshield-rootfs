@@ -73,7 +73,7 @@ make rootfs ARCH=arm64 SUITE=trixie OUTPUT=dayshield-arm64.tar.zst
     --arch amd64 \
     --suite trixie \
     --output rootfs.tar.zst \
-    --mirror http://deb.debian.org/debian
+    --mirror https://deb.debian.org/debian
 ```
 
 The build pipeline:
