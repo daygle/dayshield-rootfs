@@ -92,7 +92,8 @@ logging:
         enabled: no
 
 af-packet:
-  - interface: eth0
+  # Build-time placeholder — replaced by installer-finalize.sh with the WAN interface.
+  - interface: lo
     cluster-id: 99
     cluster-type: cluster_flow
     defrag: yes
@@ -100,7 +101,8 @@ af-packet:
     tpacket-v3: yes
 
 pcap:
-  - interface: eth0
+  # Build-time placeholder — replaced by installer-finalize.sh with the WAN interface.
+  - interface: lo
 
 app-layer:
   protocols:

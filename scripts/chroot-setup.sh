@@ -80,7 +80,7 @@ printf '  -> Installing sysctl.conf\n'
 cp "${CONFIG_DIR}/sysctl.conf" "${ROOTFS_DIR}/etc/sysctl.d/99-dayshield.conf"
 
 printf '  -> Installing nftables.conf\n'
-mkdir -p "${ROOTFS_DIR}/etc/nftables"
+mkdir -p "${ROOTFS_DIR}/etc/nftables" "${ROOTFS_DIR}/etc/nftables.d"
 cp "${CONFIG_DIR}/nftables.conf" "${ROOTFS_DIR}/etc/nftables.conf"
 
 printf '  -> Installing unbound.conf\n'
@@ -121,14 +121,6 @@ ExecStart=
 ExecStart=/usr/lib/systemd/systemd-networkd-wait-online --any --timeout=30
 EOF
 
-# ── Disable IPv6 system-wide via sysctl ───────────────────────────────────────
-printf '  -> Disabling IPv6 in sysctl\n'
-cat > "${ROOTFS_DIR}/etc/sysctl.d/99-disable-ipv6.conf" <<'EOF'
-net.ipv6.conf.all.disable_ipv6 = 1
-net.ipv6.conf.default.disable_ipv6 = 1
-net.ipv6.conf.lo.disable_ipv6 = 1
-EOF
-
 # ── Kernel cmdline placeholder for bootloader ─────────────────────────────────
 printf '  -> Writing kernel cmdline placeholder\n'
 mkdir -p "${ROOTFS_DIR}/etc/dayshield"
@@ -141,10 +133,19 @@ EOF
 # ── Install systemd service units from config ─────────────────────────────────
 printf '  -> Installing service unit files\n'
 mkdir -p "${ROOTFS_DIR}/etc/systemd/system"
-for svc in unbound nftables suricata crowdsec wireguard acme console-wizard; do
-    src="${CONFIG_DIR}/services/${svc}.service"
+for unit in \
+    unbound.service \
+    nftables.service \
+    suricata.service \
+    crowdsec.service \
+    wireguard.service \
+    acme.service \
+    acme.timer \
+    console-wizard.service
+do
+    src="${CONFIG_DIR}/services/${unit}"
     if [ -f "${src}" ]; then
-        cp "${src}" "${ROOTFS_DIR}/etc/systemd/system/${svc}.service"
+        cp "${src}" "${ROOTFS_DIR}/etc/systemd/system/${unit}"
     fi
 done
 

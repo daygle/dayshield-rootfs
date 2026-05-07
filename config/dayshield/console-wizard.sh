@@ -90,6 +90,7 @@ _load_state() {
     if [[ ! -f "${state_file}" ]]; then
         return
     fi
+    [[ -L "${state_file}" ]] && return
     owner="$(stat -c '%u' "${state_file}" 2>/dev/null || true)"
     perms="$(stat -c '%A' "${state_file}" 2>/dev/null || true)"
     if [[ "${owner}" != "0" ]]; then
@@ -229,6 +230,23 @@ _default_dhcp_pool() {
     printf '%s.%s.%s.100 %s.%s.%s.199\n' "${o1}" "${o2}" "${o3}" "${o1}" "${o2}" "${o3}"
 }
 
+_is_valid_ipv4() {
+    local ip="$1"
+    local o1 o2 o3 o4
+    [[ "${ip}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
+    IFS='.' read -r o1 o2 o3 o4 <<< "${ip}"
+    for octet in "${o1}" "${o2}" "${o3}" "${o4}"; do
+        [[ "${octet}" =~ ^[0-9]+$ ]] || return 1
+        (( octet >= 0 && octet <= 255 )) || return 1
+    done
+}
+
+_ipv4_to_int() {
+    local o1 o2 o3 o4
+    IFS='.' read -r o1 o2 o3 o4 <<< "$1"
+    printf '%u' "$(( (o1 << 24) | (o2 << 16) | (o3 << 8) | o4 ))"
+}
+
 _apply_lan_dhcp_config() {
     local kea_conf="/etc/kea/kea-dhcp4.conf"
 
@@ -239,6 +257,7 @@ _apply_lan_dhcp_config() {
         local prefix="${LAN_PREFIX:-24}"
         local o1 o2 o3 o4
         IFS='.' read -r o1 o2 o3 o4 <<< "${LAN_IP}"
+        # Calculate subnet mask from CIDR prefix (e.g. /24 -> 255.255.255.0 mask bits).
         local mask=$(( (0xFFFFFFFF << (32 - prefix)) & 0xFFFFFFFF ))
         local ip_int=$(( (o1 << 24) | (o2 << 16) | (o3 << 8) | o4 ))
         local net_int=$(( ip_int & mask ))
@@ -774,10 +793,34 @@ _set_lan_dhcp() {
     fi
     new_lease="${new_lease:-${lease_default}}"
 
-    if ! [[ "${new_start}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || \
-       ! [[ "${new_end}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || \
-       ! _is_valid_ipv4 "${new_start}" || ! _is_valid_ipv4 "${new_end}"; then
+    if ! _is_valid_ipv4 "${new_start}" || ! _is_valid_ipv4 "${new_end}" || ! _is_valid_ipv4 "${LAN_IP}"; then
         echo "Invalid DHCP range."
+        read -rp "Press Enter to continue …"
+        return
+    fi
+    if ! [[ "${new_lease}" =~ ^[0-9]+[smhd]$ ]]; then
+        echo "Invalid lease time format (expected number + one of s/m/h/d)."
+        read -rp "Press Enter to continue …"
+        return
+    fi
+    local prefix="${LAN_PREFIX:-24}"
+    local mask=$(( (0xFFFFFFFF << (32 - prefix)) & 0xFFFFFFFF ))
+    local lan_int start_int end_int
+    lan_int="$(_ipv4_to_int "${LAN_IP}")"
+    start_int="$(_ipv4_to_int "${new_start}")"
+    end_int="$(_ipv4_to_int "${new_end}")"
+    if (( start_int > end_int )); then
+        echo "Invalid DHCP range: start must be <= end."
+        read -rp "Press Enter to continue …"
+        return
+    fi
+    if (( (lan_int & mask) != (start_int & mask) || (lan_int & mask) != (end_int & mask) )); then
+        echo "Invalid DHCP range: values must be in the LAN subnet."
+        read -rp "Press Enter to continue …"
+        return
+    fi
+    if (( lan_int >= start_int && lan_int <= end_int )); then
+        echo "Invalid DHCP range: it must not include the LAN gateway IP (${LAN_IP})."
         read -rp "Press Enter to continue …"
         return
     fi

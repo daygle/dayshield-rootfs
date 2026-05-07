@@ -22,12 +22,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: daygle/dayshield-core
-          ref: 9c68406804a018ce3fefae8c60cc189b3c32048c
+          ref: 9c68406804a018ce3fefae8c60cc189b3c32048c  # main as of 2026-05-07
           path: dayshield-core-src
 
       - name: Set up Rust toolchain
-        # Pinned to dtolnay/rust-toolchain v1 ref as resolved on 2026-05-07.
-        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # master as of 2026-05-07
         with:
           toolchain: "1.88.0"
 
@@ -95,4 +94,4 @@ jobs:
         with:
           name: dayshield-rootfs
           path: rootfs/rootfs.tar.zst
-          retention-days: 30
+          retention-days: 7
