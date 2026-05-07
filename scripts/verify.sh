@@ -81,15 +81,13 @@ do
 done
 
 # ── Required service unit files ───────────────────────────────────────────────
-banner "Required service units"
+banner "Required base service units"
 for svc in \
     dayshield.service \
     nftables.service \
     unbound.service \
     suricata.service \
-    crowdsec.service \
-    wireguard.service \
-    acme.service
+    console-wizard.service
 do
     found=0
     for dir in \

@@ -41,7 +41,6 @@ zstd
 linux-image-amd64
 
 # Networking
-iptables
 nftables
 isc-dhcp-client
 kea-dhcp4-server
@@ -83,4 +82,3 @@ grub-efi-amd64-bin
 # Utilities needed by build scripts
 gzip
 tar
-zstd

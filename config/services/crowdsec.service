@@ -4,13 +4,13 @@ Documentation=https://docs.crowdsec.net
 After=network-online.target nftables.service
 Wants=network-online.target
 ConditionKernelCommandLine=!installer
+ConditionPathExists=/usr/bin/crowdsec
 
 [Service]
 Type=notify
 Environment=LC_ALL=C.UTF-8
 EnvironmentFile=-/etc/default/crowdsec
 ExecStart=/usr/bin/crowdsec -c /etc/crowdsec/config.yaml
-ExecStartPost=/usr/bin/cscli hub update --force 2>/dev/null || true
 Restart=on-failure
 RestartSec=10s
 NoNewPrivileges=yes
