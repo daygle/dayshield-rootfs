@@ -16,11 +16,12 @@ all: rootfs
 
 ## Build the root filesystem archive
 rootfs:
-	@UI_DIR="$(UI_DIR)" sh $(SCRIPTS_DIR)/build-rootfs.sh \
+	@sh $(SCRIPTS_DIR)/build-rootfs.sh \
 		--arch  "$(ARCH)"   \
 		--suite "$(SUITE)"  \
 		--output "$(OUTPUT)" \
-		--mirror "$(MIRROR)"
+		--mirror "$(MIRROR)" \
+		$(if $(UI_DIR),--ui-dir "$(UI_DIR)")
 
 ## Verify an extracted rootfs (set ROOTFS_DIR= to the path)
 verify:
