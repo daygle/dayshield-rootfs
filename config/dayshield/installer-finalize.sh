@@ -35,6 +35,11 @@ if [[ -z "${lan_iface}" || -z "${lan_ip}" || -z "${lan_prefix}" ]]; then
     exit 1
 fi
 
+if ! [[ "${lan_prefix}" =~ ^[0-9]+$ ]] || [[ "${lan_prefix}" -lt 0 ]] || [[ "${lan_prefix}" -gt 32 ]]; then
+    _fin_err "invalid LAN prefix: ${lan_prefix}"
+    exit 1
+fi
+
 if [[ ! -f "${target}/etc/shadow" ]]; then
     _fin_err "missing ${target}/etc/shadow"
     exit 1
@@ -46,7 +51,23 @@ if [[ -z "${old_root_field}" ]]; then
     exit 1
 fi
 
-lan_net="${lan_ip%.*}.0"
+if command -v python3 >/dev/null 2>&1; then
+    lan_net="$(
+        python3 - "${lan_ip}" "${lan_prefix}" <<'PY'
+import ipaddress
+import sys
+
+network = ipaddress.ip_network(f"{sys.argv[1]}/{sys.argv[2]}", strict=False)
+print(network.network_address)
+PY
+    )"
+else
+    if [[ "${lan_prefix}" != "24" ]]; then
+        _fin_err "python3 is required for non-/24 LAN prefix calculation"
+        exit 1
+    fi
+    lan_net="${lan_ip%.*}.0"
+fi
 subnet_cidr="${lan_net}/${lan_prefix}"
 
 # Hostname
@@ -64,6 +85,8 @@ fi
 
 # Password update
 use_chpasswd=0
+# chpasswd uses "user:password" records; if the password contains ':' it cannot
+# be represented safely in that format, so fall back to direct shadow update.
 if ! printf '%s' "${password}" | grep -q ':' && chroot "${target}" command -v chpasswd >/dev/null 2>&1; then
     if printf '%s\n' "root:${password}" | chroot "${target}" chpasswd >/dev/null 2>&1; then
         use_chpasswd=1
