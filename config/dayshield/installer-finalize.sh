@@ -175,6 +175,18 @@ if [[ -z "${new_root_field}" || "${new_root_field}" == "${old_root_field}" ]]; t
     exit 1
 fi
 
+# DayShield admin.json (management UI credentials)
+# dayshield-core uses its own Argon2id auth store — separate from Linux root.
+# Use the binary in the target rootfs to hash and write the credentials so the
+# same code/parameters are used at install time and at runtime.
+if chroot "${target}" /usr/local/sbin/dayshield-core init-admin "${password}" >/dev/null 2>&1; then
+    chmod 600 "${target}/etc/dayshield/admin.json" 2>/dev/null || true
+    _fin_info "DayShield admin credentials initialised"
+else
+    _fin_err "dayshield-core init-admin failed; management UI will not be accessible"
+    exit 1
+fi
+
 # nftables interface mapping
 mkdir -p "${target}/etc/dayshield/config"
 printf 'define WAN_IF = %s\ndefine LAN_IF = %s\n' \
