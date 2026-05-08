@@ -27,6 +27,7 @@ udev
 util-linux
 vim-tiny
 wget
+zstd
 
 # NOTE: squashfs-tools and zstd are needed on the HOST by the ISO builder,
 # not in the installed rootfs.  live-boot and live-config must be injected as
