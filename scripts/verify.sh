@@ -205,16 +205,27 @@ if [ -f "${NFTABLES_CONF}" ]; then
     else
         ok "nftables.conf contains no ip6/inet6 tables"
     fi
-    # Validate syntax if nft is available and we have sufficient privilege
+    # Validate syntax if nft is available and we have sufficient privilege.
+    # When verifying an extracted rootfs, use chroot so absolute include paths
+    # inside nftables.conf resolve to the rootfs tree rather than the host.
     if command -v nft >/dev/null 2>&1; then
-        NFT_ERR="$(nft --check --file "${NFTABLES_CONF}" 2>&1)" || NFT_RC=$?
-        NFT_RC="${NFT_RC:-0}"
-        if [ "${NFT_RC}" -eq 0 ]; then
-            ok "nftables ruleset syntax valid"
-        elif printf '%s' "${NFT_ERR}" | grep -q 'Operation not permitted'; then
-            printf '  [SKIP] nftables syntax check requires elevated privileges\n'
+        if [ "${ROOTFS_DIR}" != "/" ] && command -v chroot >/dev/null 2>&1; then
+            if chroot "${ROOTFS_DIR}" nft --check --file /etc/nftables.conf >/dev/null 2>&1; then
+                ok "nftables ruleset syntax valid"
+            else
+                NFT_ERR="$(chroot "${ROOTFS_DIR}" nft --check --file /etc/nftables.conf 2>&1)" || true
+                fail "nftables ruleset syntax error: ${NFT_ERR}"
+            fi
         else
-            fail "nftables ruleset syntax error: ${NFT_ERR}"
+            NFT_ERR="$(nft --check --file "${NFTABLES_CONF}" 2>&1)" || NFT_RC=$?
+            NFT_RC="${NFT_RC:-0}"
+            if [ "${NFT_RC}" -eq 0 ]; then
+                ok "nftables ruleset syntax valid"
+            elif printf '%s' "${NFT_ERR}" | grep -q 'Operation not permitted'; then
+                printf '  [SKIP] nftables syntax check requires elevated privileges\n'
+            else
+                fail "nftables ruleset syntax error: ${NFT_ERR}"
+            fi
         fi
     fi
 else
