@@ -353,6 +353,9 @@ server:
 EOF
 
 # DayShield core config.json
+# Generate a stable UUID for the seeded LAN accept rule.
+_lan_rule_uuid="$(cat /proc/sys/kernel/random/uuid 2>/dev/null || printf 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee')"
+
 cat > "${target}/etc/dayshield/config/config.json" <<EOF
 {
   "hostname": "${hostname}",
@@ -373,7 +376,21 @@ cat > "${target}/etc/dayshield/config/config.json" <<EOF
       "gateway": null
     }
   ],
-  "firewall_rules": [],
+  "firewall_rules": [
+    {
+      "id": "${_lan_rule_uuid}",
+      "description": "Default: allow all from LAN",
+      "priority": 10,
+      "source": null,
+      "destination": null,
+      "protocol": null,
+      "source_port": null,
+      "destination_port": null,
+      "action": "accept",
+      "interface": "${lan_iface}",
+      "log": false
+    }
+  ],
   "nat": null,
   "dns": null,
   "dhcp": {
