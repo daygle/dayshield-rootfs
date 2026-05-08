@@ -201,7 +201,10 @@ _suricata_iface="${wan_iface:-${lan_iface}}"
 if [[ -f "${target}/etc/suricata/suricata.yaml" ]] && [[ -n "${_suricata_iface}" ]]; then
     # Validate interface name contains only safe characters before use in sed.
     if [[ "${_suricata_iface}" =~ ^[a-zA-Z0-9_.-]+$ ]]; then
-        sed -i "s/^\([[:space:]]*- interface:\)[[:space:]]*lo$/\1 ${_suricata_iface}/" \
+        # Only replace lines with exactly two leading spaces (af-packet / pcap
+        # capture entries).  A broader pattern would corrupt app-layer protocol
+        # blocks that also contain an 'interface:' key at deeper indentation.
+        sed -i "s/^  - interface: .*$/  - interface: ${_suricata_iface}/" \
             "${target}/etc/suricata/suricata.yaml"
         _fin_info "Suricata capture interface set to ${_suricata_iface}"
     else
