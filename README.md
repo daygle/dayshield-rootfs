@@ -152,10 +152,10 @@ rootfs, which is the path expected by `dayshield-core`.
 > installed system will not serve the management interface. Do not deploy
 > a rootfs built without `UI_DIR`.
 
-The installed management UI is served by `dayshield-core`. When UI assets
-are installed, `dayshield-core` listens on port `3000`. Transport security for
-the management interface is controlled by the `dayshield-core` service
-configuration.
+The installed management UI is served by `dayshield-core`. In this rootfs,
+the `dayshield-core` service is configured with `DAYSHIELD_PORT=8443`, so the
+management UI/API are exposed on port `8443` by default. (The core binary
+itself also defaults to port `8443` when no service override is set.)
 
 ### Installer finalization contract (console + web)
 
