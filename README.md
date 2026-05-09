@@ -110,7 +110,9 @@ The build pipeline:
    starts on installed-system boot. It also seeds local git working clones at
    `/opt/dayshield-core` and `/opt/dayshield-ui` (from sibling repos by default,
    or from explicit `--core-repo-dir` / `--ui-repo-dir`), so GitHub update
-   checks and apply/rollback operations work on installed systems.
+   checks and apply/rollback operations work on installed systems. The service
+   unit explicitly grants write access to those paths because `ProtectSystem=strict`
+   would otherwise block update apply/rollback.
 4. **enable-services.sh** creates `wants/` symlinks for all required services
    and masks `systemd-resolved` (replaced by unbound).
 5. **harden-ipv4.sh** disables IPv6 at every layer: sysctl, kernel module
