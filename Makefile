@@ -7,6 +7,8 @@ SUITE        ?= trixie
 OUTPUT       ?= rootfs.tar.zst
 MIRROR       ?= https://deb.debian.org/debian
 UI_DIR       ?=
+CORE_REPO_DIR ?=
+UI_REPO_DIR   ?=
 SCRIPTS_DIR  := scripts
 ROOTFS_DIR   ?=
 
@@ -21,7 +23,9 @@ rootfs:
 		--suite "$(SUITE)"  \
 		--output "$(OUTPUT)" \
 		--mirror "$(MIRROR)" \
-		$(if $(UI_DIR),--ui-dir "$(UI_DIR)")
+		$(if $(UI_DIR),--ui-dir "$(UI_DIR)") \
+		$(if $(CORE_REPO_DIR),--core-repo-dir "$(CORE_REPO_DIR)") \
+		$(if $(UI_REPO_DIR),--ui-repo-dir "$(UI_REPO_DIR)")
 
 ## Verify an extracted rootfs (set ROOTFS_DIR= to the path)
 verify:

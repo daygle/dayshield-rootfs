@@ -160,6 +160,22 @@ else
     printf '         the rootfs is rebuilt with UI_DIR pointing at dayshield-ui/dist.\n'
 fi
 
+# ── Updater repository prerequisites ─────────────────────────────────────────
+banner "Updater repository prerequisites"
+if [ -x "${ROOTFS_DIR}/usr/bin/git" ]; then
+    ok "git binary installed in rootfs"
+else
+    fail "git binary missing (/usr/bin/git) - GitHub updater cannot run"
+fi
+
+for repo in /opt/dayshield-core /opt/dayshield-ui; do
+    if [ -d "${ROOTFS_DIR}${repo}/.git" ]; then
+        ok "seeded git repo exists: ${repo}"
+    else
+        fail "missing seeded git repo: ${repo}"
+    fi
+done
+
 # ── IPv6 disabled ─────────────────────────────────────────────────────────────
 banner "IPv6 disabled"
 

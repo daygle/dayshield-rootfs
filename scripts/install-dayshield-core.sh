@@ -9,6 +9,43 @@ set -eu
 
 BINARY_SRC="${REPO_DIR}/dayshield-core"
 SERVICE_SRC="${REPO_DIR}/config/services/dayshield.service"
+CORE_REPO_SRC="${DAYSHIELD_CORE_REPO_DIR:-}"
+UI_REPO_SRC="${DAYSHIELD_UI_REPO_DIR:-}"
+
+CORE_REPO_DEST="${ROOTFS_DIR}/opt/dayshield-core"
+UI_REPO_DEST="${ROOTFS_DIR}/opt/dayshield-ui"
+
+CORE_REMOTE_URL="https://github.com/daygle/dayshield-core"
+UI_REMOTE_URL="https://github.com/daygle/dayshield-ui"
+
+seed_repo() {
+    component="$1"
+    src="$2"
+    dest="$3"
+    remote="$4"
+
+    if [ -z "${src}" ]; then
+        printf '  -> WARNING: %s repo seed path not provided; updater for this component will require manual repo setup\n' "${component}"
+        return 0
+    fi
+
+    if ! command -v git >/dev/null 2>&1; then
+        printf 'ERROR: git is required on the build host to seed %s repo\n' "${component}" >&2
+        exit 1
+    fi
+
+    if [ ! -d "${src}/.git" ]; then
+        printf 'ERROR: %s source is not a git repo: %s\n' "${component}" "${src}" >&2
+        exit 1
+    fi
+
+    printf '  -> Seeding %s git repo from %s\n' "${component}" "${src}"
+    mkdir -p "$(dirname "${dest}")"
+    rm -rf "${dest}"
+    git clone --quiet --no-hardlinks "${src}" "${dest}"
+    git -C "${dest}" remote set-url origin "${remote}" >/dev/null 2>&1 || true
+    chmod -R a+rX "${dest}"
+}
 
 # ── Binary ────────────────────────────────────────────────────────────────────
 mkdir -p "${ROOTFS_DIR}/usr/local/sbin"
@@ -28,6 +65,10 @@ exit 1
 PLACEHOLDER
     chmod 0755 "${ROOTFS_DIR}/usr/local/sbin/dayshield-core"
 fi
+
+# ── Seed update repositories for runtime updater ─────────────────────────────
+seed_repo "core" "${CORE_REPO_SRC}" "${CORE_REPO_DEST}" "${CORE_REMOTE_URL}"
+seed_repo "ui" "${UI_REPO_SRC}" "${UI_REPO_DEST}" "${UI_REMOTE_URL}"
 
 # ── Systemd service unit ──────────────────────────────────────────────────────
 mkdir -p "${ROOTFS_DIR}/etc/systemd/system"

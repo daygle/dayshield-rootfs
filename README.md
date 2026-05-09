@@ -88,7 +88,9 @@ Or invoke the script directly:
     --suite trixie \
     --output rootfs.tar.zst \
     --mirror https://deb.debian.org/debian \
-    --ui-dir ../dayshield-ui/dist
+   --ui-dir ../dayshield-ui/dist \
+   --core-repo-dir ../dayshield-core \
+   --ui-repo-dir ../dayshield-ui
 ```
 
 The build pipeline:
@@ -105,7 +107,10 @@ The build pipeline:
 3. **install-dayshield-core.sh** installs the `dayshield-core` binary (or a
    placeholder if the binary is absent) and its systemd unit, with an
    installer-live guard (`ConditionKernelCommandLine=!installer`) so it only
-   starts on installed-system boot.
+   starts on installed-system boot. It also seeds local git working clones at
+   `/opt/dayshield-core` and `/opt/dayshield-ui` (from sibling repos by default,
+   or from explicit `--core-repo-dir` / `--ui-repo-dir`), so GitHub update
+   checks and apply/rollback operations work on installed systems.
 4. **enable-services.sh** creates `wants/` symlinks for all required services
    and masks `systemd-resolved` (replaced by unbound).
 5. **harden-ipv4.sh** disables IPv6 at every layer: sysctl, kernel module
@@ -156,6 +161,36 @@ The installed management UI is served by `dayshield-core`. In this rootfs,
 the `dayshield-core` service is configured with `DAYSHIELD_PORT=8443`, so the
 management UI/API are exposed on port `8443` by default. (The core binary
 itself also defaults to port `8443` when no service override is set.)
+
+### Seeding update repositories
+
+To make the GitHub updater work immediately after install, the rootfs builder
+seeds git working clones into the image:
+
+- `/opt/dayshield-core`
+- `/opt/dayshield-ui`
+
+Defaults:
+
+- If `--core-repo-dir` / `--ui-repo-dir` are omitted, the builder auto-detects
+   sibling repos at `../dayshield-core` and `../dayshield-ui`.
+- The cloned repos have `origin` set to the public GitHub URLs so runtime fetch
+   checks compare against upstream.
+
+Requirement:
+
+- The build fails if either repository cannot be resolved (explicit path or
+   sibling auto-detection). This prevents producing images that cannot run the
+   updater out of the box.
+
+Explicit example:
+
+```sh
+make rootfs \
+   UI_DIR=../dayshield-ui/dist \
+   CORE_REPO_DIR=../dayshield-core \
+   UI_REPO_DIR=../dayshield-ui
+```
 
 ### Installer finalization contract (console + web)
 
