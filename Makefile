@@ -9,6 +9,7 @@ MIRROR       ?= https://deb.debian.org/debian
 UI_DIR       ?=
 CORE_REPO_DIR ?=
 UI_REPO_DIR   ?=
+ROOTFS_REPO_DIR ?=
 SCRIPTS_DIR  := scripts
 ROOTFS_DIR   ?=
 
@@ -25,7 +26,8 @@ rootfs:
 		--mirror "$(MIRROR)" \
 		$(if $(UI_DIR),--ui-dir "$(UI_DIR)") \
 		$(if $(CORE_REPO_DIR),--core-repo-dir "$(CORE_REPO_DIR)") \
-		$(if $(UI_REPO_DIR),--ui-repo-dir "$(UI_REPO_DIR)")
+		$(if $(UI_REPO_DIR),--ui-repo-dir "$(UI_REPO_DIR)") \
+		$(if $(ROOTFS_REPO_DIR),--rootfs-repo-dir "$(ROOTFS_REPO_DIR)")
 
 ## Verify an extracted rootfs (set ROOTFS_DIR= to the path)
 verify:

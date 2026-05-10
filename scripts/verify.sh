@@ -170,13 +170,37 @@ else
     fail "git binary missing (/usr/bin/git) - GitHub updater cannot run"
 fi
 
-for repo in /opt/dayshield-core /opt/dayshield-ui; do
+for repo in /opt/dayshield-core /opt/dayshield-ui /opt/dayshield-rootfs; do
     if [ -d "${ROOTFS_DIR}${repo}/.git" ]; then
         ok "seeded git repo exists: ${repo}"
     else
         fail "missing seeded git repo: ${repo}"
     fi
 done
+
+if [ -f "${ROOTFS_DIR}/opt/dayshield-rootfs/scripts/apply-live-update.sh" ]; then
+    ok "rootfs live update script present: /opt/dayshield-rootfs/scripts/apply-live-update.sh"
+else
+    fail "missing rootfs live update script: /opt/dayshield-rootfs/scripts/apply-live-update.sh"
+fi
+
+if [ -f "${ROOTFS_DIR}/opt/dayshield-rootfs/config/live-update-policy.json" ]; then
+    ok "rootfs live update policy present: /opt/dayshield-rootfs/config/live-update-policy.json"
+else
+    fail "missing rootfs live update policy: /opt/dayshield-rootfs/config/live-update-policy.json"
+fi
+
+if [ -f "${ROOTFS_DIR}/opt/dayshield-rootfs/config/live-update-manifest.sha256" ]; then
+    ok "rootfs live update manifest present: /opt/dayshield-rootfs/config/live-update-manifest.sha256"
+else
+    fail "missing rootfs live update manifest: /opt/dayshield-rootfs/config/live-update-manifest.sha256"
+fi
+
+if [ -d "${ROOTFS_DIR}/opt/dayshield-rootfs/scripts/live-update-migrations.d" ]; then
+    ok "rootfs migration hooks directory present: /opt/dayshield-rootfs/scripts/live-update-migrations.d"
+else
+    fail "missing rootfs migration hooks directory: /opt/dayshield-rootfs/scripts/live-update-migrations.d"
+fi
 
 # ── IPv6 disabled ─────────────────────────────────────────────────────────────
 banner "IPv6 disabled"

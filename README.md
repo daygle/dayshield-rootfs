@@ -91,7 +91,8 @@ Or invoke the script directly:
     --mirror https://deb.debian.org/debian \
    --ui-dir ../dayshield-ui/dist \
    --core-repo-dir ../dayshield-core \
-   --ui-repo-dir ../dayshield-ui
+   --ui-repo-dir ../dayshield-ui \
+   --rootfs-repo-dir ../dayshield-rootfs
 ```
 
 The build pipeline:
@@ -109,11 +110,16 @@ The build pipeline:
    placeholder if the binary is absent) and its systemd unit, with an
    installer-live guard (`ConditionKernelCommandLine=!installer`) so it only
    starts on installed-system boot. It also seeds local git working clones at
-   `/opt/dayshield-core` and `/opt/dayshield-ui` (from sibling repos by default,
-   or from explicit `--core-repo-dir` / `--ui-repo-dir`), so GitHub update
-   checks and apply/rollback operations work on installed systems. The service
-   unit explicitly grants write access to those paths because `ProtectSystem=strict`
-   would otherwise block update apply/rollback.
+   `/opt/dayshield-core`, `/opt/dayshield-ui`, and `/opt/dayshield-rootfs`
+   (from sibling repos by default, or from explicit repo path flags), so
+   Git-based update checks and apply/rollback operations work on installed
+   systems. Rootfs runtime updates use
+   `/opt/dayshield-rootfs/scripts/apply-live-update.sh` to update managed
+   service/script assets while preserving existing DayShield settings. The
+   service unit explicitly grants write access to those paths because
+   `ProtectSystem=strict` would otherwise block update apply/rollback.
+   Rootfs live updates can be rolled back from the latest snapshot backup
+   captured under `/var/lib/dayshield/rootfs-live-update/backups`.
 4. **enable-services.sh** creates `wants/` symlinks for all required services
    and masks `systemd-resolved` (replaced by unbound).
 5. **harden-ipv4.sh** disables IPv6 at every layer: sysctl, kernel module
@@ -172,19 +178,22 @@ seeds git working clones into the image:
 
 - `/opt/dayshield-core`
 - `/opt/dayshield-ui`
+- `/opt/dayshield-rootfs`
 
 Defaults:
 
 - If `--core-repo-dir` / `--ui-repo-dir` are omitted, the builder auto-detects
    sibling repos at `../dayshield-core` and `../dayshield-ui`.
+- If `--rootfs-repo-dir` is omitted, the builder seeds the current
+   `dayshield-rootfs` git repo into the image.
 - The cloned repos have `origin` set to the public GitHub URLs so runtime fetch
    checks compare against upstream.
 
 Requirement:
 
-- The build fails if either repository cannot be resolved (explicit path or
-   sibling auto-detection). This prevents producing images that cannot run the
-   updater out of the box.
+- The build fails if any required repository cannot be resolved (explicit path
+   or sibling auto-detection). This prevents producing images that cannot run
+   the updater out of the box.
 
 Explicit example:
 
@@ -192,7 +201,40 @@ Explicit example:
 make rootfs \
    UI_DIR=../dayshield-ui/dist \
    CORE_REPO_DIR=../dayshield-core \
-   UI_REPO_DIR=../dayshield-ui
+   UI_REPO_DIR=../dayshield-ui \
+   ROOTFS_REPO_DIR=../dayshield-rootfs
+
+### Live rootfs updates on installed systems
+
+Installed appliances can apply managed rootfs updates from the seeded
+`/opt/dayshield-rootfs` repo without reinstalling from ISO.
+
+- `scripts/apply-live-update.sh` updates DayShield-owned service units and
+   helper scripts in place.
+- Existing configuration under `/etc/dayshield/config` and runtime state under
+   `/var/lib/dayshield` are preserved.
+- For mutable config files under `/etc` (for example unbound/nftables/SSH),
+   differing upstream versions are staged as `*.dayshield-new` for manual merge
+   rather than overwriting live settings.
+- The script emits a report at
+   `/var/lib/dayshield/rootfs-live-update/last-run.json` listing staged files,
+   backup directory, changed units, and migration version changes.
+- Live update rollback is available with:
+
+```sh
+sh /opt/dayshield-rootfs/scripts/apply-live-update.sh --rollback-latest --non-interactive
+```
+
+### Live-update migration and policy hooks
+
+- Migration hooks live in `scripts/live-update-migrations.d/` and run in sorted
+   numeric order (`001_*.sh`, `002_*.sh`, ...).
+- The current migration schema version is stored at
+   `/var/lib/dayshield/rootfs-live-update/schema-version`.
+- `config/live-update-policy.json` can force rebuild-only updates by setting
+   `requireRebuild` to `true`.
+- `config/live-update-manifest.sha256` is used by the updater to verify high-
+   impact rootfs assets before live deploy.
 ```
 
 ### Installer finalization contract (console + web)

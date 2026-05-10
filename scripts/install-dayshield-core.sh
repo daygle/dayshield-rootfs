@@ -11,12 +11,15 @@ BINARY_SRC="${REPO_DIR}/dayshield-core"
 SERVICE_SRC="${REPO_DIR}/config/services/dayshield.service"
 CORE_REPO_SRC="${DAYSHIELD_CORE_REPO_DIR:-}"
 UI_REPO_SRC="${DAYSHIELD_UI_REPO_DIR:-}"
+ROOTFS_REPO_SRC="${DAYSHIELD_ROOTFS_REPO_DIR:-}"
 
 CORE_REPO_DEST="${ROOTFS_DIR}/opt/dayshield-core"
 UI_REPO_DEST="${ROOTFS_DIR}/opt/dayshield-ui"
+ROOTFS_REPO_DEST="${ROOTFS_DIR}/opt/dayshield-rootfs"
 
 CORE_REMOTE_URL="https://github.com/daygle/dayshield-core"
 UI_REMOTE_URL="https://github.com/daygle/dayshield-ui"
+ROOTFS_REMOTE_URL="https://github.com/daygle/dayshield-rootfs"
 
 seed_repo() {
     component="$1"
@@ -69,6 +72,7 @@ fi
 # ── Seed update repositories for runtime updater ─────────────────────────────
 seed_repo "core" "${CORE_REPO_SRC}" "${CORE_REPO_DEST}" "${CORE_REMOTE_URL}"
 seed_repo "ui" "${UI_REPO_SRC}" "${UI_REPO_DEST}" "${UI_REMOTE_URL}"
+seed_repo "rootfs" "${ROOTFS_REPO_SRC}" "${ROOTFS_REPO_DEST}" "${ROOTFS_REMOTE_URL}"
 
 # ── Systemd service unit ──────────────────────────────────────────────────────
 mkdir -p "${ROOTFS_DIR}/etc/systemd/system"
@@ -95,7 +99,7 @@ RestartSec=5s
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
-ReadWritePaths=/etc/dayshield /var/lib/dayshield /opt/dayshield-core /opt/dayshield-ui
+ReadWritePaths=/etc/dayshield /var/lib/dayshield /opt/dayshield-core /opt/dayshield-ui /opt/dayshield-rootfs
 PrivateTmp=yes
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
 

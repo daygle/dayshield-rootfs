@@ -17,6 +17,7 @@ MIRROR="https://deb.debian.org/debian"
 UI_DIR=""
 CORE_REPO_DIR=""
 UI_REPO_DIR=""
+ROOTFS_REPO_DIR=""
 
 usage() {
     cat <<EOF
@@ -28,8 +29,9 @@ Options:
   --output FILE     Output file (default: rootfs.tar.zst)
   --mirror URL      Debian mirror URL (default: https://deb.debian.org/debian)
   --ui-dir PATH     Optional built UI output directory to install into /usr/local/share/dayshield-ui
-    --core-repo-dir PATH  Core git repo to seed into /opt/dayshield-core
-    --ui-repo-dir PATH    UI git repo to seed into /opt/dayshield-ui
+    --core-repo-dir PATH   Core git repo to seed into /opt/dayshield-core
+    --ui-repo-dir PATH     UI git repo to seed into /opt/dayshield-ui
+    --rootfs-repo-dir PATH RootFS git repo to seed into /opt/dayshield-rootfs
   --help            Show this help message
 EOF
     exit 0
@@ -38,7 +40,7 @@ EOF
 # Parse arguments
 while [ $# -gt 0 ]; do
     case "$1" in
-        --arch|--suite|--output|--mirror|--ui-dir|--core-repo-dir|--ui-repo-dir)
+        --arch|--suite|--output|--mirror|--ui-dir|--core-repo-dir|--ui-repo-dir|--rootfs-repo-dir)
             if [ $# -lt 2 ] || [ -z "${2}" ] || [ "${2#--}" != "${2}" ]; then
                 printf 'ERROR: option %s requires a value\n' "$1" >&2
                 exit 1
@@ -51,6 +53,7 @@ while [ $# -gt 0 ]; do
                 --ui-dir) UI_DIR="$2" ;;
                 --core-repo-dir) CORE_REPO_DIR="$2" ;;
                 --ui-repo-dir) UI_REPO_DIR="$2" ;;
+                --rootfs-repo-dir) ROOTFS_REPO_DIR="$2" ;;
             esac
             shift 2
             ;;
@@ -75,6 +78,9 @@ fi
 if [ -z "${UI_REPO_DIR}" ] && [ -d "${REPO_DIR}/../dayshield-ui/.git" ]; then
     UI_REPO_DIR="${REPO_DIR}/../dayshield-ui"
 fi
+if [ -z "${ROOTFS_REPO_DIR}" ] && [ -d "${REPO_DIR}/.git" ]; then
+    ROOTFS_REPO_DIR="${REPO_DIR}"
+fi
 
 if [ -n "${CORE_REPO_DIR}" ] && [ ! -d "${CORE_REPO_DIR}/.git" ]; then
     printf 'ERROR: core repo path is not a git repo: %s\n' "${CORE_REPO_DIR}" >&2
@@ -82,6 +88,10 @@ if [ -n "${CORE_REPO_DIR}" ] && [ ! -d "${CORE_REPO_DIR}/.git" ]; then
 fi
 if [ -n "${UI_REPO_DIR}" ] && [ ! -d "${UI_REPO_DIR}/.git" ]; then
     printf 'ERROR: UI repo path is not a git repo: %s\n' "${UI_REPO_DIR}" >&2
+    exit 1
+fi
+if [ -n "${ROOTFS_REPO_DIR}" ] && [ ! -d "${ROOTFS_REPO_DIR}/.git" ]; then
+    printf 'ERROR: rootfs repo path is not a git repo: %s\n' "${ROOTFS_REPO_DIR}" >&2
     exit 1
 fi
 
@@ -141,6 +151,7 @@ printf '    Packages     : %s\n' "${PACKAGES}"
 printf '    UI dir       : %s\n' "${UI_DIR:-<none>}"
 printf '    Core repo    : %s\n' "${CORE_REPO_DIR:-<none>}"
 printf '    UI repo      : %s\n' "${UI_REPO_DIR:-<none>}"
+printf '    RootFS repo  : %s\n' "${ROOTFS_REPO_DIR:-<none>}"
 printf '\n'
 
 # ── 1. Run mmdebstrap ────────────────────────────────────────────────────────
@@ -175,6 +186,11 @@ if [ -z "${UI_REPO_DIR}" ]; then
     printf '       Pass --ui-repo-dir <path-to-dayshield-ui>\n' >&2
     exit 1
 fi
+if [ -z "${ROOTFS_REPO_DIR}" ]; then
+    printf 'ERROR: rootfs repo path not provided and current repo git metadata was not found\n' >&2
+    printf '       Pass --rootfs-repo-dir <path-to-dayshield-rootfs>\n' >&2
+    exit 1
+fi
 printf '==> Step 3: install-dayshield-core\n'
 env ROOTFS_DIR="${ROOTFS_DIR}" \
     CONFIG_DIR="${CONFIG_DIR}" \
@@ -182,6 +198,7 @@ env ROOTFS_DIR="${ROOTFS_DIR}" \
     DAYSHIELD_UI_DIR="${UI_DIR}" \
     DAYSHIELD_CORE_REPO_DIR="${CORE_REPO_DIR}" \
     DAYSHIELD_UI_REPO_DIR="${UI_REPO_DIR}" \
+    DAYSHIELD_ROOTFS_REPO_DIR="${ROOTFS_REPO_DIR}" \
     sh "${SCRIPT_DIR}/install-dayshield-core.sh"
 
 # ── 4. Run enable-services.sh ────────────────────────────────────────────────
