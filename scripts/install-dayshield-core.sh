@@ -70,6 +70,13 @@ PLACEHOLDER
 fi
 
 # ── Seed update repositories for runtime updater ─────────────────────────────
+# Ensure /opt/dayshield-* directories exist for the runtime updater,
+# whether or not repos are seeded during build.
+mkdir -p "${ROOTFS_DIR}/opt"
+mkdir -p "${CORE_REPO_DEST}"
+mkdir -p "${UI_REPO_DEST}"
+mkdir -p "${ROOTFS_REPO_DEST}"
+
 seed_repo "core" "${CORE_REPO_SRC}" "${CORE_REPO_DEST}" "${CORE_REMOTE_URL}"
 seed_repo "ui" "${UI_REPO_SRC}" "${UI_REPO_DEST}" "${UI_REMOTE_URL}"
 seed_repo "rootfs" "${ROOTFS_REPO_SRC}" "${ROOTFS_REPO_DEST}" "${ROOTFS_REMOTE_URL}"
@@ -99,7 +106,7 @@ RestartSec=5s
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
-ReadWritePaths=/etc/dayshield /var/lib/dayshield /opt/dayshield-core /opt/dayshield-ui /opt/dayshield-rootfs
+ReadWritePaths=/etc/dayshield /var/lib/dayshield /opt/dayshield-core /opt/dayshield-ui /opt/dayshield-rootfs /usr/local/sbin /usr/local/share/dayshield-ui
 PrivateTmp=yes
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
 
