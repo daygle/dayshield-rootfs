@@ -72,6 +72,7 @@ for dir in \
     /etc/unbound \
     /etc/nftables \
     /etc/suricata \
+    /etc/chrony \
     /etc/crowdsec \
     /etc/systemd/system
 do

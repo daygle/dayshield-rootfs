@@ -28,7 +28,7 @@ Options:
   --suite SUITE     Debian suite (default: trixie)
   --output FILE     Output file (default: rootfs.tar.zst)
   --mirror URL      Debian mirror URL (default: https://deb.debian.org/debian)
-  --ui-dir PATH     Optional built UI output directory to install into /usr/local/share/dayshield-ui
+  --ui-dir PATH     Built UI output directory to install into /usr/local/share/dayshield-ui (required)
     --core-repo-dir PATH   Core git repo to seed into /opt/dayshield-core
     --ui-repo-dir PATH     UI git repo to seed into /opt/dayshield-ui
     --rootfs-repo-dir PATH RootFS git repo to seed into /opt/dayshield-rootfs
@@ -65,9 +65,17 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-# Validate required tools
-if [ -n "${UI_DIR}" ] && [ ! -d "${UI_DIR}" ]; then
+# Validate required inputs
+if [ -z "${UI_DIR}" ]; then
+    printf 'ERROR: --ui-dir <path-to-dayshield-ui-dist> is required\n' >&2
+    exit 1
+fi
+if [ ! -d "${UI_DIR}" ]; then
     printf 'ERROR: UI build directory not found: %s\n' "${UI_DIR}" >&2
+    exit 1
+fi
+if [ ! -f "${UI_DIR}/index.html" ]; then
+    printf 'ERROR: UI build directory does not look like a Vite dist output: %s\n' "${UI_DIR}" >&2
     exit 1
 fi
 
@@ -176,6 +184,11 @@ env ROOTFS_DIR="${ROOTFS_DIR}" \
     sh "${SCRIPT_DIR}/chroot-setup.sh"
 
 # ── 3. Run install-dayshield-core.sh ────────────────────────────────────────
+if [ ! -f "${REPO_DIR}/dayshield-core" ]; then
+    printf 'ERROR: missing dayshield-core binary at %s/dayshield-core\n' "${REPO_DIR}" >&2
+    printf '       Build dayshield-core and copy target/release/dayshield-core there before running rootfs build.\n' >&2
+    exit 1
+fi
 if [ -z "${CORE_REPO_DIR}" ]; then
     printf 'ERROR: core repo path not provided and sibling ../dayshield-core was not found\n' >&2
     printf '       Pass --core-repo-dir <path-to-dayshield-core>\n' >&2

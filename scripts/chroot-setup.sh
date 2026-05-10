@@ -96,6 +96,9 @@ printf '  -> Installing suricata.yaml\n'
 mkdir -p "${ROOTFS_DIR}/etc/suricata"
 cp "${CONFIG_DIR}/suricata.yaml" "${ROOTFS_DIR}/etc/suricata/suricata.yaml"
 
+printf '  -> Creating /etc/chrony directory (for NTP timesyncd/chrony config)\n'
+mkdir -p "${ROOTFS_DIR}/etc/chrony"
+
 printf '  -> Installing crowdsec.yaml\n'
 mkdir -p "${ROOTFS_DIR}/etc/crowdsec"
 cp "${CONFIG_DIR}/crowdsec.yaml" "${ROOTFS_DIR}/etc/crowdsec/config.yaml"

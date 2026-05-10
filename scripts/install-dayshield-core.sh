@@ -58,15 +58,9 @@ if [ -f "${BINARY_SRC}" ]; then
     cp "${BINARY_SRC}" "${ROOTFS_DIR}/usr/local/sbin/dayshield-core"
     chmod 0755 "${ROOTFS_DIR}/usr/local/sbin/dayshield-core"
 else
-    printf '  -> dayshield-core binary not found at %s; creating placeholder\n' "${BINARY_SRC}"
-    # Create a placeholder script so the service can be enabled during build
-    cat > "${ROOTFS_DIR}/usr/local/sbin/dayshield-core" <<'PLACEHOLDER'
-#!/bin/sh
-# Placeholder - replace with the real dayshield-core binary before deployment.
-printf 'dayshield-core: not yet installed\n' >&2
-exit 1
-PLACEHOLDER
-    chmod 0755 "${ROOTFS_DIR}/usr/local/sbin/dayshield-core"
+    printf 'ERROR: dayshield-core binary not found at %s\n' "${BINARY_SRC}" >&2
+    printf '       Build dayshield-core and copy the release binary to this path before building rootfs.\n' >&2
+    exit 1
 fi
 
 # ── Seed update repositories for runtime updater ─────────────────────────────
@@ -133,26 +127,24 @@ cat > "${ROOTFS_DIR}/etc/systemd/system/dayshield.service.d/dayshield-installer.
 ConditionKernelCommandLine=!installer
 EOF
 
-# ── Optional Management UI assets ───────────────────────────────────────────
-if [ -n "${DAYSHIELD_UI_DIR:-}" ]; then
-    if [ ! -d "${DAYSHIELD_UI_DIR}" ]; then
-        printf 'ERROR: DayShield UI build directory not found: %s\n' "${DAYSHIELD_UI_DIR}" >&2
-        exit 1
-    fi
-    if [ ! -f "${DAYSHIELD_UI_DIR}/index.html" ]; then
-        printf 'ERROR: DayShield UI build directory does not look like a Vite build output: %s\n' "${DAYSHIELD_UI_DIR}" >&2
-        exit 1
-    fi
-
-    printf '  -> Installing DayShield UI static assets from %s\n' "${DAYSHIELD_UI_DIR}"
-    mkdir -p "${ROOTFS_DIR}/usr/local/share/dayshield-ui"
-    cp -a "${DAYSHIELD_UI_DIR}/." "${ROOTFS_DIR}/usr/local/share/dayshield-ui/"
-    chmod -R a+rX "${ROOTFS_DIR}/usr/local/share/dayshield-ui"
-else
-    printf '  -> WARNING: No DayShield UI assets installed into rootfs.\n'
-    printf '     The installed system will not serve the management interface unless\n'
-    printf '     you build the UI and pass UI_DIR to make rootfs.\n'
+# ── Required Management UI assets ───────────────────────────────────────────
+if [ -z "${DAYSHIELD_UI_DIR:-}" ]; then
+    printf 'ERROR: DAYSHIELD_UI_DIR is required and must point to a built UI dist directory.\n' >&2
+    exit 1
 fi
+if [ ! -d "${DAYSHIELD_UI_DIR}" ]; then
+    printf 'ERROR: DayShield UI build directory not found: %s\n' "${DAYSHIELD_UI_DIR}" >&2
+    exit 1
+fi
+if [ ! -f "${DAYSHIELD_UI_DIR}/index.html" ]; then
+    printf 'ERROR: DayShield UI build directory does not look like a Vite build output: %s\n' "${DAYSHIELD_UI_DIR}" >&2
+    exit 1
+fi
+
+printf '  -> Installing DayShield UI static assets from %s\n' "${DAYSHIELD_UI_DIR}"
+mkdir -p "${ROOTFS_DIR}/usr/local/share/dayshield-ui"
+cp -a "${DAYSHIELD_UI_DIR}/." "${ROOTFS_DIR}/usr/local/share/dayshield-ui/"
+chmod -R a+rX "${ROOTFS_DIR}/usr/local/share/dayshield-ui"
 
 # ── Enable the service via symlink ────────────────────────────────────────────
 printf '  -> Enabling dayshield.service\n'
