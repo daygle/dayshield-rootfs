@@ -955,7 +955,7 @@ _run_guided_setup() {
     _save_state
 
     clear
-    _print_header
+    # _print_header  # Banner disabled
     echo "Initial setup wizard completed."
     echo ""
     read -rp "Press Enter to continue to the main menu ..."
@@ -1361,7 +1361,7 @@ fi
 
 while true; do
     clear
-    _print_header
+    # _print_header  # Banner disabled
 
     echo "  Main Menu"
     echo ""
