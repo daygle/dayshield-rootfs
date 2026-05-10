@@ -296,6 +296,8 @@ apply_update() {
     install_managed_file "${CONFIG_DIR}/dayshield/console-wizard.sh" "/usr/local/bin/dayshield-console" 0755
     install_managed_file "${CONFIG_DIR}/dayshield/installer-finalize.sh" "/usr/local/lib/dayshield/installer-finalize.sh" 0755
     install_managed_file "${CONFIG_DIR}/dayshield/console-login-profile.sh" "/etc/profile.d/dayshield-console.sh" 0644
+    install_managed_file "${CONFIG_DIR}/dayshield/dayshield-unbound-write.conf" "/etc/systemd/system/dayshield.service.d/dayshield-unbound-write.conf" 0644
+    record_changed_unit "dayshield.service"
 
     stage_preserving_file "${CONFIG_DIR}/nftables.conf" "/etc/nftables.conf" 0644
     stage_preserving_file "${CONFIG_DIR}/unbound.conf" "/etc/unbound/unbound.conf" 0644

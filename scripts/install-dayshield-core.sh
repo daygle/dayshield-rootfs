@@ -115,6 +115,16 @@ WantedBy=multi-user.target
 UNIT
 fi
 
+# Ensure DNS engine can update Unbound config under ProtectSystem=strict.
+mkdir -p "${ROOTFS_DIR}/etc/systemd/system/dayshield.service.d"
+cat > "${ROOTFS_DIR}/etc/systemd/system/dayshield.service.d/dayshield-unbound-write.conf" <<'EOF'
+[Service]
+ReadWritePaths=/etc/unbound
+ReadWritePaths=/etc/chrony
+ReadWritePaths=/etc/systemd
+ReadWritePaths=/etc/suricata
+EOF
+
 # ── Installer/live mode guard ────────────────────────────────────────────────
 # dayshield-core must not start while booted as installer live media.
 mkdir -p "${ROOTFS_DIR}/etc/systemd/system/dayshield.service.d"
