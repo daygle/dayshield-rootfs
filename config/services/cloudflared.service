@@ -1,0 +1,23 @@
+[Unit]
+Description=Cloudflare Tunnel (cloudflared)
+Documentation=https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/
+After=network-online.target dayshield.service
+Wants=network-online.target
+ConditionKernelCommandLine=!installer
+ConditionPathExists=/etc/cloudflared/config.yml
+ConditionPathExists=/etc/default/cloudflared
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/default/cloudflared
+ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
+Restart=on-failure
+RestartSec=10s
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/etc/cloudflared /var/lib/cloudflared
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

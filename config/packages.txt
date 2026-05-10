@@ -64,6 +64,7 @@ suricata
 
 # Firewall / threat intelligence
 # crowdsec   # available via crowdsec APT repository, added post-build
+cloudflared
 
 # TLS / certificates
 openssl

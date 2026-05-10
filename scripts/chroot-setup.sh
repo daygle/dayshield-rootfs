@@ -75,6 +75,11 @@ mkdir -p \
     "${ROOTFS_DIR}/var/lib/dayshield/crowdsec" \
     "${ROOTFS_DIR}/var/lib/dayshield/acme"
 
+printf '  -> Creating cloudflared runtime directories\n'
+mkdir -p \
+    "${ROOTFS_DIR}/etc/cloudflared" \
+    "${ROOTFS_DIR}/var/lib/cloudflared"
+
 # ── Install base configs ──────────────────────────────────────────────────────
 printf '  -> Installing sysctl.conf\n'
 cp "${CONFIG_DIR}/sysctl.conf" "${ROOTFS_DIR}/etc/sysctl.d/99-dayshield.conf"
@@ -138,6 +143,7 @@ for unit in \
     nftables.service \
     suricata.service \
     crowdsec.service \
+    cloudflared.service \
     wireguard.service \
     acme.service \
     acme.timer \

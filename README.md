@@ -25,6 +25,7 @@ for direct injection into the `dayshield-iso` build pipeline.
 |   |   |-- nftables.service
 |   |   |-- suricata.service
 |   |   |-- crowdsec.service
+|   |   |-- cloudflared.service
 |   |   |-- wireguard.service
 |   |   |-- acme.service
 |   |   |-- acme.timer

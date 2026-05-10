@@ -67,6 +67,8 @@ for dir in \
     /var/lib/dayshield/aliases \
     /var/lib/dayshield/crowdsec \
     /var/lib/dayshield/acme \
+    /etc/cloudflared \
+    /var/lib/cloudflared \
     /etc/unbound \
     /etc/nftables \
     /etc/suricata \
