@@ -11,19 +11,41 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
     steps:
       - name: Checkout dayshield-rootfs
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           path: rootfs
 
+      - name: Checkout dayshield-ui
+        uses: actions/checkout@v5
+        with:
+          repository: daygle/dayshield-ui
+          ref: main
+          path: dayshield-ui-src
+
       - name: Checkout dayshield-core
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: daygle/dayshield-core
           ref: 9c68406804a018ce3fefae8c60cc189b3c32048c  # main as of 2026-05-07
           path: dayshield-core-src
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: dayshield-ui-src/package-lock.json
+
+      - name: Build dayshield-ui dist
+        working-directory: dayshield-ui-src
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
 
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # master as of 2026-05-07
@@ -56,7 +78,12 @@ jobs:
 
       - name: Build rootfs
         working-directory: rootfs
-        run: sudo make rootfs
+        run: |
+          sudo make rootfs \
+            UI_DIR="${GITHUB_WORKSPACE}/dayshield-ui-src/dist" \
+            CORE_REPO_DIR="${GITHUB_WORKSPACE}/dayshield-core-src" \
+            UI_REPO_DIR="${GITHUB_WORKSPACE}/dayshield-ui-src" \
+            ROOTFS_REPO_DIR="${GITHUB_WORKSPACE}/rootfs"
 
       - name: Verify rootfs artifacts
         working-directory: rootfs
