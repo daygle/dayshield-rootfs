@@ -89,6 +89,7 @@ for svc in \
     dayshield.service \
     nftables.service \
     unbound.service \
+    dayshield-disable-offloads.service \
     suricata.service \
     console-wizard.service
 do
@@ -115,6 +116,12 @@ if [ -x "${ROOTFS_DIR}/usr/local/lib/dayshield/installer-finalize.sh" ]; then
     ok "shared installer finalization script exists"
 else
     fail "missing shared installer finalization script: /usr/local/lib/dayshield/installer-finalize.sh"
+fi
+
+if [ -x "${ROOTFS_DIR}/usr/local/lib/dayshield/disable-offloads.sh" ]; then
+    ok "NIC offload disable helper exists"
+else
+    fail "missing NIC offload disable helper: /usr/local/lib/dayshield/disable-offloads.sh"
 fi
 
 DS_INSTALLER_GUARD="${ROOTFS_DIR}/etc/systemd/system/dayshield.service.d/dayshield-installer.conf"

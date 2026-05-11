@@ -1,0 +1,14 @@
+[Unit]
+Description=Disable NIC offloads for packet capture fidelity
+Wants=network-pre.target
+After=network-pre.target systemd-udev-settle.service
+Before=suricata.service
+ConditionPathExists=/usr/local/lib/dayshield/disable-offloads.sh
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/lib/dayshield/disable-offloads.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

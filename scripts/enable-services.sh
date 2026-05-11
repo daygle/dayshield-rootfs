@@ -34,6 +34,7 @@ enable_service() {
 for svc in \
     nftables.service \
     unbound.service \
+    dayshield-disable-offloads.service \
     suricata.service \
     ssh.service \
     dayshield.service \

@@ -142,6 +142,18 @@ reload_systemd_units() {
     done < "${CHANGED_UNITS_FILE}"
 }
 
+enable_unit_if_present() {
+    unit="$1"
+
+    if ! command -v systemctl >/dev/null 2>&1; then
+        return 0
+    fi
+
+    if [ -f "/etc/systemd/system/${unit}" ] || [ -f "/lib/systemd/system/${unit}" ] || [ -f "/usr/lib/systemd/system/${unit}" ]; then
+        systemctl enable "${unit}" >/dev/null 2>&1 || true
+    fi
+}
+
 current_schema_version() {
     if [ -f "${SCHEMA_VERSION_FILE}" ]; then
         cat "${SCHEMA_VERSION_FILE}"
@@ -293,8 +305,12 @@ apply_update() {
         record_changed_unit "${unit}"
     done
 
+    # Newly introduced units are not automatically enabled on existing systems.
+    enable_unit_if_present "dayshield-disable-offloads.service"
+
     install_managed_file "${CONFIG_DIR}/dayshield/console-wizard.sh" "/usr/local/bin/dayshield-console" 0755
     install_managed_file "${CONFIG_DIR}/dayshield/installer-finalize.sh" "/usr/local/lib/dayshield/installer-finalize.sh" 0755
+    install_managed_file "${CONFIG_DIR}/dayshield/disable-offloads.sh" "/usr/local/lib/dayshield/disable-offloads.sh" 0755
     install_managed_file "${CONFIG_DIR}/dayshield/console-login-profile.sh" "/etc/profile.d/dayshield-console.sh" 0644
     install_managed_file "${CONFIG_DIR}/dayshield/dayshield-unbound-write.conf" "/etc/systemd/system/dayshield.service.d/dayshield-unbound-write.conf" 0644
     record_changed_unit "dayshield.service"
