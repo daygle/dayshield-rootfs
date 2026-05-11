@@ -64,6 +64,11 @@ apt-get install mmdebstrap zstd systemd-container
 
 ## Building the RootFS
 
+The normal production path is GitHub Actions, triggered from a version tag in
+`dayshield-core`, which builds and publishes the rootfs artifact together with
+core and UI artifacts. Local rootfs builds are still useful for development,
+debugging, and installer work.
+
 Always build the management UI first, then pass its output to the rootfs builder:
 
 ```sh
@@ -109,17 +114,13 @@ The build pipeline:
 3. **install-dayshield-core.sh** installs the `dayshield-core` binary (or a
    placeholder if the binary is absent) and its systemd unit, with an
    installer-live guard (`ConditionKernelCommandLine=!installer`) so it only
-   starts on installed-system boot. It also seeds local git working clones at
-   `/opt/dayshield-core`, `/opt/dayshield-ui`, and `/opt/dayshield-rootfs`
-   (from sibling repos by default, or from explicit repo path flags), so
-   Git-based update checks and apply/rollback operations work on installed
-   systems. Rootfs runtime updates use
-   `/opt/dayshield-rootfs/scripts/apply-live-update.sh` to update managed
-   service/script assets while preserving existing DayShield settings. The
-   service unit explicitly grants write access to those paths because
-   `ProtectSystem=strict` would otherwise block update apply/rollback.
-   Rootfs live updates can be rolled back from the latest snapshot backup
-   captured under `/var/lib/dayshield/rootfs-live-update/backups`.
+   starts on installed-system boot. The installed appliance update path is
+   registry-based: it downloads prebuilt `core`, `ui`, and `rootfs` artifacts
+   from GitHub Releases instead of building on the appliance. Rootfs runtime
+   updates still use `apply-live-update.sh` from the extracted rootfs artifact
+   to update managed service/script assets while preserving existing DayShield
+   settings. Rootfs live updates can be rolled back from the latest snapshot
+   backup captured under `/var/lib/dayshield/rootfs-live-update/backups`.
 4. **enable-services.sh** creates `wants/` symlinks for all required services
    and masks `systemd-resolved` (replaced by unbound).
 5. **harden-ipv4.sh** disables IPv6 at every layer: sysctl, kernel module
@@ -171,43 +172,10 @@ the `dayshield-core` service is configured with `DAYSHIELD_PORT=8443`, so the
 management UI/API are exposed on port `8443` by default. (The core binary
 itself also defaults to port `8443` when no service override is set.)
 
-### Seeding update repositories
-
-To make the GitHub updater work immediately after install, the rootfs builder
-seeds git working clones into the image:
-
-- `/opt/dayshield-core`
-- `/opt/dayshield-ui`
-- `/opt/dayshield-rootfs`
-
-Defaults:
-
-- If `--core-repo-dir` / `--ui-repo-dir` are omitted, the builder auto-detects
-   sibling repos at `../dayshield-core` and `../dayshield-ui`.
-- If `--rootfs-repo-dir` is omitted, the builder seeds the current
-   `dayshield-rootfs` git repo into the image.
-- The cloned repos have `origin` set to the public GitHub URLs so runtime fetch
-   checks compare against upstream.
-
-Requirement:
-
-- The build fails if any required repository cannot be resolved (explicit path
-   or sibling auto-detection). This prevents producing images that cannot run
-   the updater out of the box.
-
-Explicit example:
-
-```sh
-make rootfs \
-   UI_DIR=../dayshield-ui/dist \
-   CORE_REPO_DIR=../dayshield-core \
-   UI_REPO_DIR=../dayshield-ui \
-   ROOTFS_REPO_DIR=../dayshield-rootfs
-
 ### Live rootfs updates on installed systems
 
-Installed appliances can apply managed rootfs updates from the seeded
-`/opt/dayshield-rootfs` repo without reinstalling from ISO.
+Installed appliances can apply managed rootfs updates from the prebuilt
+rootfs artifact without reinstalling from ISO.
 
 - `scripts/apply-live-update.sh` updates DayShield-owned service units and
    helper scripts in place.
@@ -222,8 +190,15 @@ Installed appliances can apply managed rootfs updates from the seeded
 - Live update rollback is available with:
 
 ```sh
-sh /opt/dayshield-rootfs/scripts/apply-live-update.sh --rollback-latest --non-interactive
+sh /path/to/extracted/rootfs/scripts/apply-live-update.sh --rollback-latest --non-interactive
 ```
+
+## Releases
+
+Production rootfs artifacts are built automatically by the release workflow in
+`dayshield-core` when a version tag is pushed. The published artifact is
+`rootfs-vX.Y.Z.tar.zst`, and installed appliances consume it through the
+registry-based update flow.
 
 ### Live-update migration and policy hooks
 
