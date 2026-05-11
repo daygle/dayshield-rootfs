@@ -109,14 +109,15 @@ WantedBy=multi-user.target
 UNIT
 fi
 
-# Ensure DNS engine can update Unbound config under ProtectSystem=strict.
+# Ensure engines can update their config files under ProtectSystem=strict.
 mkdir -p "${ROOTFS_DIR}/etc/systemd/system/dayshield.service.d"
-cat > "${ROOTFS_DIR}/etc/systemd/system/dayshield.service.d/dayshield-unbound-write.conf" <<'EOF'
+cat > "${ROOTFS_DIR}/etc/systemd/system/dayshield.service.d/dayshield-engine-paths.conf" <<'EOF'
 [Service]
 ReadWritePaths=/etc/unbound
 ReadWritePaths=/etc/chrony
 ReadWritePaths=/etc/systemd
 ReadWritePaths=/etc/suricata
+ReadWritePaths=/etc/wireguard
 EOF
 
 # ── Installer/live mode guard ────────────────────────────────────────────────

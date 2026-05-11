@@ -69,6 +69,10 @@ mkdir -p \
     "${ROOTFS_DIR}/etc/dayshield/logs"
 chmod 700 "${ROOTFS_DIR}/etc/dayshield/certs"
 
+printf '  -> Creating /etc/wireguard directory\n'
+mkdir -p "${ROOTFS_DIR}/etc/wireguard"
+chmod 700 "${ROOTFS_DIR}/etc/wireguard"
+
 printf '  -> Creating /var/lib/dayshield directory tree\n'
 mkdir -p \
     "${ROOTFS_DIR}/var/lib/dayshield/aliases" \
