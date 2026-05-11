@@ -279,10 +279,12 @@ MANIFEST_FILE="${MANIFEST_DIR}/live-update-manifest.sha256"
 {
     printf '# SHA256 manifest for high-impact rootfs live-update assets\n'
     printf '# Format: <sha256> <relative-path>\n'
-    cd "${ROOTFS_DIR}/opt/dayshield-rootfs" && \
-    sha256sum scripts/apply-live-update.sh \
-              config/dayshield/installer-finalize.sh \
-              config/dayshield/console-wizard.sh 2>/dev/null || true
+    (
+        cd "${ROOTFS_DIR}/opt/dayshield-rootfs" && \
+        sha256sum scripts/apply-live-update.sh \
+                  config/dayshield/installer-finalize.sh \
+                  config/dayshield/console-wizard.sh
+    ) 2>/dev/null || true
 } > "${MANIFEST_FILE}"
 printf 'Manifest written to: %s\n' "${MANIFEST_FILE}"
 cat "${MANIFEST_FILE}"
