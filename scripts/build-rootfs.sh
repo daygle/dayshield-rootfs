@@ -225,7 +225,7 @@ printf '==> Step 5: harden-ipv4\n'
 env ROOTFS_DIR="${ROOTFS_DIR}" \
     sh "${SCRIPT_DIR}/harden-ipv4.sh"
 # ── 5b. Generate initramfs (required for boot) ──────────────────
-printf '==> Step 6: generating initramfs\n'
+printf '==> Step 5b: generating initramfs\n'
 if [ -d "${ROOTFS_DIR}/boot" ]; then
     FSTAB_PATH="${ROOTFS_DIR}/etc/fstab"
     FSTAB_BACKUP="${ROOTFS_DIR}/etc/fstab.dayshield-build.bak"
@@ -267,7 +267,7 @@ else
     exit 1
 fi
 # ── 6. Run cleanup.sh ────────────────────────────────────────────────────────
-printf '==> Step 7: cleanup\n'
+printf '==> Step 6: cleanup\n'
 env ROOTFS_DIR="${ROOTFS_DIR}" \
     sh "${SCRIPT_DIR}/cleanup.sh"
 
@@ -290,7 +290,7 @@ printf 'Manifest written to: %s\n' "${MANIFEST_FILE}"
 cat "${MANIFEST_FILE}"
 
 # ── 7b. Package the rootfs ──────────────────────────────────────
-printf '==> Step 8: packaging rootfs -> %s\n' "${OUTPUT}"
+printf '==> Step 7b: packaging rootfs -> %s\n' "${OUTPUT}"
 OUTPUT_ABS="$(cd "$(dirname "${OUTPUT}")" && pwd)/$(basename "${OUTPUT}")"
 tar \
     --sort=name \
