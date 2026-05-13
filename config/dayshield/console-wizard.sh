@@ -154,7 +154,7 @@ _save_state() {
     mkdir -p /etc/dayshield
     old_umask="$(umask)"
     umask 077
-    tmp_file="$(mktemp /etc/dayshield/console-state.XXXXXX)"
+    tmp_file="$(mktemp -p /etc/dayshield console-state.XXXXXX)"
     {
         printf 'WAN_IFACE=%s\n' "$(printf '%s' "${WAN_IFACE}" | base64 | tr -d '\n')"
         printf 'WAN_TYPE=%s\n' "$(printf '%s' "${WAN_TYPE}" | base64 | tr -d '\n')"

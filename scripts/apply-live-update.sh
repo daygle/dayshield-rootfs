@@ -206,7 +206,7 @@ write_report() {
         printf '  "migrationToVersion": %s,\n' "${MIGRATION_TO}"
         _rb_available="false"
         if [ -n "${_backup_dir}" ] && [ -d "${_backup_dir}" ]; then
-            if find "${_backup_dir}" -maxdepth 3 -type f 2>/dev/null | head -1 | grep -q .; then
+        if [ -n "$(find "${_backup_dir}" -maxdepth 3 -type f -print -quit 2>/dev/null)" ]; then
                 _rb_available="true"
             fi
         fi
