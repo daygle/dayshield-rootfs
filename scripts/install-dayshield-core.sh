@@ -122,7 +122,6 @@ EOF
 
 # ── Installer/live mode guard ────────────────────────────────────────────────
 # dayshield-core must not start while booted as installer live media.
-mkdir -p "${ROOTFS_DIR}/etc/systemd/system/dayshield.service.d"
 cat > "${ROOTFS_DIR}/etc/systemd/system/dayshield.service.d/dayshield-installer.conf" <<'EOF'
 [Unit]
 ConditionKernelCommandLine=!installer

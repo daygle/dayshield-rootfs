@@ -188,9 +188,12 @@ else
 fi
 
 # nftables interface mapping
+# For PPPoE, traffic exits via ppp0, not the physical WAN interface.
+_effective_wan_if="${wan_iface:-lo}"
+[[ "${wan_type}" == "pppoe" ]] && _effective_wan_if="ppp0"
 mkdir -p "${target}/etc/dayshield/config"
 printf 'define WAN_IF = %s\ndefine LAN_IF = %s\n' \
-    "${wan_iface:-lo}" "${lan_iface}" \
+    "${_effective_wan_if}" "${lan_iface}" \
     > "${target}/etc/dayshield/config/nft-ifaces.conf"
 
 # Suricata — update the IDS capture interface to the WAN interface.

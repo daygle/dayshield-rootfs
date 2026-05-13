@@ -168,6 +168,10 @@ run_migrations() {
 
     [ -d "${MIGRATIONS_DIR}" ] || return 0
 
+    # Word-split iteration is intentional here: migration filenames follow the
+    # strict pattern NNN_name.sh (digits + underscores only) and never contain
+    # whitespace, so the for-loop split is safe in this context.
+    # shellcheck disable=SC2044
     for migration in $(find "${MIGRATIONS_DIR}" -maxdepth 1 -type f -name '*.sh' | sort); do
         name="$(basename "${migration}")"
         next="$(printf '%s' "${name}" | sed 's/^\([0-9][0-9]*\).*/\1/')"
@@ -200,7 +204,13 @@ write_report() {
         printf '  "backupDir": "%s",\n' "$(json_escape "${_backup_dir}")"
         printf '  "migrationFromVersion": %s,\n' "${MIGRATION_FROM}"
         printf '  "migrationToVersion": %s,\n' "${MIGRATION_TO}"
-        printf '  "rollbackAvailable": true,\n'
+        _rb_available="false"
+        if [ -n "${_backup_dir}" ] && [ -d "${_backup_dir}" ]; then
+        if [ -n "$(find "${_backup_dir}" -maxdepth 3 -type f -print -quit 2>/dev/null)" ]; then
+                _rb_available="true"
+            fi
+        fi
+        printf '  "rollbackAvailable": %s,\n' "${_rb_available}"
 
         printf '  "stagedFiles": ['
         first=1

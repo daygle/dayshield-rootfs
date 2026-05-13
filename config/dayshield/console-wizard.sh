@@ -49,22 +49,6 @@ _is_valid_iface_name() {
     [[ "$1" =~ ^[a-zA-Z0-9_.-]+$ ]]
 }
 
-_is_valid_ipv4() {
-    local ip="$1" IFS=. o1 o2 o3 o4 octet
-    [[ "${ip}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
-    read -r o1 o2 o3 o4 <<< "${ip}"
-    for octet in "${o1}" "${o2}" "${o3}" "${o4}"; do
-        [[ "${octet}" =~ ^[0-9]+$ ]] || return 1
-        (( octet >= 0 && octet <= 255 )) || return 1
-    done
-}
-
-_ipv4_to_int() {
-    local ip="$1" IFS=. o1 o2 o3 o4
-    read -r o1 o2 o3 o4 <<< "${ip}"
-    printf '%u' "$(( (o1 << 24) | (o2 << 16) | (o3 << 8) | o4 ))"
-}
-
 _is_safe_text() {
     [[ "$1" != *$'\n'* && "$1" != *$'\r'* ]]
 }
@@ -168,9 +152,9 @@ _save_state() {
     local state_file tmp_file old_umask
     state_file="/etc/dayshield/console-state"
     mkdir -p /etc/dayshield
-    tmp_file="$(mktemp /etc/dayshield/console-state.XXXXXX)"
     old_umask="$(umask)"
     umask 077
+    tmp_file="$(mktemp -p /etc/dayshield console-state.XXXXXX)"
     {
         printf 'WAN_IFACE=%s\n' "$(printf '%s' "${WAN_IFACE}" | base64 | tr -d '\n')"
         printf 'WAN_TYPE=%s\n' "$(printf '%s' "${WAN_TYPE}" | base64 | tr -d '\n')"
@@ -330,8 +314,11 @@ EOF
 _apply_nftables_config() {
     local nft_ifaces="/etc/dayshield/config/nft-ifaces.conf"
     mkdir -p /etc/dayshield/config
+    # PPPoE traffic exits via ppp0, not the physical WAN interface.
+    local effective_wan="${WAN_IFACE:-lo}"
+    [[ "${WAN_TYPE}" == "pppoe" ]] && effective_wan="ppp0"
     printf 'define WAN_IF = %s\ndefine LAN_IF = %s\n' \
-        "${WAN_IFACE:-lo}" "${LAN_IFACE:-lo}" > "${nft_ifaces}"
+        "${effective_wan}" "${LAN_IFACE:-lo}" > "${nft_ifaces}"
     nft -f /etc/nftables.conf 2>/dev/null || true
 }
 
@@ -825,37 +812,6 @@ _set_lan_dhcp() {
         return
     fi
 
-    local prefix start_int end_int gw_int lan_mask lan_net start_net end_net
-    prefix="${LAN_PREFIX:-24}"
-    if ! [[ "${prefix}" =~ ^[0-9]+$ ]] || (( prefix < 1 || prefix > 32 )); then
-        echo "Invalid LAN prefix: ${prefix}"
-        read -rp "Press Enter to continue …"
-        return
-    fi
-    start_int="$(_ipv4_to_int "${new_start}")"
-    end_int="$(_ipv4_to_int "${new_end}")"
-    gw_int="$(_ipv4_to_int "${LAN_IP}")"
-    lan_mask=$(( (0xFFFFFFFF << (32 - prefix)) & 0xFFFFFFFF ))
-    lan_net=$(( gw_int & lan_mask ))
-    start_net=$(( start_int & lan_mask ))
-    end_net=$(( end_int & lan_mask ))
-
-    if (( start_int > end_int )); then
-        echo "Invalid DHCP range: start must be less than or equal to end."
-        read -rp "Press Enter to continue …"
-        return
-    fi
-    if (( start_net != lan_net || end_net != lan_net )); then
-        echo "Invalid DHCP range: addresses must be in LAN subnet ${LAN_IP}/${prefix}."
-        read -rp "Press Enter to continue …"
-        return
-    fi
-    if (( gw_int >= start_int && gw_int <= end_int )); then
-        echo "Invalid DHCP range: LAN gateway address ${LAN_IP} cannot be in the pool."
-        read -rp "Press Enter to continue …"
-        return
-    fi
-
     LAN_DHCP_ENABLE="yes"
     LAN_DHCP_START="${new_start}"
     LAN_DHCP_END="${new_end}"
@@ -1032,7 +988,15 @@ _inst_format() {
     return 0
 }
 
+# Global output variables for _inst_find_rootfs (avoids subshell mount leak).
+_INST_ROOTFS_PATH=""
+_INST_MEDIA_MOUNT_TMP=""
+
 _inst_find_rootfs() {
+    _INST_ROOTFS_PATH=""
+    _INST_MEDIA_MOUNT_TMP=""
+
+    local candidate
     for candidate in \
         "/run/installer/rootfs.tar.zst" \
         "/lib/live/mount/medium/installer/rootfs.tar.zst" \
@@ -1040,8 +1004,12 @@ _inst_find_rootfs() {
         "/media/cdrom/installer/rootfs.tar.zst" \
         "/media/live/installer/rootfs.tar.zst"
     do
-        [[ -f "${candidate}" ]] && printf '%s' "${candidate}" && return 0
+        if [[ -f "${candidate}" ]]; then
+            _INST_ROOTFS_PATH="${candidate}"
+            return 0
+        fi
     done
+
     # Last resort: scan for DAYSHIELD-labelled block device
     local bdev mp
     bdev=$(blkid -t LABEL=DAYSHIELD -o device 2>/dev/null | head -n1)
@@ -1049,8 +1017,9 @@ _inst_find_rootfs() {
         mp=$(mktemp -d)
         if mount -o ro "${bdev}" "${mp}" 2>/dev/null; then
             if [[ -f "${mp}/installer/rootfs.tar.zst" ]]; then
-                printf '%s' "${mp}/installer/rootfs.tar.zst"
-                return 0   # leave mounted; caller must umount $mp
+                _INST_ROOTFS_PATH="${mp}/installer/rootfs.tar.zst"
+                _INST_MEDIA_MOUNT_TMP="${mp}"
+                return 0
             fi
             umount "${mp}" 2>/dev/null || true
         fi
@@ -1295,13 +1264,22 @@ _run_install_wizard() {
     # ── Step 6: Install rootfs ─────────────────────────────────────
     clear; _inst_step 6 "${total_steps}" "Installing Root Filesystem"; printf '\n'
     _inst_info "Locating rootfs archive ..."
-    rootfs="$(_inst_find_rootfs || true)"
-    if [[ -z "${rootfs}" ]]; then
+    if ! _inst_find_rootfs; then
         _inst_err "rootfs archive not found. Ensure ISO contains /installer/rootfs.tar.zst"
         read -rp "  Press Enter ..."; return
     fi
+    rootfs="${_INST_ROOTFS_PATH}"
     _inst_ok "Found: ${rootfs}"
-    _inst_install_rootfs "${disk}" "${rootfs}" || { read -rp "  rootfs install failed. Press Enter ..."; return; }
+    _inst_install_rootfs "${disk}" "${rootfs}" || {
+        # Clean up any temporarily mounted installation media before returning.
+        if [[ -n "${_INST_MEDIA_MOUNT_TMP}" ]]; then
+            umount "${_INST_MEDIA_MOUNT_TMP}" 2>/dev/null || true
+            rmdir "${_INST_MEDIA_MOUNT_TMP}" 2>/dev/null || true
+            _INST_MEDIA_MOUNT_TMP=""
+        fi
+        read -rp "  rootfs install failed. Press Enter ..."
+        return
+    }
     _inst_ok "Root filesystem extracted."
     _inst_info "Writing system configuration ..."
     _inst_write_config \
@@ -1321,6 +1299,14 @@ _run_install_wizard() {
 
     # ── Finalize ───────────────────────────────────────────────────
     _inst_finalize
+
+    # Clean up any temporarily mounted installation media.
+    if [[ -n "${_INST_MEDIA_MOUNT_TMP}" ]]; then
+        umount "${_INST_MEDIA_MOUNT_TMP}" 2>/dev/null || true
+        rmdir "${_INST_MEDIA_MOUNT_TMP}" 2>/dev/null || true
+        _INST_MEDIA_MOUNT_TMP=""
+    fi
+
     _inst_ok "All done."
 
     # ── Summary ────────────────────────────────────────────────────
