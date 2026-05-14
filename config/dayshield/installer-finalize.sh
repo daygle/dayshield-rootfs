@@ -382,7 +382,7 @@ cat > "${target}/etc/dayshield/config/config.json" <<EOF
   "firewall_rules": [
     {
       "id": "${_lan_rule_uuid}",
-      "description": "Default: allow all from LAN",
+    "description": "Allow All (LAN)",
       "priority": 10,
       "source": null,
       "destination": null,
