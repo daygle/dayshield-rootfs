@@ -176,7 +176,7 @@ if [[ -z "${new_root_field}" || "${new_root_field}" == "${old_root_field}" ]]; t
 fi
 
 # DayShield admin.json (management UI credentials)
-# dayshield-core uses its own Argon2id auth store — separate from Linux root.
+# dayshield-core uses its own Argon2id auth store - separate from Linux root.
 # Use the binary in the target rootfs to hash and write the credentials so the
 # same code/parameters are used at install time and at runtime.
 if chroot "${target}" /usr/local/sbin/dayshield-core init-admin "${password}" >/dev/null 2>&1; then
@@ -196,7 +196,7 @@ printf 'define WAN_IF = %s\ndefine LAN_IF = %s\n' \
     "${_effective_wan_if}" "${lan_iface}" \
     > "${target}/etc/dayshield/config/nft-ifaces.conf"
 
-# Suricata — update the IDS capture interface to the WAN interface.
+# Suricata - update the IDS capture interface to the WAN interface.
 # The base rootfs ships with a 'lo' placeholder; replace it with the real
 # WAN interface so Suricata actually inspects inbound traffic.
 # Prefer WAN; fall back to LAN if no WAN interface was configured.
