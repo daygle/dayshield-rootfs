@@ -45,7 +45,7 @@ seed_repo() {
     printf '  -> Seeding %s git repo from %s\n' "${component}" "${src}"
     mkdir -p "$(dirname "${dest}")"
     rm -rf "${dest}"
-    git clone --quiet --no-hardlinks "${src}" "${dest}"
+    git -c advice.detachedHead=false clone --quiet --no-hardlinks "${src}" "${dest}"
     git -C "${dest}" remote set-url origin "${remote}" >/dev/null 2>&1 || true
     chmod -R a+rX "${dest}"
 }
