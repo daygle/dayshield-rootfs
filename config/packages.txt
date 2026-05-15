@@ -23,7 +23,6 @@ procps
 sudo
 systemd
 systemd-sysv
-systemd-timesyncd
 chrony
 udev
 util-linux
