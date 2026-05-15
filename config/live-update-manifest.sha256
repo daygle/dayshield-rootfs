@@ -1,5 +1,0 @@
-# SHA256 manifest for high-impact rootfs live-update assets
-# Format: <sha256> <relative-path>
-4bc2724eb4b32bf73434c16dddb94176ea4d96eba54390113ba36dfe8295611e scripts/apply-live-update.sh
-b90448688d9570581b4b327f428a34176e15a5c5c004a1e06c66b8d89f459e20 config/dayshield/installer-finalize.sh
-70ce8a1f12f9adc682a2893f569d3d12cf627b9753b00dfbf72b5938e14c0a1b config/dayshield/console-wizard.sh

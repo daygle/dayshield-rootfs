@@ -116,11 +116,7 @@ The build pipeline:
    installer-live guard (`ConditionKernelCommandLine=!installer`) so it only
    starts on installed-system boot. The installed appliance update path is
    registry-based: it downloads prebuilt `core`, `ui`, and `rootfs` artifacts
-   from GitHub Releases instead of building on the appliance. Rootfs runtime
-   updates still use `apply-live-update.sh` from the extracted rootfs artifact
-   to update managed service/script assets while preserving existing DayShield
-   settings. Rootfs live updates can be rolled back from the latest snapshot
-   backup captured under `/var/lib/dayshield/rootfs-live-update/backups`.
+   from GitHub Releases instead of building on the appliance.
 4. **enable-services.sh** creates `wants/` symlinks for all required services
    and masks `systemd-resolved` (replaced by unbound).
 5. **harden-ipv4.sh** disables IPv6 at every layer: sysctl, kernel module
@@ -172,45 +168,12 @@ the `dayshield-core` service is configured with `DAYSHIELD_PORT=8443`, so the
 management UI/API are exposed on port `8443` by default. (The core binary
 itself also defaults to port `8443` when no service override is set.)
 
-### Live rootfs updates on installed systems
-
-Installed appliances can apply managed rootfs updates from the prebuilt
-rootfs artifact without reinstalling from ISO.
-
-- `scripts/apply-live-update.sh` updates DayShield-owned service units and
-   helper scripts in place.
-- Existing configuration under `/etc/dayshield/config` and runtime state under
-   `/var/lib/dayshield` are preserved.
-- For mutable config files under `/etc` (for example unbound/nftables/SSH),
-   differing upstream versions are staged as `*.dayshield-new` for manual merge
-   rather than overwriting live settings.
-- The script emits a report at
-   `/var/lib/dayshield/rootfs-live-update/last-run.json` listing staged files,
-   backup directory, changed units, and migration version changes.
-- Live update rollback is available with:
-
-```sh
-sh /path/to/extracted/rootfs/scripts/apply-live-update.sh --rollback-latest --non-interactive
-```
-
 ## Releases
 
 Production rootfs artifacts are built automatically by the release workflow in
 `dayshield-core` when a version tag is pushed. The published artifact is
 `rootfs-vX.Y.Z.tar.zst`, and installed appliances consume it through the
 registry-based update flow.
-
-### Live-update migration and policy hooks
-
-- Migration hooks live in `scripts/live-update-migrations.d/` and run in sorted
-   numeric order (`001_*.sh`, `002_*.sh`, ...).
-- The current migration schema version is stored at
-   `/var/lib/dayshield/rootfs-live-update/schema-version`.
-- `config/live-update-policy.json` can force rebuild-only updates by setting
-   `requireRebuild` to `true`.
-- `config/live-update-manifest.sha256` is used by the updater to verify high-
-   impact rootfs assets before live deploy.
-```
 
 ### Installer finalization contract (console + web)
 
