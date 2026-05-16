@@ -26,7 +26,9 @@ for direct injection into the `dayshield-iso` build pipeline.
 |   |   |-- suricata.service
 |   |   |-- crowdsec.service
 |   |   |-- cloudflared.service
+|   |   |-- kea-dhcp4-server.service
 |   |   |-- wireguard.service
+|   |   |-- dayshield-disable-offloads.service
 |   |   |-- acme.service
 |   |   |-- acme.timer
 |   |   `-- console-wizard.service
@@ -111,12 +113,13 @@ The build pipeline:
    configures systemd-networkd (matching both legacy `eth0` and predictable
    `en*` interface names). It also installs the shared installer finalization
    script at `/usr/local/lib/dayshield/installer-finalize.sh`.
-3. **install-dayshield-core.sh** installs the `dayshield-core` binary (or a
-   placeholder if the binary is absent) and its systemd unit, with an
-   installer-live guard (`ConditionKernelCommandLine=!installer`) so it only
-   starts on installed-system boot. The installed appliance update path is
-   registry-based: it downloads prebuilt `core`, `ui`, and `rootfs` artifacts
-   from GitHub Releases instead of building on the appliance.
+3. **install-dayshield-core.sh** installs the `dayshield-core` binary and its
+   systemd unit, with an installer-live guard
+   (`ConditionKernelCommandLine=!installer`) so it only starts on
+   installed-system boot. The build now fails fast if the binary is absent.
+   The installed appliance update path is registry-based: it downloads
+   prebuilt `core`, `ui`, and `rootfs` artifacts from GitHub Releases instead
+   of building on the appliance.
 4. **enable-services.sh** creates `wants/` symlinks for all required services
    and masks `systemd-resolved` (replaced by unbound).
 5. **harden-ipv4.sh** disables IPv6 at every layer: sysctl, kernel module
@@ -129,7 +132,7 @@ The build pipeline:
 7. The finished tree is archived with `tar --sort=name --mtime=@0` and
    compressed with `zstd -19` to produce the final `rootfs.tar.zst`.
 
-### Providing the `dayshield-core` binary
+### Providing the `dayshield-core` binary (required)
 
 Place the compiled binary at the repository root before building:
 
@@ -138,11 +141,9 @@ cp /path/to/dayshield-core ./dayshield-core
 make rootfs
 ```
 
-If the binary is absent, a shell placeholder is written to
-`/usr/local/sbin/dayshield-core`. The placeholder exits with an error at
-runtime - replace it before deploying.
+If the binary is absent, the build fails with an explicit error.
 
-### Providing the Management UI
+### Providing the Management UI (required)
 
 The management UI is a required component. Always build it before building
 the rootfs and pass its `dist` directory via `UI_DIR`:
@@ -159,14 +160,28 @@ make rootfs UI_DIR=../dayshield-ui/dist
 This copies the UI output into `/usr/local/share/dayshield-ui` inside the
 rootfs, which is the path expected by `dayshield-core`.
 
-> **Warning:** If `UI_DIR` is omitted, the build will complete but the
-> installed system will not serve the management interface. Do not deploy
-> a rootfs built without `UI_DIR`.
+> **Warning:** If `UI_DIR` is omitted (or invalid), the build fails.
 
-The installed management UI is served by `dayshield-core`. In this rootfs,
-the `dayshield-core` service is configured with `DAYSHIELD_PORT=8443`, so the
+The installed management UI is served by `dayshield-core`. In this rootfs, the
+`dayshield-core` service is configured with `DAYSHIELD_PORT=8443`, so the
 management UI/API are exposed on port `8443` by default. (The core binary
 itself also defaults to port `8443` when no service override is set.)
+
+### Repo seed paths for updater (recommended)
+
+`build-rootfs.sh` can seed local git clones into `/opt/dayshield-core`,
+`/opt/dayshield-ui`, and `/opt/dayshield-rootfs` for updater compatibility.
+When running in the standard sibling-repo layout, these are auto-detected.
+
+If your repos are not siblings, pass explicit paths:
+
+```sh
+make rootfs \
+   UI_DIR=../dayshield-ui/dist \
+   CORE_REPO_DIR=/path/to/dayshield-core \
+   UI_REPO_DIR=/path/to/dayshield-ui \
+   ROOTFS_REPO_DIR=/path/to/dayshield-rootfs
+```
 
 ## Releases
 
