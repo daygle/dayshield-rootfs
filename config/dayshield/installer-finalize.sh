@@ -303,6 +303,10 @@ Name=${wan_iface}
 DHCP=ipv4
 IPv6AcceptRA=no
 LinkLocalAddressing=no
+
+[DHCPv4]
+UseHostname=false
+SendHostname=false
 EOF
     fi
 fi
@@ -317,9 +321,9 @@ LinkLocalAddressing=no
 EOF
 
 # Kea DHCPv4
-mkdir -p "${target}/etc/kea" "${target}/var/lib/kea" "${target}/var/log/kea"
+mkdir -p "${target}/etc/dayshield" "${target}/etc/kea" "${target}/var/lib/kea" "${target}/var/log/kea"
 chmod 755 "${target}/etc/kea"
-cat > "${target}/etc/kea/kea-dhcp4.conf" <<EOF
+cat > "${target}/etc/dayshield/kea-dhcp4.conf" <<EOF
 {
   "Dhcp4": {
     "interfaces-config": {
@@ -348,6 +352,11 @@ cat > "${target}/etc/kea/kea-dhcp4.conf" <<EOF
     ]
   }
 }
+EOF
+chmod 644 "${target}/etc/dayshield/kea-dhcp4.conf"
+cat > "${target}/etc/kea/kea-dhcp4.conf" <<EOF
+# Compatibility include - canonical file is managed under /etc/dayshield
+include: "/etc/dayshield/kea-dhcp4.conf"
 EOF
 chmod 644 "${target}/etc/kea/kea-dhcp4.conf"
 
@@ -447,6 +456,14 @@ cat > "${target}/etc/dayshield/config/config.json" <<EOF
   }
 }
 EOF
+
+# Keep DNS stack deterministic: unbound is authoritative on :53 and DayShield
+# does not ship resolvconf.
+mkdir -p "${target}/etc/systemd/system"
+ln -sf /dev/null "${target}/etc/systemd/system/systemd-resolved.service" 2>/dev/null || true
+ln -sf /dev/null "${target}/etc/systemd/system/unbound-resolvconf.service" 2>/dev/null || true
+printf 'nameserver 127.0.0.1\n' > "${target}/etc/resolv.conf"
+chmod 644 "${target}/etc/resolv.conf"
 
 # Install-time validation criteria
 _fin_info "Validating install-time criteria ..."

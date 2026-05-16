@@ -61,6 +61,12 @@ cat > "${ROOTFS_DIR}/etc/systemd/system/unbound.service.d/dayshield-installer.co
 ConditionKernelCommandLine=!installer
 EOF
 
+# Debian's optional unbound-resolvconf helper expects /sbin/resolvconf.
+# DayShield does not ship resolvconf, so mask the helper to avoid noisy
+# skipped-condition logs at boot.
+mkdir -p "${ROOTFS_DIR}/etc/systemd/system"
+ln -sf /dev/null "${ROOTFS_DIR}/etc/systemd/system/unbound-resolvconf.service"
+
 # Kea DHCP should only start when a concrete config exists. This prevents
 # boot-time failures on systems where the package default unit is enabled but
 # /etc/dayshield/kea-dhcp4.conf has not been written yet.
