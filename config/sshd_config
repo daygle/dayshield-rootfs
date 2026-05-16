@@ -21,6 +21,9 @@ ChallengeResponseAuthentication no
 KbdInteractiveAuthentication no
 
 UsePAM yes
+UseDNS no
+PermitUserEnvironment no
+LogLevel VERBOSE
 
 # ── Forwarding ────────────────────────────────────────────────────────────────
 AllowAgentForwarding no
@@ -32,6 +35,7 @@ PermitTunnel no
 # ── Session hardening ─────────────────────────────────────────────────────────
 LoginGraceTime 30
 MaxAuthTries 3
+MaxStartups 10:30:60
 MaxSessions 5
 ClientAliveInterval 300
 ClientAliveCountMax 2

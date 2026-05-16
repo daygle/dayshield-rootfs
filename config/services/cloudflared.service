@@ -4,6 +4,7 @@ Documentation=https://developers.cloudflare.com/cloudflare-one/connections/conne
 After=network-online.target dayshield.service
 Wants=network-online.target
 ConditionKernelCommandLine=!installer
+ConditionPathExists=/usr/bin/cloudflared
 ConditionPathExists=/etc/cloudflared/config.yml
 ConditionPathExists=/etc/default/cloudflared
 

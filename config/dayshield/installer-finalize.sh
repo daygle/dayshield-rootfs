@@ -120,11 +120,35 @@ print(network.network_address)
 PY
     )"
 else
-    if [[ "${lan_prefix}" != "24" ]]; then
-        _fin_err "python3 is required for calculating non-/24 LAN prefix (currently ${lan_prefix}); install python3 or use /24 prefix"
+    lan_net="$({
+        awk -v ip="${lan_ip}" -v prefix="${lan_prefix}" 'BEGIN {
+            split(ip, oct, ".")
+            if (length(oct) != 4) {
+                exit 1
+            }
+            for (i = 1; i <= 4; i++) {
+                if (oct[i] !~ /^[0-9]+$/ || oct[i] < 0 || oct[i] > 255) {
+                    exit 1
+                }
+            }
+            if (prefix < 0 || prefix > 32) {
+                exit 1
+            }
+
+            ipn = oct[1] * 16777216 + oct[2] * 65536 + oct[3] * 256 + oct[4]
+            block = (prefix == 32) ? 1 : (2 ^ (32 - prefix))
+            net = int(ipn / block) * block
+
+            o1 = int(net / 16777216) % 256
+            o2 = int(net / 65536) % 256
+            o3 = int(net / 256) % 256
+            o4 = net % 256
+            printf "%d.%d.%d.%d", o1, o2, o3, o4
+        }'
+    })" || {
+        _fin_err "failed to calculate LAN network for ${lan_ip}/${lan_prefix}"
         exit 1
-    fi
-    lan_net="${lan_ip%.*}.0"
+    }
 fi
 subnet_cidr="${lan_net}/${lan_prefix}"
 
@@ -218,6 +242,8 @@ fi
 # DayShield network.conf
 mkdir -p "${target}/etc/dayshield"
 cat > "${target}/etc/dayshield/network.conf" <<EOF
+WAN_IFACE=${wan_iface}
+WAN_TYPE=${wan_type}
 LAN_IFACE=${lan_iface}
 LAN_IP=${lan_ip}
 LAN_PREFIX=${lan_prefix}
@@ -339,12 +365,17 @@ server:
   root-hints: "/usr/share/dns/root.hints"
   harden-glue: yes
   harden-dnssec-stripped: yes
+  harden-below-nxdomain: yes
+  qname-minimisation: no
+  aggressive-nsec: no
   use-caps-for-id: yes
   hide-identity: yes
   hide-version: yes
+  edns-buffer-size: 1232
   cache-min-ttl: 300
   cache-max-ttl: 86400
   prefetch: yes
+  prefetch-key: yes
   num-threads: 2
   rrset-cache-size: 256m
   msg-cache-size: 128m
@@ -353,6 +384,8 @@ server:
   private-address: 192.168.0.0/16
   private-address: 100.64.0.0/10
   minimal-responses: yes
+  verbosity: 1
+  log-queries: no
 EOF
 
 # DayShield core config.json

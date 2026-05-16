@@ -37,7 +37,7 @@ default-log-dir: /var/log/suricata/
 
 stats:
   enabled: yes
-  interval: 8
+  interval: 30
 
 outputs:
   - fast:
@@ -258,7 +258,8 @@ flow-timeouts:
 
 stream:
   memcap: 64mb
-  checksum-validation: yes
+  # Disable checksum validation to avoid false positives with NIC offloading.
+  checksum-validation: no
   inline: auto
   reassembly:
     memcap: 256mb
@@ -321,25 +322,25 @@ luajit:
 
 profiling:
   rules:
-    enabled: yes
+    enabled: no
     filename: rule_perf.log
     append: yes
     limit: 10
     json: yes
   keywords:
-    enabled: yes
+    enabled: no
     filename: keyword_perf.log
     append: yes
   prefilter:
-    enabled: yes
+    enabled: no
     filename: prefilter_perf.log
     append: yes
   rulegroups:
-    enabled: yes
+    enabled: no
     filename: rule_group_perf.log
     append: yes
   packets:
-    enabled: yes
+    enabled: no
     filename: packet_stats.log
     append: yes
     csv:
@@ -358,7 +359,7 @@ nfq:
   mode: accept
 
 capture:
-  disable-offloading: false
+  disable-offloading: true
 
 security:
   limit-noproc: true

@@ -273,6 +273,10 @@ env ROOTFS_DIR="${ROOTFS_DIR}" \
 
 # ── 7. Package the rootfs ───────────────────────────────────────
 printf '==> Step 7: packaging rootfs -> %s\n' "${OUTPUT}"
+OUTPUT_DIR="$(dirname "${OUTPUT}")"
+if [ "${OUTPUT_DIR}" != "." ] && [ ! -d "${OUTPUT_DIR}" ]; then
+    mkdir -p "${OUTPUT_DIR}"
+fi
 OUTPUT_ABS="$(cd "$(dirname "${OUTPUT}")" && pwd)/$(basename "${OUTPUT}")"
 tar \
     --sort=name \

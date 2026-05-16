@@ -213,7 +213,7 @@ else
 fi
 
 if [ -f "${ROOTFS_DIR}/etc/hosts" ]; then
-    if grep -qE '^\s*::' "${ROOTFS_DIR}/etc/hosts" || \
+    if grep -qE '^[[:space:]]*::' "${ROOTFS_DIR}/etc/hosts" || \
        grep -q 'ip6-' "${ROOTFS_DIR}/etc/hosts"; then
         fail "/etc/hosts still contains IPv6 entries"
     else
@@ -243,6 +243,7 @@ if [ -f "${NFTABLES_CONF}" ]; then
                 fail "nftables ruleset syntax error: ${NFT_ERR}"
             fi
         else
+            NFT_RC=0
             NFT_ERR="$(nft --check --file "${NFTABLES_CONF}" 2>&1)" || NFT_RC=$?
             NFT_RC="${NFT_RC:-0}"
             if [ "${NFT_RC}" -eq 0 ]; then

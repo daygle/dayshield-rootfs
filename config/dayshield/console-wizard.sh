@@ -319,7 +319,9 @@ _apply_nftables_config() {
     [[ "${WAN_TYPE}" == "pppoe" ]] && effective_wan="ppp0"
     printf 'define WAN_IF = %s\ndefine LAN_IF = %s\n' \
         "${effective_wan}" "${LAN_IFACE:-lo}" > "${nft_ifaces}"
-    nft -f /etc/nftables.conf 2>/dev/null || true
+    if ! nft -f /etc/nftables.conf >/dev/null 2>&1; then
+        printf '  [WARN] failed to apply /etc/nftables.conf; verify interface assignments and nftables syntax\n' >&2
+    fi
 }
 
 _apply_network_config() {
@@ -389,7 +391,9 @@ EOF
         printf '1\n' > /proc/sys/kernel/printk 2>/dev/null || true
     fi
 
-    networkctl reload 2>/dev/null || true
+    if ! networkctl reload >/dev/null 2>&1; then
+        printf '  [WARN] networkctl reload failed; network changes may be incomplete\n' >&2
+    fi
     sleep 1
 
     if [[ -n "${old_console_loglevel}" ]] && [[ -w /proc/sys/kernel/printk ]]; then
@@ -644,6 +648,13 @@ _assign_interfaces() {
     if [[ "${lan_n}" =~ ^[0-9]+$ ]] && \
        [[ "${lan_n}" -ge 1 ]] && [[ "${lan_n}" -le "${#ifaces[@]}" ]]; then
         LAN_IFACE="${ifaces[$(( lan_n - 1 ))]}"
+    fi
+
+    if [[ -n "${WAN_IFACE}" && -n "${LAN_IFACE}" && "${WAN_IFACE}" == "${LAN_IFACE}" ]]; then
+        echo ""
+        echo "Invalid selection: WAN and LAN interfaces must be different."
+        read -rp "Press Enter to continue ..."
+        return
     fi
 
     _apply_network_config
@@ -1239,6 +1250,11 @@ _run_install_wizard() {
     if [[ "${lan_n}" =~ ^[0-9]+$ ]] && \
        [[ "${lan_n}" -ge 1 ]] && [[ "${lan_n}" -le "${#ifaces[@]}" ]]; then
         lan_iface="${ifaces[$(( lan_n - 1 ))]}"
+    fi
+    if [[ -n "${wan_iface}" && -n "${lan_iface}" && "${wan_iface}" == "${lan_iface}" ]]; then
+        printf '\n  WAN and LAN interfaces must be different.\n'
+        read -rp "  Press Enter ..."
+        return
     fi
     if [[ -z "${lan_iface}" ]]; then
         printf '\n  LAN interface is required.\n'; read -rp "  Press Enter ..."; return

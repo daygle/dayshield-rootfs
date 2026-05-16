@@ -30,9 +30,11 @@ enable_service() {
     printf '  -> Enabled %s -> %s\n' "${_service}" "${_target}"
 }
 
+# ── Early-boot firewall (sysinit) ────────────────────────────────────────────
+enable_service sysinit.target nftables.service
+
 # ── Multi-user services ───────────────────────────────────────────────────────
 for svc in \
-    nftables.service \
     unbound.service \
     dayshield-disable-offloads.service \
     suricata.service \
