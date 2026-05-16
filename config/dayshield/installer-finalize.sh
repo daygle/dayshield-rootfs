@@ -77,6 +77,9 @@ if [[ "${wan_type}" == "pppoe" && ( -z "${wan_iface}" || -z "${wan_pppoe_user}" 
     _fin_err "PPPoE mode requires WAN interface and credentials"
     exit 1
 fi
+if [[ "${wan_type}" == "pppoe" ]] && { [[ "${wan_pppoe_user}" =~ [[:cntrl:]] ]] || [[ "${wan_pppoe_pass}" =~ [[:cntrl:]] ]]; }; then
+    _fin_err "PPPoE credentials must not contain control characters"
+fi
 
 if [[ -z "${lan_iface}" || -z "${lan_ip}" || -z "${lan_prefix}" ]]; then
     _fin_err "LAN interface/address/prefix are required"
@@ -258,6 +261,10 @@ mkdir -p "${netdir}"
 rm -f "${netdir}/10-dayshield-eth.network"
 if [[ -n "${wan_iface}" ]]; then
     if [[ "${wan_type}" == "pppoe" ]]; then
+    ppp_esc_user="${wan_pppoe_user//\\/\\\\}"
+    ppp_esc_user="${ppp_esc_user//\"/\\\"}"
+    ppp_esc_pass="${wan_pppoe_pass//\\/\\\\}"
+    ppp_esc_pass="${ppp_esc_pass//\"/\\\"}"
         cat > "${netdir}/10-wan.network" <<EOF
 [Match]
 Name=${wan_iface}
@@ -270,7 +277,7 @@ EOF
         mkdir -p "${target}/etc/ppp/peers"
         cat > "${target}/etc/ppp/peers/wan" <<EOF
 plugin rp-pppoe.so ${wan_iface}
-user "${wan_pppoe_user}"
+    user "${ppp_esc_user}"
 linkname wan
 pidfile /run/ppp-wan.pid
 noauth
@@ -283,7 +290,7 @@ holdoff 5
 noipv6
 EOF
         chmod 600 "${target}/etc/ppp/peers/wan"
-        ppp_auth_line="\"${wan_pppoe_user}\" * \"${wan_pppoe_pass}\" *"
+    ppp_auth_line="\"${ppp_esc_user}\" * \"${ppp_esc_pass}\" *"
         printf '%s\n' "${ppp_auth_line}" > "${target}/etc/ppp/chap-secrets"
         printf '%s\n' "${ppp_auth_line}" > "${target}/etc/ppp/pap-secrets"
         chmod 600 "${target}/etc/ppp/chap-secrets" "${target}/etc/ppp/pap-secrets"
