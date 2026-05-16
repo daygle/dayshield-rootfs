@@ -63,12 +63,15 @@ EOF
 
 # Kea DHCP should only start when a concrete config exists. This prevents
 # boot-time failures on systems where the package default unit is enabled but
-# /etc/kea/kea-dhcp4.conf has not been seeded yet.
+# /etc/dayshield/kea-dhcp4.conf has not been written yet.
 mkdir -p "${ROOTFS_DIR}/etc/systemd/system/kea-dhcp4-server.service.d"
 cat > "${ROOTFS_DIR}/etc/systemd/system/kea-dhcp4-server.service.d/dayshield-guard.conf" <<'EOF'
 [Unit]
 ConditionKernelCommandLine=!installer
-ConditionPathExists=/etc/kea/kea-dhcp4.conf
+ConditionPathExists=/etc/dayshield/kea-dhcp4.conf
+
+[Service]
+ConfigurationDirectoryMode=750
 EOF
 
 # ── DayShield directory layout ───────────────────────────────────────────────
