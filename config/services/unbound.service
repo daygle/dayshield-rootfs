@@ -9,7 +9,7 @@ ConditionKernelCommandLine=!installer
 [Service]
 Type=notify
 # Bootstrap DNSSEC trust anchor on first boot (noop if already present)
-ExecStartPre=/bin/sh -c 'mkdir -p /var/lib/unbound && /usr/sbin/unbound-anchor -a /var/lib/unbound/root.key || true'
+ExecStartPre=/bin/sh -c 'mkdir -p /var/lib/unbound && if [ -x /usr/sbin/unbound-anchor ]; then /usr/sbin/unbound-anchor -a /var/lib/unbound/root.key || true; elif [ ! -s /var/lib/unbound/root.key ] && [ -f /usr/share/dns/root.key ]; then cp /usr/share/dns/root.key /var/lib/unbound/root.key || true; fi'
 ExecStartPre=/bin/sh -c 'chown -R unbound:unbound /var/lib/unbound 2>/dev/null || true'
 ExecStart=/usr/sbin/unbound -d
 ExecReload=/bin/kill -HUP $MAINPID

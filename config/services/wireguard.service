@@ -6,6 +6,8 @@ Wants=network-online.target
 PartOf=network.target
 ConditionKernelCommandLine=!installer
 ConditionPathExists=/etc/wireguard/wg0.conf
+# Guard to defer to dayshield-core for dynamic management
+ConditionPathExists=/etc/dayshield/wg0.conf
 
 [Service]
 Type=oneshot

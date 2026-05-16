@@ -236,6 +236,7 @@ _apply_lan_dhcp_config() {
 
     if [[ "${LAN_DHCP_ENABLE}" == "yes" ]] && [[ -n "${LAN_IFACE}" ]] && [[ -n "${LAN_IP}" ]] && [[ -n "${LAN_DHCP_START}" ]] && [[ -n "${LAN_DHCP_END}" ]]; then
         mkdir -p /etc/kea /var/log/kea /var/lib/kea
+        chmod 755 /etc/kea
 
         # Compute network address for Kea subnet (e.g. 192.168.1.0/24)
         local prefix="${LAN_PREFIX:-24}"
@@ -303,6 +304,7 @@ _apply_lan_dhcp_config() {
   }
 }
 EOF
+    chmod 644 "${kea_conf}"
 
         systemctl enable kea-dhcp4-server >/dev/null 2>&1 || true
         systemctl restart kea-dhcp4-server >/dev/null 2>&1 || true

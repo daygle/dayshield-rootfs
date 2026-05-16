@@ -311,6 +311,7 @@ EOF
 
 # Kea DHCPv4
 mkdir -p "${target}/etc/kea" "${target}/var/lib/kea" "${target}/var/log/kea"
+chmod 755 "${target}/etc/kea"
 cat > "${target}/etc/kea/kea-dhcp4.conf" <<EOF
 {
   "Dhcp4": {
@@ -341,6 +342,7 @@ cat > "${target}/etc/kea/kea-dhcp4.conf" <<EOF
   }
 }
 EOF
+chmod 644 "${target}/etc/kea/kea-dhcp4.conf"
 
 # Unbound DNS
 mkdir -p "${target}/etc/unbound" "${target}/var/lib/unbound"
@@ -354,6 +356,7 @@ cat > "${target}/etc/unbound/unbound.conf" <<EOF
 server:
   interface: 0.0.0.0
   port: 53
+    pidfile: "/run/unbound/unbound.pid"
   do-ip4: yes
   do-ip6: no
   do-udp: yes
