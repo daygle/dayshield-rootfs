@@ -372,6 +372,7 @@ server:
   qname-minimisation: no
   aggressive-nsec: no
   use-caps-for-id: yes
+    module-config: "validator iterator"
   hide-identity: yes
   hide-version: yes
   edns-buffer-size: 1232
