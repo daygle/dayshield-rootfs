@@ -306,10 +306,7 @@ _apply_lan_dhcp_config() {
 }
 EOF
     chmod 644 "${kea_conf}"
-    cat > "${kea_compat_conf}" <<EOF
-# Compatibility include - canonical file is managed under /etc/dayshield
-include: "/etc/dayshield/kea-dhcp4.conf"
-EOF
+    cp "${kea_conf}" "${kea_compat_conf}"
     chmod 644 "${kea_compat_conf}"
 
         systemctl enable kea-dhcp4-server >/dev/null 2>&1 || true

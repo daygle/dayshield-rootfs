@@ -354,10 +354,7 @@ cat > "${target}/etc/dayshield/kea-dhcp4.conf" <<EOF
 }
 EOF
 chmod 644 "${target}/etc/dayshield/kea-dhcp4.conf"
-cat > "${target}/etc/kea/kea-dhcp4.conf" <<EOF
-# Compatibility include - canonical file is managed under /etc/dayshield
-include: "/etc/dayshield/kea-dhcp4.conf"
-EOF
+cp "${target}/etc/dayshield/kea-dhcp4.conf" "${target}/etc/kea/kea-dhcp4.conf"
 chmod 644 "${target}/etc/kea/kea-dhcp4.conf"
 
 # Unbound DNS
