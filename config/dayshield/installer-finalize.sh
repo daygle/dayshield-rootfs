@@ -79,6 +79,7 @@ if [[ "${wan_type}" == "pppoe" && ( -z "${wan_iface}" || -z "${wan_pppoe_user}" 
 fi
 if [[ "${wan_type}" == "pppoe" ]] && { [[ "${wan_pppoe_user}" =~ [[:cntrl:]] ]] || [[ "${wan_pppoe_pass}" =~ [[:cntrl:]] ]]; }; then
     _fin_err "PPPoE credentials must not contain control characters"
+    exit 1
 fi
 
 if [[ -z "${lan_iface}" || -z "${lan_ip}" || -z "${lan_prefix}" ]]; then
@@ -411,46 +412,56 @@ _lan_rule_uuid="$(cat /proc/sys/kernel/random/uuid 2>/dev/null || printf 'aaaaaa
 
 cat > "${target}/etc/dayshield/config/config.json" <<EOF
 {
-  "hostname": "${hostname}",
-  "domain": null,
-  "interfaces": [
-    {
-      "name": "${lan_iface}",
-      "description": "LAN",
-      "addresses": ["${lan_ip}/${lan_prefix}"],
-      "mtu": 1500,
-      "enabled": true,
-      "dhcp4": false,
-      "dhcp6": false,
-      "vlan": null,
-      "wan_mode": null,
-      "pppoe_username": null,
-      "pppoe_password": null,
-      "gateway": null
+    "hostname": "${hostname}",
+    "domain": null,
+    "interfaces": [
+        {
+            "name": "${lan_iface}",
+            "description": "LAN",
+            "addresses": ["${lan_ip}/${lan_prefix}"],
+            "mtu": 1500,
+            "enabled": true,
+            "dhcp4": false,
+            "dhcp6": false,
+            "vlan": null,
+            "wan_mode": null,
+            "pppoe_username": null,
+            "pppoe_password": null,
+            "gateway": null
+        }
+    ],
+    "firewall_rules": [
+        {
+            "id": "${_lan_rule_uuid}",
+            "description": "Allow All (LAN)",
+            "priority": 10,
+            "source": null,
+            "destination": null,
+            "protocol": null,
+            "source_port": null,
+            "destination_port": null,
+            "action": "accept",
+            "interface": "${lan_iface}",
+            "log": false
+        }
+    ],
+    "nat": null,
+    "dns": null,
+    "dhcp": {
+        "enabled": true,
+        "interface": "${lan_iface}",
+        "scopes": [
+            {
+                "id": 1,
+                "subnet": "${lan_ip}/${lan_prefix}",
+                "pool_start": "${dhcp_start}",
+                "pool_end": "${dhcp_end}",
+                "dns_servers": ["${lan_ip}"],
+                "lease_seconds": 43200,
+                "reservations": []
+            }
+        ]
     }
-  ],
-  "firewall_rules": [
-    {
-      "id": "${_lan_rule_uuid}",
-    "description": "Allow All (LAN)",
-      "priority": 10,
-      "source": null,
-      "destination": null,
-      "protocol": null,
-      "source_port": null,
-      "destination_port": null,
-      "action": "accept",
-      "interface": "${lan_iface}",
-      "log": false
-    }
-  ],
-  "nat": null,
-  "dns": null,
-  "dhcp": {
-    "enabled": true,
-    "interface": "${lan_iface}",
-    "scopes": [ { "start": "${dhcp_start}", "end": "${dhcp_end}", "lease_time": 43200 } ]
-  }
 }
 EOF
 
@@ -468,9 +479,14 @@ _fin_info "Validating install-time criteria ..."
 if grep -qE '(^|[[:space:]])installer([[:space:]]|$)' /proc/cmdline 2>/dev/null; then
     if command -v ss >/dev/null 2>&1; then
         # Prevent installer-live/service conflicts on the management redirect port.
+        # Allow if the only listener is the installer httpd (busybox/httpd or installer-ui-web.service)
         if ss -H -ltn 'sport = :8443' 2>/dev/null | grep -q '[0-9]'; then
-            _fin_err "live installer has an active TCP listener on port 8443"
-            exit 1
+            # Get the process name(s) listening on 8443
+            listeners=$(ss -H -ltnp 'sport = :8443' 2>/dev/null | awk '{print $NF}' | grep -oP 'users:\(\(.*pid=\d+,fd=\d+\)\)' | grep -oP 'pid=\d+' | cut -d= -f2 | xargs -r -n1 ps -p 2>/dev/null | awk 'NR>1{print $4}' | sort | uniq)
+            if ! echo "$listeners" | grep -Eq '(^| )httpd( |$)|(^| )installer-ui-web( |$)'; then
+                _fin_err "live installer has an active TCP listener on port 8443 (process: $listeners)"
+                exit 1
+            fi
         fi
     fi
 fi

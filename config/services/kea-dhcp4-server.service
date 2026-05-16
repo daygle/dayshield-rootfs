@@ -1,2 +1,0 @@
-# Guard to defer to dayshield-core for dynamic management
-ConditionPathExists=/etc/dayshield/kea-dhcp4.conf

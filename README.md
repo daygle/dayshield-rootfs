@@ -26,7 +26,7 @@ for direct injection into the `dayshield-iso` build pipeline.
 |   |   |-- suricata.service
 |   |   |-- crowdsec.service
 |   |   |-- cloudflared.service
-|   |   |-- kea-dhcp4-server.service
+|   |   |
 |   |   |-- wireguard.service
 |   |   |-- dayshield-disable-offloads.service
 |   |   |-- acme.service
