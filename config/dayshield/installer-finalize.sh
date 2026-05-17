@@ -281,6 +281,7 @@ plugin rp-pppoe.so ${wan_iface}
     user "${ppp_esc_user}"
 linkname wan
 pidfile /run/ppp-wan.pid
+noipdefault
 noauth
 defaultroute
 replacedefaultroute
@@ -288,6 +289,8 @@ hide-password
 persist
 maxfail 0
 holdoff 5
+mtu 1492
+mru 1492
 noipv6
 EOF
         chmod 600 "${target}/etc/ppp/peers/wan"

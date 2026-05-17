@@ -416,12 +416,18 @@ EOF
 # Write /etc/ppp/peers/wan and restart pppd for PPPoE WAN.
 _apply_pppoe_config() {
     mkdir -p /etc/ppp
+    local ppp_user="${WAN_PPPOE_USER//\\/\\\\}"
+    ppp_user="${ppp_user//\"/\\\"}"
+    local ppp_pass="${WAN_PPPOE_PASS//\\/\\\\}"
+    ppp_pass="${ppp_pass//\"/\\\"}"
+
     # Write peer config - rp-pppoe plugin runs over the physical WAN interface
     cat > /etc/ppp/peers/wan <<EOF
 plugin rp-pppoe.so ${WAN_IFACE}
-user "${WAN_PPPOE_USER}"
+user "${ppp_user}"
 linkname wan
 pidfile /run/ppp-wan.pid
+noipdefault
 noauth
 defaultroute
 replacedefaultroute
@@ -429,12 +435,14 @@ hide-password
 persist
 maxfail 0
 holdoff 5
+mtu 1492
+mru 1492
 noipv6
 EOF
     chmod 600 /etc/ppp/peers/wan
 
     # Write credentials to chap-secrets and pap-secrets
-    local secrets_line="\"${WAN_PPPOE_USER}\" * \"${WAN_PPPOE_PASS}\" *"
+    local secrets_line="\"${ppp_user}\" * \"${ppp_pass}\" *"
     printf '%s\n' "${secrets_line}" > /etc/ppp/chap-secrets
     printf '%s\n' "${secrets_line}" > /etc/ppp/pap-secrets
     chmod 600 /etc/ppp/chap-secrets /etc/ppp/pap-secrets
