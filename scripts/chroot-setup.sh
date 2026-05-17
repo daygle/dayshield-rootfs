@@ -80,6 +80,16 @@ ConditionPathExists=/etc/dayshield/kea-dhcp4.conf
 ConfigurationDirectoryMode=750
 EOF
 
+mkdir -p "${ROOTFS_DIR}/etc/systemd/system/kea-dhcp6-server.service.d"
+cat > "${ROOTFS_DIR}/etc/systemd/system/kea-dhcp6-server.service.d/dayshield-guard.conf" <<'EOF'
+[Unit]
+ConditionKernelCommandLine=!installer
+ConditionPathExists=/etc/dayshield/kea-dhcp6.conf
+
+[Service]
+ConfigurationDirectoryMode=750
+EOF
+
 # ── DayShield directory layout ───────────────────────────────────────────────
 printf '  -> Creating /etc/dayshield directory tree\n'
 mkdir -p \

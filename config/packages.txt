@@ -45,6 +45,8 @@ nftables
 ethtool
 isc-dhcp-client
 kea-dhcp4-server
+kea-dhcp6-server
+radvd
 netbase
 net-tools
 wireguard

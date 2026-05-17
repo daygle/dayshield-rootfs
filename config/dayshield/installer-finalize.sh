@@ -323,7 +323,7 @@ EOF
 
 # Kea DHCPv4
 mkdir -p "${target}/etc/dayshield" "${target}/etc/kea" "${target}/var/lib/kea" "${target}/var/log/kea"
-chmod 755 "${target}/etc/kea"
+chmod 750 "${target}/etc/kea"
 cat > "${target}/etc/dayshield/kea-dhcp4.conf" <<EOF
 {
   "Dhcp4": {
