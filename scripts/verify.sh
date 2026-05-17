@@ -186,8 +186,8 @@ for repo in /opt/dayshield-core /opt/dayshield-ui /opt/dayshield-rootfs; do
     fi
 done
 
-# ── IPv6 disabled ─────────────────────────────────────────────────────────────
-banner "IPv6 disabled"
+# ── IPv6 default-off but runtime-toggleable ──────────────────────────────────
+banner "IPv6 default off"
 
 SYSCTL_CONF="${ROOTFS_DIR}/etc/sysctl.d/99-disable-ipv6.conf"
 if [ -f "${SYSCTL_CONF}" ]; then
@@ -203,21 +203,25 @@ fi
 
 MODPROBE_CONF="${ROOTFS_DIR}/etc/modprobe.d/disable-ipv6.conf"
 if [ -f "${MODPROBE_CONF}" ]; then
-    if grep -q 'blacklist ipv6' "${MODPROBE_CONF}"; then
-        ok "IPv6 kernel module blacklisted"
-    else
-        fail "IPv6 kernel module blacklist entry missing"
-    fi
+    fail "IPv6 kernel module blacklist present; runtime IPv6 toggle would not work"
 else
-    fail "missing modprobe IPv6 disable file"
+    ok "IPv6 kernel module is not blacklisted"
+fi
+
+KERNEL_CMDLINE="${ROOTFS_DIR}/etc/dayshield/kernel-cmdline"
+if [ -f "${KERNEL_CMDLINE}" ]; then
+    if grep -q 'ipv6.disable=1' "${KERNEL_CMDLINE}"; then
+        fail "kernel cmdline hard-disables IPv6"
+    else
+        ok "kernel cmdline does not hard-disable IPv6"
+    fi
 fi
 
 if [ -f "${ROOTFS_DIR}/etc/hosts" ]; then
-    if grep -qE '^[[:space:]]*::' "${ROOTFS_DIR}/etc/hosts" || \
-       grep -q 'ip6-' "${ROOTFS_DIR}/etc/hosts"; then
-        fail "/etc/hosts still contains IPv6 entries"
+    if grep -qE '^[[:space:]]*::1[[:space:]]' "${ROOTFS_DIR}/etc/hosts"; then
+        ok "/etc/hosts has IPv6 localhost entries for runtime enablement"
     else
-        ok "/etc/hosts has no IPv6 entries"
+        fail "/etc/hosts is missing IPv6 localhost entries"
     fi
 fi
 
@@ -227,9 +231,9 @@ NFTABLES_CONF="${ROOTFS_DIR}/etc/nftables.conf"
 if [ -f "${NFTABLES_CONF}" ]; then
     ok "nftables.conf exists"
     if grep -qiE '^[[:space:]]*(table[[:space:]]+ip6|table[[:space:]]+inet6)' "${NFTABLES_CONF}"; then
-        fail "nftables.conf contains ip6/inet6 table (IPv6 not fully disabled)"
+        fail "default nftables.conf contains static ip6/inet6 table"
     else
-        ok "nftables.conf contains no ip6/inet6 tables"
+        ok "default nftables.conf contains no static ip6/inet6 tables"
     fi
     # Validate syntax if nft is available and we have sufficient privilege.
     # When verifying an extracted rootfs, use chroot so absolute include paths
@@ -265,7 +269,7 @@ UNBOUND_CONF="${ROOTFS_DIR}/etc/unbound/unbound.conf"
 if [ -f "${UNBOUND_CONF}" ]; then
     ok "unbound.conf exists"
     if grep -q 'do-ip6: no' "${UNBOUND_CONF}"; then
-        ok "unbound IPv6 disabled (do-ip6: no)"
+        ok "unbound IPv6 disabled by default (do-ip6: no)"
     else
         fail "unbound do-ip6 not set to no"
     fi

@@ -169,7 +169,6 @@ mmdebstrap \
     --variant=minbase \
     --include="${PACKAGES}" \
     --aptopt='Acquire::Languages=none' \
-    --aptopt='Acquire::IPv6::Disable=true' \
     --aptopt='Acquire::Retries=0' \
     --aptopt='Acquire::http::Timeout=10' \
     "${SUITE}" \
@@ -220,7 +219,7 @@ env ROOTFS_DIR="${ROOTFS_DIR}" \
     CONFIG_DIR="${CONFIG_DIR}" \
     sh "${SCRIPT_DIR}/enable-services.sh"
 
-# ── 5. Run harden-ipv4.sh ────────────────────────────────────────────────────
+# ── 5. Run harden-ipv4.sh default hardening ──────────────────────────────────
 printf '==> Step 5: harden-ipv4\n'
 env ROOTFS_DIR="${ROOTFS_DIR}" \
     sh "${SCRIPT_DIR}/harden-ipv4.sh"

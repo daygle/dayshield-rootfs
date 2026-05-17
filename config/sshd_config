@@ -4,7 +4,8 @@
 
 Port 22
 AddressFamily any
-ListenAddress 0.0.0.0
+# ListenAddress is intentionally unset so sshd can bind IPv4 by default and
+# IPv6 as soon as DayShield enables it at runtime.
 
 # ── Authentication ────────────────────────────────────────────────────────────
 # Allow root password login on the installed system.

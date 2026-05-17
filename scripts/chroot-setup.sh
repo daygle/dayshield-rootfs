@@ -157,8 +157,7 @@ printf '  -> Writing kernel cmdline placeholder\n'
 mkdir -p "${ROOTFS_DIR}/etc/dayshield"
 cat > "${ROOTFS_DIR}/etc/dayshield/kernel-cmdline" <<'EOF'
 # Extra kernel command-line parameters appended by the ISO builder.
-# IPv6 is disabled at the kernel level via this file.
-ipv6.disable=1
+# IPv6 is disabled by sysctl/config by default so DayShield can enable it at runtime.
 EOF
 
 # ── Install systemd service units from config ─────────────────────────────────

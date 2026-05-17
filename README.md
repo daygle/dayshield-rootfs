@@ -15,7 +15,7 @@ for direct injection into the `dayshield-iso` build pipeline.
 |   |-- chroot-setup.sh          # Configure chroot environment
 |   |-- install-dayshield-core.sh# Install dayshield-core binary & service
 |   |-- enable-services.sh       # Enable systemd services
-|   |-- harden-ipv4.sh           # IPv4-only hardening
+|   |-- harden-ipv4.sh           # IPv4-first hardening defaults
 |   |-- cleanup.sh               # Strip non-reproducible artifacts
 |   `-- verify.sh                # Verify rootfs integrity
 |-- config/
@@ -33,7 +33,7 @@ for direct injection into the `dayshield-iso` build pipeline.
 |   |   |-- acme.timer
 |   |   `-- console-wizard.service
 |   |-- sysctl.conf              # Kernel hardening parameters
-|   |-- nftables.conf            # IPv4-only firewall ruleset
+|   |-- nftables.conf            # IPv4-first default firewall ruleset
 |   |-- unbound.conf             # Local recursive DNS resolver
 |   |-- suricata.yaml            # Intrusion Detection System config
 |   |-- crowdsec.yaml            # CrowdSec security engine config
@@ -122,8 +122,9 @@ The build pipeline:
    of building on the appliance.
 4. **enable-services.sh** creates `wants/` symlinks for all required services
    and masks `systemd-resolved` (replaced by unbound).
-5. **harden-ipv4.sh** disables IPv6 at every layer: sysctl, kernel module
-   blacklist, `/etc/hosts`, `/etc/resolv.conf`, nftables, and unbound.
+5. **harden-ipv4.sh** keeps IPv6 disabled by default through sysctl and service
+   config while leaving the kernel module and localhost entries available for
+   the DayShield global IPv6 toggle.
    The initramfs is then (re)generated via `update-initramfs` with proc/dev/sys
    bind-mounted into the chroot so module dependency resolution succeeds.
 6. **cleanup.sh** removes APT caches, clears `machine-id`, removes any
@@ -230,9 +231,9 @@ The script checks:
 - Kernel image (`vmlinuz-*`) and initramfs (`initrd.img-*`) are present in `/boot`
 - `/etc/fstab` exists and contains a root (`/`) mount entry
 - `live-boot` and `live-config` are **not** installed (they must not be in the installed rootfs)
-- IPv6 is fully disabled (sysctl, module blacklist, `/etc/hosts`)
-- `nftables.conf` contains no `ip6`/`inet6` tables
-- `unbound.conf` has `do-ip6: no`
+- IPv6 is disabled by default without kernel/module boot hard-disables
+- `nftables.conf` contains no static `ip6`/`inet6` tables until the core enables IPv6
+- `unbound.conf` has `do-ip6: no` by default
 - Config files for suricata and crowdsec are present
 
 Exit code 0 = all checks passed.
@@ -279,7 +280,7 @@ make -C ../dayshield-iso iso ROOTFS=$(pwd)/rootfs.tar.zst
 | Decision | Rationale |
 |----------|-----------|
 | `mmdebstrap` instead of `debootstrap` | Runs unprivileged; produces more reproducible output |
-| IPv4-only | Reduces attack surface; all services bind only to `127.0.0.1` or IPv4 |
+| IPv6 default-off | Reduces default attack surface while preserving runtime IPv6 support through the global DayShield setting |
 | `unbound` instead of `systemd-resolved` | Full DNSSEC, local recursion, no stub-listener conflicts |
 | `nftables` instead of `iptables` | Modern, performant, supported by Debian trixie |
 | `tar --sort=name --mtime=@0` | Byte-for-byte reproducible archives across builds |

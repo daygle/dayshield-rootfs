@@ -461,6 +461,17 @@ cat > "${target}/etc/dayshield/config/config.json" <<EOF
                 "reservations": []
             }
         ]
+    },
+    "system_settings": {
+        "hostname": "${hostname}",
+        "timezone": "UTC",
+        "ntpServers": ["0.pool.ntp.org", "1.pool.ntp.org"],
+        "dnsServers": [],
+        "sshEnabled": true,
+        "sshPort": 22,
+        "webPort": 443,
+        "ipv6Enabled": false,
+        "managementTlsAcmeDomain": null
     }
 }
 EOF
