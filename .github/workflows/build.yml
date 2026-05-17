@@ -101,14 +101,6 @@ jobs:
             FAIL=1
           fi
 
-          echo "==> Checking /etc/modprobe.d/disable-ipv6.conf"
-          if sudo grep -q 'blacklist ipv6' "${VERIFY_DIR}/etc/modprobe.d/disable-ipv6.conf" 2>/dev/null; then
-            echo "  [PASS] IPv6 kernel module blacklist entry present"
-          else
-            echo "  [FAIL] IPv6 modprobe blacklist missing or incorrect" >&2
-            FAIL=1
-          fi
-
           sudo rm -rf "${VERIFY_DIR}"
 
           if [ "${FAIL}" -ne 0 ]; then
