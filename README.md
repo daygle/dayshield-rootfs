@@ -1,7 +1,7 @@
-# DayShield RootFS
+# DayShield Firewall RootFS
 
 Deterministic, reproducible Debian-based root filesystem builder for the
-**DayShield Firewall OS**. The output is a `rootfs.tar.zst` archive suitable
+**DayShield Firewall**. The output is a `rootfs.tar.zst` archive suitable
 for direct injection into the `dayshield-iso` build pipeline.
 
 ---
