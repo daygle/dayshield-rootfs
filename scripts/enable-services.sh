@@ -40,6 +40,7 @@ for svc in \
     suricata.service \
     ssh.service \
     dayshield.service \
+    dayshield-rootfs-watchdog.service \
     console-wizard.service
 do
     enable_service multi-user.target "${svc}"

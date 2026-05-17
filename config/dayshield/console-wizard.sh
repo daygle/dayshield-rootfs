@@ -970,23 +970,19 @@ _inst_partition() {
     _inst_info "Wiping existing signatures on /dev/${dev} ..."
     wipefs -a "/dev/${dev}" >/dev/null 2>&1 || true
 
-    _inst_info "Creating GPT layout (1 MiB BIOS + 512 MiB EFI + rest root) ..."
-    if command -v sgdisk >/dev/null 2>&1; then
-        sgdisk --zap-all \
-            --new=1:1MiB:+1MiB --typecode=1:EF02 --change-name=1:"BIOS Boot" \
-            --new=2:0:+512M    --typecode=2:EF00 --change-name=2:"EFI System" \
-            --new=3:0:0        --typecode=3:8300 --change-name=3:"Linux Root" \
-            "/dev/${dev}" >/dev/null 2>&1 || { _inst_err "sgdisk failed."; return 1; }
-    elif command -v parted >/dev/null 2>&1; then
+    _inst_info "Creating GPT A/B layout (BIOS + EFI + shared boot + root A/B) ..."
+    if command -v parted >/dev/null 2>&1; then
         parted -s "/dev/${dev}" \
             mklabel gpt \
             mkpart primary 1MiB 2MiB \
             set 1 bios_grub on \
             mkpart primary fat32 2MiB 514MiB \
             set 2 esp on \
-            mkpart primary ext4 514MiB 100% >/dev/null 2>&1 || { _inst_err "parted failed."; return 1; }
+            mkpart primary ext4 514MiB 1538MiB \
+            mkpart primary ext4 1538MiB 50% \
+            mkpart primary ext4 50% 100% >/dev/null 2>&1 || { _inst_err "parted failed."; return 1; }
     else
-        _inst_err "Neither sgdisk nor parted found."
+        _inst_err "parted was not found."
         return 1
     fi
 
@@ -995,7 +991,7 @@ _inst_partition() {
     local pfx
     case "$dev" in nvme*|mmcblk*) pfx="${dev}p" ;; *) pfx="${dev}" ;; esac
     local waited=0
-    while ! [[ -b "/dev/${pfx}2" ]] || ! [[ -b "/dev/${pfx}3" ]]; do
+    while ! [[ -b "/dev/${pfx}2" ]] || ! [[ -b "/dev/${pfx}3" ]] || ! [[ -b "/dev/${pfx}4" ]] || ! [[ -b "/dev/${pfx}5" ]]; do
         sleep 1; waited=$(( waited + 1 ))
         [[ ${waited} -ge 10 ]] && { _inst_err "Partition nodes did not appear."; return 1; }
     done
@@ -1005,14 +1001,22 @@ _inst_partition() {
 _inst_format() {
     local dev="$1" pfx
     case "$dev" in nvme*|mmcblk*) pfx="${dev}p" ;; *) pfx="${dev}" ;; esac
-    local efi="/dev/${pfx}2" root="/dev/${pfx}3"
+    local efi="/dev/${pfx}2" boot="/dev/${pfx}3" root_a="/dev/${pfx}4" root_b="/dev/${pfx}5"
 
     _inst_info "Formatting ${efi} as FAT32 (EFI) ..."
-    mkfs.fat -F32 -n "EFI" "${efi}" >/dev/null 2>&1 || { _inst_err "mkfs.fat failed."; return 1; }
+    mkfs.fat -F32 -n "DS_EFI" "${efi}" >/dev/null 2>&1 || { _inst_err "mkfs.fat failed."; return 1; }
 
-    _inst_info "Formatting ${root} as ext4 (root) ..."
-    mkfs.ext4 -F -L "dayshield-root" -O "^64bit,metadata_csum" -m 1 \
-        "${root}" >/dev/null 2>&1 || { _inst_err "mkfs.ext4 failed."; return 1; }
+    _inst_info "Formatting ${boot} as ext4 (shared boot) ..."
+    mkfs.ext4 -F -L "DAYSHIELD_BOOT" -O "^64bit,metadata_csum" -m 1 \
+        "${boot}" >/dev/null 2>&1 || { _inst_err "mkfs.ext4 boot failed."; return 1; }
+
+    _inst_info "Formatting ${root_a} as ext4 (root slot A) ..."
+    mkfs.ext4 -F -L "DAYSHIELD_ROOT_A" -O "^64bit,metadata_csum" -m 1 \
+        "${root_a}" >/dev/null 2>&1 || { _inst_err "mkfs.ext4 root A failed."; return 1; }
+
+    _inst_info "Formatting ${root_b} as ext4 (root slot B) ..."
+    mkfs.ext4 -F -L "DAYSHIELD_ROOT_B" -O "^64bit,metadata_csum" -m 1 \
+        "${root_b}" >/dev/null 2>&1 || { _inst_err "mkfs.ext4 root B failed."; return 1; }
     return 0
 }
 
@@ -1059,15 +1063,23 @@ _inst_find_rootfs() {
 _inst_install_rootfs() {
     local dev="$1" rootfs="$2" pfx target="/mnt/target"
     case "$dev" in nvme*|mmcblk*) pfx="${dev}p" ;; *) pfx="${dev}" ;; esac
-    local efi="/dev/${pfx}2" root="/dev/${pfx}3"
+    local efi="/dev/${pfx}2" boot="/dev/${pfx}3" root="/dev/${pfx}4"
 
-    _inst_info "Mounting root partition ..."
+    _inst_info "Mounting root slot A ..."
     mkdir -p "${target}"
     mount "${root}" "${target}" || { _inst_err "Failed to mount ${root}."; return 1; }
+
+    _inst_info "Mounting shared boot partition ..."
+    mkdir -p "${target}/boot"
+    mount "${boot}" "${target}/boot" || {
+        umount "${target}" 2>/dev/null || true
+        _inst_err "Failed to mount boot partition."; return 1
+    }
 
     _inst_info "Mounting EFI partition ..."
     mkdir -p "${target}/boot/efi"
     mount "${efi}" "${target}/boot/efi" || {
+        umount "${target}/boot" 2>/dev/null || true
         umount "${target}" 2>/dev/null || true
         _inst_err "Failed to mount EFI partition."; return 1
     }
@@ -1076,18 +1088,33 @@ _inst_install_rootfs() {
     if command -v zstd >/dev/null 2>&1; then
         zstd -d --stdout "${rootfs}" | tar -xp -C "${target}" || {
             umount "${target}/boot/efi" 2>/dev/null || true
+            umount "${target}/boot" 2>/dev/null || true
             umount "${target}" 2>/dev/null || true
             _inst_err "Extraction failed."; return 1
         }
     elif tar --version 2>&1 | grep -q "GNU tar"; then
         tar -xp --zstd -f "${rootfs}" -C "${target}" || {
             umount "${target}/boot/efi" 2>/dev/null || true
+            umount "${target}/boot" 2>/dev/null || true
             umount "${target}" 2>/dev/null || true
             _inst_err "Extraction failed (GNU tar)."; return 1
         }
     else
         _inst_err "Neither zstd nor GNU tar available."; return 1
     fi
+    local root_uuid boot_uuid efi_uuid
+    root_uuid="$(blkid -s UUID -o value "${root}")"
+    boot_uuid="$(blkid -s UUID -o value "${boot}")"
+    efi_uuid="$(blkid -s UUID -o value "${efi}")"
+    cat > "${target}/etc/fstab" <<EOF
+# /etc/fstab - generated by DayShield installer
+UUID=${root_uuid}  /          ext4  defaults,noatime  0  1
+UUID=${boot_uuid}  /boot      ext4  defaults,noatime  0  2
+UUID=${efi_uuid}   /boot/efi  vfat  umask=0077        0  2
+tmpfs              /tmp       tmpfs defaults           0  0
+EOF
+    mkdir -p "${target}/etc/dayshield"
+    printf 'a\n' > "${target}/etc/dayshield/rootfs-slot"
     return 0
 }
 
@@ -1128,6 +1155,44 @@ _inst_install_bootloader() {
             _inst_err "UEFI grub-install warning (may be non-fatal)"
     fi
 
+    _inst_info "Installing A/B rootfs boot entries ..."
+    local boot_uuid root_a_uuid root_b_uuid kernel initrd
+    boot_uuid="$(blkid -s UUID -o value "$(blkid -L DAYSHIELD_BOOT)")"
+    root_a_uuid="$(blkid -s UUID -o value "$(blkid -L DAYSHIELD_ROOT_A)")"
+    root_b_uuid="$(blkid -s UUID -o value "$(blkid -L DAYSHIELD_ROOT_B)")"
+    kernel="$(find "${target}/boot" -maxdepth 1 -name 'vmlinuz*' | sort | tail -n1)"
+    initrd="$(find "${target}/boot" -maxdepth 1 -name 'initrd.img*' | sort | tail -n1)"
+    if [[ -n "${kernel}" && -n "${initrd}" ]]; then
+        mkdir -p "${target}/boot/dayshield/slot-a" "${target}/boot/dayshield/slot-b"
+        cp "${kernel}" "${target}/boot/dayshield/slot-a/vmlinuz"
+        cp "${initrd}" "${target}/boot/dayshield/slot-a/initrd.img"
+    fi
+    cat > "${target}/etc/grub.d/09_dayshield_ab" <<EOF
+#!/bin/sh
+set -e
+cat <<'GRUB_EOF'
+menuentry 'DayShield slot A' --id 'dayshield-a' {
+    search --no-floppy --fs-uuid --set=root ${boot_uuid}
+    linux /dayshield/slot-a/vmlinuz root=UUID=${root_a_uuid} ro quiet splash
+    initrd /dayshield/slot-a/initrd.img
+}
+
+menuentry 'DayShield slot B' --id 'dayshield-b' {
+    search --no-floppy --fs-uuid --set=root ${boot_uuid}
+    linux /dayshield/slot-b/vmlinuz root=UUID=${root_b_uuid} ro quiet splash
+    initrd /dayshield/slot-b/initrd.img
+}
+GRUB_EOF
+EOF
+    chmod 755 "${target}/etc/grub.d/09_dayshield_ab"
+    if [[ -f "${target}/etc/default/grub" ]]; then
+        sed -i 's/^GRUB_DEFAULT=.*/GRUB_DEFAULT=saved/' "${target}/etc/default/grub" 2>/dev/null || true
+        grep -q '^GRUB_DEFAULT=' "${target}/etc/default/grub" || printf 'GRUB_DEFAULT=saved\n' >> "${target}/etc/default/grub"
+        grep -q '^GRUB_SAVEDEFAULT=' "${target}/etc/default/grub" || printf 'GRUB_SAVEDEFAULT=false\n' >> "${target}/etc/default/grub"
+    else
+        printf 'GRUB_DEFAULT=saved\nGRUB_SAVEDEFAULT=false\nGRUB_TIMEOUT=5\n' > "${target}/etc/default/grub"
+    fi
+
     _inst_info "Generating GRUB config ..."
     chroot "${target}" grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1 || \
         _inst_err "grub-mkconfig warning"
@@ -1166,6 +1231,8 @@ _inst_finalize() {
     done
     _inst_info "Unmounting EFI partition ..."
     umount "${target}/boot/efi" 2>/dev/null || _inst_err "EFI umount warning"
+    _inst_info "Unmounting boot partition ..."
+    umount "${target}/boot" 2>/dev/null || _inst_err "Boot umount warning"
     _inst_info "Unmounting root partition ..."
     umount "${target}" 2>/dev/null || _inst_err "Root umount warning"
     sync
