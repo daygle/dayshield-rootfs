@@ -210,8 +210,18 @@ jobs:
           EOF
           )
 
-          gh release create "${TAG}" \
-            --title "rootfs ${TAG}" \
-            --notes "${NOTES}" \
-            "${ARTIFACT}" \
-            "${ARTIFACT}.sha256"
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release edit "${TAG}" \
+              --title "rootfs ${TAG}" \
+              --notes "${NOTES}"
+            gh release upload "${TAG}" \
+              "${ARTIFACT}" \
+              "${ARTIFACT}.sha256" \
+              --clobber
+          else
+            gh release create "${TAG}" \
+              --title "rootfs ${TAG}" \
+              --notes "${NOTES}" \
+              "${ARTIFACT}" \
+              "${ARTIFACT}.sha256"
+          fi
