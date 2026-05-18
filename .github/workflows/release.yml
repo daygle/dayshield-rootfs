@@ -213,5 +213,5 @@ jobs:
           gh release create "${TAG}" \
             --title "rootfs ${TAG}" \
             --notes "${NOTES}" \
-            "rootfs/${ARTIFACT}" \
-            "rootfs/${ARTIFACT}.sha256"
+            "${ARTIFACT}" \
+            "${ARTIFACT}.sha256"
