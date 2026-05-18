@@ -198,6 +198,54 @@ Runtime update checks for `core`/`ui` still consume their own component entries
 from the same manifest and do not require a new rootfs tag for every core/ui
 release.
 
+### Release workflow (GitHub Actions)
+
+The release workflow lives at `.github/workflows/release.yml`.
+
+#### Tag-triggered release (standard path)
+
+Push a version tag to trigger an automated build and GitHub Release:
+
+```sh
+git tag v1.2.3
+git push origin v1.2.3
+```
+
+The workflow will:
+1. Check out this repo at the tag, plus the default branch of `dayshield-core`
+   and `dayshield-ui`.
+2. Build the `dayshield-ui` dist (Node.js).
+3. Compile the `dayshield-core` binary (Rust).
+4. Build the rootfs archive using `make rootfs`.
+5. Verify the artifact contains the expected `dayshield-core` binary.
+6. Generate a SHA-256 checksum file.
+7. Publish a GitHub Release named `rootfs vX.Y.Z` with:
+   - `rootfs-vX.Y.Z.tar.zst` — the compressed rootfs archive
+   - `rootfs-vX.Y.Z.tar.zst.sha256` — the SHA-256 checksum
+
+#### Manual release (workflow_dispatch)
+
+To build and release from an existing tag while pinning specific upstream
+component refs, trigger the workflow manually from the GitHub Actions UI or CLI:
+
+```sh
+gh workflow run release.yml \
+  -f tag=v1.2.3 \
+  -f core_ref=v2.0.0 \
+  -f ui_ref=v0.9.5
+```
+
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `tag` | yes | — | Existing repo tag to release (e.g. `v1.2.3`) |
+| `core_ref` | no | `main` | `dayshield-core` branch, tag, or SHA to build against |
+| `ui_ref` | no | `main` | `dayshield-ui` branch, tag, or SHA to build against |
+
+#### Required permissions
+
+The workflow requires `contents: write` on the repository token, which is the
+default for tag-push events.  No additional secrets are needed.
+
 ### Build/release inputs
 
 Rootfs build inputs remain:
@@ -210,6 +258,25 @@ Rootfs build inputs remain:
 Releasing rootfs publishes a rootfs artifact for the rootfs tag/version; it
 does not imply synchronized version bumps in `dayshield-core` or
 `dayshield-ui`.
+
+### After releasing: update the central manifest
+
+After a GitHub Release is published, update the central manifest to point
+installed systems at the new rootfs artifact URL.  The manifest entry for
+`rootfs` should reference the release asset URL, for example:
+
+```json
+{
+  "rootfs": {
+    "version": "v1.2.3",
+    "url": "https://github.com/daygle/dayshield-rootfs/releases/download/v1.2.3/rootfs-v1.2.3.tar.zst",
+    "sha256": "<contents of rootfs-v1.2.3.tar.zst.sha256>"
+  }
+}
+```
+
+This step is currently manual.  Future work may automate it via a workflow in
+the manifest repository once the manifest store is established.
 
 ### Installer finalization contract (console + web)
 
