@@ -450,6 +450,8 @@ cat > "${target}/etc/dayshield/config/config.json" <<EOF
     ],
     "nat": null,
     "dns": null,
+    "vpn_tunnels": [],
+    "crowdsec_policies": [],
     "dhcp": {
         "enabled": true,
         "interface": "${lan_iface}",

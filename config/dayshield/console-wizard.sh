@@ -1481,6 +1481,42 @@ _run_install_wizard() {
     read -rp "  DHCP pool start [${dhcp_start}]: " ds_in; dhcp_start="${ds_in:-${dhcp_start}}"
     read -rp "  DHCP pool end   [${dhcp_end}]: "   de_in; dhcp_end="${de_in:-${dhcp_end}}"
 
+    if ! _is_valid_ipv4 "${lan_ip}"; then
+        printf '\n  Invalid LAN IP address: %s\n' "${lan_ip}"
+        read -rp "  Press Enter ..."
+        return
+    fi
+    if ! [[ "${lan_prefix}" =~ ^[0-9]+$ ]] || [[ "${lan_prefix}" -lt 1 ]] || [[ "${lan_prefix}" -gt 32 ]]; then
+        printf '\n  Invalid subnet prefix (must be 1-32): %s\n' "${lan_prefix}"
+        read -rp "  Press Enter ..."
+        return
+    fi
+    if ! _is_valid_ipv4 "${dhcp_start}" || ! _is_valid_ipv4 "${dhcp_end}"; then
+        printf '\n  Invalid DHCP pool: %s - %s\n' "${dhcp_start}" "${dhcp_end}"
+        read -rp "  Press Enter ..."
+        return
+    fi
+    local lan_int start_int end_int mask
+    mask=$(( (0xFFFFFFFF << (32 - lan_prefix)) & 0xFFFFFFFF ))
+    lan_int="$(_ipv4_to_int "${lan_ip}")"
+    start_int="$(_ipv4_to_int "${dhcp_start}")"
+    end_int="$(_ipv4_to_int "${dhcp_end}")"
+    if (( start_int > end_int )); then
+        printf '\n  Invalid DHCP pool: start must be less than or equal to end.\n'
+        read -rp "  Press Enter ..."
+        return
+    fi
+    if (( (lan_int & mask) != (start_int & mask) || (lan_int & mask) != (end_int & mask) )); then
+        printf '\n  Invalid DHCP pool: addresses must be inside the LAN subnet.\n'
+        read -rp "  Press Enter ..."
+        return
+    fi
+    if (( lan_int >= start_int && lan_int <= end_int )); then
+        printf '\n  Invalid DHCP pool: it must not include the LAN gateway IP (%s).\n' "${lan_ip}"
+        read -rp "  Press Enter ..."
+        return
+    fi
+
     # ── Step 5: Partition and format ───────────────────────────────
     clear; _inst_step 5 "${total_steps}" "Partitioning and Formatting"; printf '\n'
     _inst_partition "${disk}" || { read -rp "  Partitioning failed. Press Enter ..."; return; }

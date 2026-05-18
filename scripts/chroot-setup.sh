@@ -126,6 +126,9 @@ cp "${CONFIG_DIR}/nftables.conf" "${ROOTFS_DIR}/etc/nftables.conf"
 printf '  -> Installing unbound.conf\n'
 mkdir -p "${ROOTFS_DIR}/etc/unbound"
 cp "${CONFIG_DIR}/unbound.conf" "${ROOTFS_DIR}/etc/unbound/unbound.conf"
+# Base unbound.conf includes this DayShield-managed file. Keep it present so
+# config validation and first boot do not fail before the DNS engine rewrites it.
+: > "${ROOTFS_DIR}/etc/dayshield/unbound.conf"
 
 printf '  -> Installing suricata.yaml\n'
 mkdir -p "${ROOTFS_DIR}/etc/suricata"
