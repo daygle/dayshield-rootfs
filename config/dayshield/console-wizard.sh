@@ -195,6 +195,25 @@ _iface_ip4() {
         | awk '/inet / {print $2}' | head -n1
 }
 
+_iface_ip6() {
+    # Returns global IPv6 CIDRs as a comma-separated list, or empty string.
+    ip -6 addr show "${1}" scope global 2>/dev/null \
+        | awk '/inet6 / {print $2}' | paste -sd ', ' -
+}
+
+_iface_role() {
+    local iface="$1"
+    if [[ -n "${WAN_IFACE}" && "${iface}" == "${WAN_IFACE}" ]]; then
+        printf 'WAN'
+    elif [[ "${WAN_TYPE}" == "pppoe" && "${iface}" == "ppp0" ]]; then
+        printf 'WAN'
+    elif [[ -n "${LAN_IFACE}" && "${iface}" == "${LAN_IFACE}" ]]; then
+        printf 'LAN'
+    else
+        printf '-'
+    fi
+}
+
 _live_web_ifaces_with_ip() {
     # Lists iface<TAB>ip for all global IPv4 addresses currently assigned.
     ip -o -4 addr show scope global 2>/dev/null \
@@ -502,6 +521,10 @@ _hr() {
     printf '  ------------------------------------------------------------\n'
 }
 
+_wide_hr() {
+    printf '  ==========================================================================\n'
+}
+
 _kv() {
     printf '  %-20s %s\n' "$1" "$2"
 }
@@ -515,12 +538,38 @@ _print_header() {
     local mode_line=""
     $LIVE_MODE && mode_line=" - LIVE INSTALLER SESSION"
 
-    _hr
+    _wide_hr
     printf "  DayShield Console  v%s%s\n" "${DAYSHIELD_VERSION}" "${mode_line}"
-    _kv "Site" "${DAYSHIELD_SITE}"
-    _kv "Hostname" "${hostname}"
+    _kv "Host" "${hostname}"
+    _kv "Web UI" "https://<LAN-IP>:8443/"
+    _wide_hr
+    printf "  Interfaces\n"
+    printf "  %-12s %-6s %-6s %-18s %s\n" "Name" "Role" "State" "IPv4" "IPv6"
     _hr
-    printf "  Network Summary\n"
+
+    local printed_iface=0
+    while IFS= read -r iface; do
+        local ip4 ip6 role state
+        ip4="$(_iface_ip4 "${iface}")"
+        ip6="$(_iface_ip6 "${iface}")"
+        role="$(_iface_role "${iface}")"
+        state="$(_iface_state "${iface}")"
+        printf "  %-12s %-6s %-6s %-18s %s\n" \
+            "${iface}" "${role}" "${state}" "${ip4:-"-"}" "${ip6:-"-"}"
+        printed_iface=1
+    done < <(_list_ifaces)
+    if [[ "${WAN_TYPE}" == "pppoe" ]] && ip link show ppp0 >/dev/null 2>&1; then
+        local ppp4 ppp6 ppp_state
+        ppp4="$(_iface_ip4 ppp0)"
+        ppp6="$(_iface_ip6 ppp0)"
+        ppp_state="$(_iface_state ppp0)"
+        printf "  %-12s %-6s %-6s %-18s %s\n" \
+            "ppp0" "WAN" "${ppp_state}" "${ppp4:-"-"}" "${ppp6:-"-"}"
+        printed_iface=1
+    fi
+    [[ "${printed_iface}" -eq 0 ]] && printf "  No network interfaces detected.\n"
+    _wide_hr
+    printf "  Status\n"
 
     # Interface status
     if [[ -n "${WAN_IFACE}" ]]; then
@@ -568,13 +617,13 @@ _print_header() {
         fi
         echo ""
     elif [[ -n "${lan_ip4}" ]] && [[ "${lan_ip4}" != "no address" ]]; then
-        _kv "LAN Management IP" "${lan_ip4}"
+        _kv "Management" "https://${lan_ip4}:8443/"
         echo ""
     fi
 
     printf "  SSH Host Key Fingerprints\n"
     _ssh_fingerprints
-    _hr
+    _wide_hr
     echo ""
 }
 
@@ -874,6 +923,84 @@ _shutdown() {
     echo ""
     read -rp "Shut down now? [y/N]: " confirm
     [[ "${confirm,,}" == "y" ]] && systemctl poweroff
+}
+
+_update_system() {
+    clear
+    echo "DayShield Console - System Update"
+    echo "----------------------------------"
+    echo ""
+
+    if ! command -v dayshield-core >/dev/null 2>&1; then
+        echo "dayshield-core is not installed or is not in PATH."
+        echo ""
+        read -rp "Press Enter to continue ..."
+        return
+    fi
+
+    echo "Current update status:"
+    echo ""
+    if ! dayshield-core update-status; then
+        echo ""
+        echo "Unable to read update status."
+        read -rp "Press Enter to continue ..."
+        return
+    fi
+
+    echo ""
+    read -rp "Check for available updates now? [Y/n]: " do_check
+    if [[ -z "${do_check}" || "${do_check,,}" == "y" ]]; then
+        echo ""
+        echo "Checking update registry ..."
+        echo ""
+        if ! dayshield-core update-check; then
+            echo ""
+            echo "Update check failed. Verify DNS, WAN connectivity, and update settings."
+            read -rp "Press Enter to continue ..."
+            return
+        fi
+    fi
+
+    echo ""
+    echo "Apply component:"
+    echo "  1) Core + UI runtime updates"
+    echo "  2) Core only"
+    echo "  3) UI only"
+    echo "  4) Root filesystem update"
+    echo "  0) Cancel"
+    echo ""
+    read -rp "Select update target [0]: " target
+
+    local component=""
+    case "${target}" in
+        1) component="both" ;;
+        2) component="core" ;;
+        3) component="ui" ;;
+        4) component="rootfs" ;;
+        *) return ;;
+    esac
+
+    echo ""
+    if [[ "${component}" == "rootfs" ]]; then
+        echo "Root filesystem updates are staged to the inactive slot and require a reboot."
+    else
+        echo "Runtime updates may restart DayShield services while they are applied."
+    fi
+    read -rp "Apply ${component} update now? [y/N]: " confirm
+    [[ "${confirm,,}" == "y" ]] || return
+
+    echo ""
+    echo "Applying update ..."
+    echo ""
+    if dayshield-core update-apply "${component}"; then
+        echo ""
+        echo "Update command completed."
+    else
+        echo ""
+        echo "Update command failed. Review the output above and system logs."
+    fi
+    echo ""
+    read -rp "Press Enter to continue ..."
 }
 
 _run_guided_setup() {
@@ -1447,26 +1574,27 @@ fi
 
 while true; do
     clear
-    # _print_header  # Banner disabled
+    _print_header
 
-    echo "  Main Menu"
-    echo ""
+    echo "  Actions"
+    _hr
     if [[ "${CONSOLE_MODE}" == "boot" ]]; then
-        echo "  [0] Open shell                 - local rescue shell"
+        echo "  [0] Open shell                  local rescue shell"
     else
-        echo "  [0] Logout                     - return to login prompt"
+        echo "  [0] Logout                      return to login prompt"
     fi
     if $LIVE_MODE; then
-        echo "  [8] Install DayShield          - run disk installation wizard"
-        echo "  [9] Setup Web Installer LAN    - assign interface and LAN IP"
+        echo "  [8] Install DayShield           run disk installation wizard"
+        echo "  [9] Setup Web Installer LAN     assign interface and LAN IP"
     else
-        echo "  [1] Assign interfaces          - choose WAN and LAN adapters"
-        echo "  [2] Set LAN IP address         - configure LAN gateway address"
-        echo "  [3] Configure LAN DHCP server  - client address pool"
-        echo "  [4] Change root password       - local console/root password"
+        echo "  [1] Assign interfaces           choose WAN and LAN adapters"
+        echo "  [2] Set LAN IP address          configure LAN gateway address"
+        echo "  [3] Configure LAN DHCP server   client address pool"
+        echo "  [4] Change root password        local console/root password"
         echo "  [5] Reboot system"
         echo "  [6] Power off system"
         echo "  [7] Run management setup wizard"
+        echo "  [8] Update DayShield            check and apply core/UI/rootfs updates"
     fi
     echo ""
 
@@ -1490,7 +1618,13 @@ while true; do
         5) ! $LIVE_MODE && _reboot ;;
         6) ! $LIVE_MODE && _shutdown ;;
         7) ! $LIVE_MODE && _run_guided_setup ;;
-        8) $LIVE_MODE && _run_install_wizard ;;
+        8)
+            if $LIVE_MODE; then
+                _run_install_wizard
+            else
+                _update_system
+            fi
+            ;;
         9) $LIVE_MODE && _assign_interfaces && _set_lan_ip ;;
         *) ;;
     esac
