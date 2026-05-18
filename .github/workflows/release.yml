@@ -1,0 +1,216 @@
+name: Release RootFS
+
+# Triggered by a version tag push (e.g. v1.2.3) or a manual workflow dispatch.
+#
+# Independent versioning model
+# ─────────────────────────────
+# dayshield-core, dayshield-ui, and dayshield-rootfs each maintain their own
+# tag/version.  Releasing a rootfs tag publishes rootfs-vX.Y.Z.tar.zst but
+# does NOT imply any version bump in core or ui.
+#
+# Build inputs
+# ────────────
+# The rootfs artifact depends on:
+#   - this repo's scripts, config, and filesystem layout
+#   - a compiled dayshield-core binary (built from dayshield-core)
+#   - a built dayshield-ui dist (built from dayshield-ui)
+#
+# For a tag-triggered release both deps are built from their current default
+# branch.  Use workflow_dispatch inputs to pin specific refs when needed.
+#
+# Artifact
+# ────────
+# Published as a GitHub Release asset named rootfs-vX.Y.Z.tar.zst with an
+# accompanying SHA-256 checksum file.  The central manifest references this
+# asset URL for the manifest-driven updater.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing repository tag to release (e.g. v1.2.3)'
+        required: true
+        type: string
+      core_ref:
+        description: 'dayshield-core ref (branch, tag, or commit SHA) to build against'
+        required: false
+        default: 'main'
+        type: string
+      ui_ref:
+        description: 'dayshield-ui ref (branch, tag, or commit SHA) to build against'
+        required: false
+        default: 'main'
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # required to create the GitHub Release and upload assets
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+    steps:
+      # ── Resolve version ─────────────────────────────────────────────────────
+      - name: Resolve release tag and artifact name
+        id: version
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="${{ inputs.tag }}"
+          fi
+          printf 'tag=%s\n' "${TAG}"       >> "${GITHUB_OUTPUT}"
+          printf 'artifact=rootfs-%s.tar.zst\n' "${TAG}" >> "${GITHUB_OUTPUT}"
+
+      # ── Checkout sources ─────────────────────────────────────────────────────
+      - name: Checkout dayshield-rootfs
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ steps.version.outputs.tag }}
+          path: rootfs
+
+      - name: Checkout dayshield-ui
+        uses: actions/checkout@v5
+        with:
+          repository: daygle/dayshield-ui
+          ref: ${{ inputs.ui_ref || 'main' }}
+          path: dayshield-ui-src
+
+      - name: Checkout dayshield-core
+        uses: actions/checkout@v5
+        with:
+          repository: daygle/dayshield-core
+          ref: ${{ inputs.core_ref || 'main' }}
+          path: dayshield-core-src
+
+      # ── Build dayshield-ui dist ──────────────────────────────────────────────
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: dayshield-ui-src/package-lock.json
+
+      - name: Build dayshield-ui dist
+        working-directory: dayshield-ui-src
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
+      # ── Build dayshield-core binary ──────────────────────────────────────────
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # master as of 2026-05-07
+        with:
+          toolchain: "1.88.0"
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            dayshield-core-src/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('dayshield-core-src/**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Build dayshield-core binary
+        working-directory: dayshield-core-src
+        run: cargo build --release -p dayshield-core
+
+      - name: Copy binary to rootfs workspace
+        run: cp dayshield-core-src/target/release/dayshield-core rootfs/dayshield-core
+
+      # ── Build rootfs ─────────────────────────────────────────────────────────
+      - name: Install rootfs build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends mmdebstrap zstd debian-archive-keyring
+
+      - name: Build rootfs
+        working-directory: rootfs
+        run: |
+          sudo make rootfs \
+            OUTPUT="${{ steps.version.outputs.artifact }}" \
+            UI_DIR="${GITHUB_WORKSPACE}/dayshield-ui-src/dist" \
+            CORE_REPO_DIR="${GITHUB_WORKSPACE}/dayshield-core-src" \
+            UI_REPO_DIR="${GITHUB_WORKSPACE}/dayshield-ui-src" \
+            ROOTFS_REPO_DIR="${GITHUB_WORKSPACE}/rootfs"
+
+      # ── Verify ───────────────────────────────────────────────────────────────
+      - name: Verify rootfs artifact
+        working-directory: rootfs
+        run: |
+          VERIFY_DIR="$(mktemp -d)"
+          sudo tar -I zstd -C "${VERIFY_DIR}" -xf "${{ steps.version.outputs.artifact }}"
+
+          FAIL=0
+
+          echo "==> Checking /usr/local/sbin/dayshield-core"
+          if sudo test -x "${VERIFY_DIR}/usr/local/sbin/dayshield-core"; then
+            echo "  [PASS] dayshield-core is present and executable"
+          else
+            echo "  [FAIL] dayshield-core missing or not executable" >&2
+            FAIL=1
+          fi
+
+          sudo rm -rf "${VERIFY_DIR}"
+
+          if [ "${FAIL}" -ne 0 ]; then
+            exit 1
+          fi
+
+      # ── Checksum ─────────────────────────────────────────────────────────────
+      - name: Generate SHA-256 checksum
+        working-directory: rootfs
+        run: |
+          sha256sum "${{ steps.version.outputs.artifact }}" \
+            > "${{ steps.version.outputs.artifact }}.sha256"
+
+      # ── Publish GitHub Release ───────────────────────────────────────────────
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          ARTIFACT="${{ steps.version.outputs.artifact }}"
+          CORE_REF="${{ inputs.core_ref || 'main' }}"
+          UI_REF="${{ inputs.ui_ref || 'main' }}"
+
+          NOTES=$(cat <<EOF
+          ## DayShield RootFS ${TAG}
+
+          Deterministic Debian-based root filesystem for the DayShield Firewall appliance.
+
+          ### Artifacts
+          - \`${ARTIFACT}\` — compressed rootfs archive (zstd)
+          - \`${ARTIFACT}.sha256\` — SHA-256 checksum
+
+          ### Build inputs
+          - **dayshield-core ref:** \`${CORE_REF}\`
+          - **dayshield-ui ref:** \`${UI_REF}\`
+
+          ### Independent versioning
+          This rootfs release is independent of \`dayshield-core\` and \`dayshield-ui\`
+          releases. Component versions are not required to match. The central manifest
+          resolves the latest installable artifact per component for the manifest-driven
+          updater.
+
+          ### Integration
+          Pass this artifact to the \`dayshield-iso\` build pipeline:
+          \`\`\`sh
+          make -C ../dayshield-iso iso ROOTFS=/path/to/${ARTIFACT}
+          \`\`\`
+          EOF
+          )
+
+          gh release create "${TAG}" \
+            --title "rootfs ${TAG}" \
+            --notes "${NOTES}" \
+            "rootfs/${ARTIFACT}" \
+            "rootfs/${ARTIFACT}.sha256"
