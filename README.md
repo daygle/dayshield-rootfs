@@ -66,10 +66,9 @@ apt-get install mmdebstrap zstd systemd-container
 
 ## Building the RootFS
 
-The normal production path is GitHub Actions, triggered from a version tag in
-`dayshield-core`, which builds and publishes the rootfs artifact together with
-core and UI artifacts. Local rootfs builds are still useful for development,
-debugging, and installer work.
+The normal production path is GitHub Actions for this repository. `dayshield-core`,
+`dayshield-ui`, and `dayshield-rootfs` now use independent tags/versions.
+Local rootfs builds are still useful for development, debugging, and installer work.
 
 Always build the management UI first, then pass its output to the rootfs builder:
 
@@ -117,9 +116,9 @@ The build pipeline:
    systemd unit, with an installer-live guard
    (`ConditionKernelCommandLine=!installer`) so it only starts on
    installed-system boot. The build now fails fast if the binary is absent.
-   The installed appliance update path is registry-based: it downloads
-   prebuilt `core`, `ui`, and `rootfs` artifacts from GitHub Releases instead
-   of building on the appliance.
+   The installed appliance update path is registry/manifest-based: it downloads
+   prebuilt `core`, `ui`, and `rootfs` artifacts referenced by a central
+   registry manifest instead of building on the appliance.
 4. **enable-services.sh** creates `wants/` symlinks for all required services
    and masks `systemd-resolved` (replaced by unbound).
 5. **harden-ipv4.sh** keeps IPv6 disabled by default through sysctl and service
@@ -186,10 +185,31 @@ make rootfs \
 
 ## Releases
 
-Production rootfs artifacts are built automatically by the release workflow in
-`dayshield-core` when a version tag is pushed. The published artifact is
-`rootfs-vX.Y.Z.tar.zst`, and installed appliances consume it through the
-registry-based update flow.
+Rootfs releases are independent from `dayshield-core` and `dayshield-ui`
+releases. This repository publishes its own rootfs artifacts from its own
+tags/versions.
+
+The updater resolves latest installable artifacts per component (`core`, `ui`,
+`rootfs`) from a central registry manifest. Component versions are not required
+to match each other.
+
+Rootfs remains an image/staging artifact for installer and ISO workflows.
+Runtime update checks for `core`/`ui` still consume their own component entries
+from the same manifest and do not require a new rootfs tag for every core/ui
+release.
+
+### Build/release inputs
+
+Rootfs build inputs remain:
+
+- this repo's filesystem/config/scripts
+- a built `dayshield-core` binary copied to this repo root as `./dayshield-core`
+- a built `dayshield-ui/dist` passed via `UI_DIR`
+- optional repo seed paths (`CORE_REPO_DIR`, `UI_REPO_DIR`, `ROOTFS_REPO_DIR`)
+
+Releasing rootfs publishes a rootfs artifact for the rootfs tag/version; it
+does not imply synchronized version bumps in `dayshield-core` or
+`dayshield-ui`.
 
 ### Installer finalization contract (console + web)
 
