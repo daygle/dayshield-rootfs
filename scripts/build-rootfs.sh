@@ -14,6 +14,8 @@ ARCH="amd64"
 SUITE="trixie"
 OUTPUT="rootfs.tar.zst"
 MIRROR="https://deb.debian.org/debian"
+SECURITY_MIRROR="https://deb.debian.org/debian-security"
+ENABLE_SUITE_UPDATES="0"
 UI_DIR=""
 CORE_REPO_DIR=""
 UI_REPO_DIR=""
@@ -28,6 +30,10 @@ Options:
   --suite SUITE     Debian suite (default: trixie)
   --output FILE     Output file (default: rootfs.tar.zst)
   --mirror URL      Debian mirror URL (default: https://deb.debian.org/debian)
+    --security-mirror URL
+                                        Debian security mirror URL (default: https://deb.debian.org/debian-security)
+    --enable-suite-updates
+                        Include SUITE-updates source for stable-style suites (default: disabled)
   --ui-dir PATH     Built UI output directory to install into /usr/local/share/dayshield-ui (required)
     --core-repo-dir PATH   Core git repo to seed into /opt/dayshield-core
     --ui-repo-dir PATH     UI git repo to seed into /opt/dayshield-ui
@@ -40,7 +46,7 @@ EOF
 # Parse arguments
 while [ $# -gt 0 ]; do
     case "$1" in
-        --arch|--suite|--output|--mirror|--ui-dir|--core-repo-dir|--ui-repo-dir|--rootfs-repo-dir)
+        --arch|--suite|--output|--mirror|--security-mirror|--ui-dir|--core-repo-dir|--ui-repo-dir|--rootfs-repo-dir)
             if [ $# -lt 2 ] || [ -z "${2}" ] || [ "${2#--}" != "${2}" ]; then
                 printf 'ERROR: option %s requires a value\n' "$1" >&2
                 exit 1
@@ -50,12 +56,17 @@ while [ $# -gt 0 ]; do
                 --suite) SUITE="$2" ;;
                 --output) OUTPUT="$2" ;;
                 --mirror) MIRROR="$2" ;;
+                --security-mirror) SECURITY_MIRROR="$2" ;;
                 --ui-dir) UI_DIR="$2" ;;
                 --core-repo-dir) CORE_REPO_DIR="$2" ;;
                 --ui-repo-dir) UI_REPO_DIR="$2" ;;
                 --rootfs-repo-dir) ROOTFS_REPO_DIR="$2" ;;
             esac
             shift 2
+            ;;
+        --enable-suite-updates)
+            ENABLE_SUITE_UPDATES="1"
+            shift
             ;;
         --help)    usage ;;
         *)
@@ -150,11 +161,41 @@ cleanup_build() {
 }
 trap cleanup_build EXIT
 
+security_suite_enabled() {
+    case "$1" in
+        unstable|sid|testing|experimental)
+            return 1
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+}
+
+SECURITY_MIRROR_ENTRY=""
+UPDATES_MIRROR_ENTRY=""
+if security_suite_enabled "${SUITE}"; then
+    SECURITY_MIRROR_ENTRY="deb ${SECURITY_MIRROR} ${SUITE}-security main"
+    if [ "${ENABLE_SUITE_UPDATES}" = "1" ]; then
+        UPDATES_MIRROR_ENTRY="deb ${MIRROR} ${SUITE}-updates main"
+    fi
+fi
+
 printf '==> Building DayShield RootFS\n'
 printf '    Architecture : %s\n' "${ARCH}"
 printf '    Suite        : %s\n' "${SUITE}"
 printf '    Output       : %s\n' "${OUTPUT}"
 printf '    Mirror       : %s\n' "${MIRROR}"
+if [ -n "${SECURITY_MIRROR_ENTRY}" ]; then
+    printf '    Security     : %s (%s-security)\n' "${SECURITY_MIRROR}" "${SUITE}"
+else
+    printf '    Security     : disabled for suite %s\n' "${SUITE}"
+fi
+if [ -n "${UPDATES_MIRROR_ENTRY}" ]; then
+    printf '    Updates      : enabled (%s-updates from %s)\n' "${SUITE}" "${MIRROR}"
+else
+    printf '    Updates      : disabled\n'
+fi
 printf '    Packages     : %s\n' "${PACKAGES}"
 printf '    UI dir       : %s\n' "${UI_DIR:-<none>}"
 printf '    Core repo    : %s\n' "${CORE_REPO_DIR:-<none>}"
@@ -164,16 +205,43 @@ printf '\n'
 
 # ── 1. Run mmdebstrap ────────────────────────────────────────────────────────
 printf '==> Step 1: mmdebstrap\n'
-mmdebstrap \
-    --arch="${ARCH}" \
-    --variant=minbase \
-    --include="${PACKAGES}" \
-    --aptopt='Acquire::Languages=none' \
-    --aptopt='Acquire::Retries=0' \
-    --aptopt='Acquire::http::Timeout=10' \
-    "${SUITE}" \
-    "${ROOTFS_DIR}" \
-    "${MIRROR}"
+if [ -n "${SECURITY_MIRROR_ENTRY}" ] && [ -n "${UPDATES_MIRROR_ENTRY}" ]; then
+    mmdebstrap \
+        --arch="${ARCH}" \
+        --variant=minbase \
+        --include="${PACKAGES}" \
+        --aptopt='Acquire::Languages=none' \
+        --aptopt='Acquire::Retries=0' \
+        --aptopt='Acquire::http::Timeout=10' \
+        "${SUITE}" \
+        "${ROOTFS_DIR}" \
+        "${MIRROR}" \
+        "${SECURITY_MIRROR_ENTRY}" \
+        "${UPDATES_MIRROR_ENTRY}"
+elif [ -n "${SECURITY_MIRROR_ENTRY}" ]; then
+    mmdebstrap \
+        --arch="${ARCH}" \
+        --variant=minbase \
+        --include="${PACKAGES}" \
+        --aptopt='Acquire::Languages=none' \
+        --aptopt='Acquire::Retries=0' \
+        --aptopt='Acquire::http::Timeout=10' \
+        "${SUITE}" \
+        "${ROOTFS_DIR}" \
+        "${MIRROR}" \
+        "${SECURITY_MIRROR_ENTRY}"
+else
+    mmdebstrap \
+        --arch="${ARCH}" \
+        --variant=minbase \
+        --include="${PACKAGES}" \
+        --aptopt='Acquire::Languages=none' \
+        --aptopt='Acquire::Retries=0' \
+        --aptopt='Acquire::http::Timeout=10' \
+        "${SUITE}" \
+        "${ROOTFS_DIR}" \
+        "${MIRROR}"
+fi
 
 # ── 2. Run chroot-setup.sh ───────────────────────────────────────────────────
 printf '==> Step 2: chroot-setup\n'

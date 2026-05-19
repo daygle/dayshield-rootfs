@@ -44,6 +44,11 @@ on:
         required: false
         default: 'main'
         type: string
+      enable_suite_updates:
+        description: 'Include SUITE-updates in this build (default: false)'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   release:
@@ -135,8 +140,14 @@ jobs:
       - name: Build rootfs
         working-directory: rootfs
         run: |
+          ENABLE_SUITE_UPDATES=0
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.enable_suite_updates }}" = "true" ]; then
+            ENABLE_SUITE_UPDATES=1
+          fi
+
           sudo make rootfs \
             OUTPUT="${{ steps.version.outputs.artifact }}" \
+            ENABLE_SUITE_UPDATES="${ENABLE_SUITE_UPDATES}" \
             UI_DIR="${GITHUB_WORKSPACE}/dayshield-ui-src/dist" \
             CORE_REPO_DIR="${GITHUB_WORKSPACE}/dayshield-core-src" \
             UI_REPO_DIR="${GITHUB_WORKSPACE}/dayshield-ui-src" \

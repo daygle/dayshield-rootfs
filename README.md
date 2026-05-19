@@ -95,10 +95,21 @@ Or invoke the script directly:
     --suite trixie \
     --output rootfs.tar.zst \
     --mirror https://deb.debian.org/debian \
+   --security-mirror https://deb.debian.org/debian-security \
    --ui-dir ../dayshield-ui/dist \
    --core-repo-dir ../dayshield-core \
    --ui-repo-dir ../dayshield-ui \
    --rootfs-repo-dir ../dayshield-rootfs
+```
+
+By default, the builder includes `${SUITE}-security` for stable-style suites
+and keeps `${SUITE}-updates` disabled to minimize package drift. For an
+exceptional release that needs stable updates, opt in explicitly:
+
+```sh
+make rootfs \
+   ENABLE_SUITE_UPDATES=1 \
+   UI_DIR=../dayshield-ui/dist
 ```
 
 The build pipeline:
@@ -106,7 +117,11 @@ The build pipeline:
 1. **mmdebstrap** bootstraps a minimal Debian `trixie` root with the
    packages listed in `config/packages.txt`. The build directory is made
    traversable for the `_apt` sandbox user so package downloads stay within
-   APT's default privilege boundary.
+   APT's default privilege boundary. For stable-style suites, the builder also
+   adds an explicit `${SUITE}-security` source from
+   `https://deb.debian.org/debian-security` so released rootfs artifacts can
+   include Debian security fixes when rebuilt. `${SUITE}-updates` remains
+   disabled by default and can be enabled only via explicit opt-in.
 2. **chroot-setup.sh** sets the hostname, writes a placeholder `/etc/fstab`,
    creates the DayShield directory tree, installs all config files, and
    configures systemd-networkd (matching both legacy `eth0` and predictable
@@ -226,13 +241,24 @@ The workflow will:
 #### Manual release (workflow_dispatch)
 
 To build and release from an existing tag while pinning specific upstream
-component refs, trigger the workflow manually from the GitHub Actions UI or CLI:
+component refs, trigger the workflow manually from the GitHub Actions UI or CLI.
+
+GitHub Actions UI steps:
+1. Open **Actions** in `daygle/dayshield-rootfs`.
+2. Select **Release RootFS**.
+3. Click **Run workflow**.
+4. Enter `tag`, optional `core_ref`/`ui_ref`, and set
+    `enable_suite_updates=true` only for exceptional releases.
+5. Click **Run workflow** to start the release job.
+
+GitHub CLI example:
 
 ```sh
 gh workflow run release.yml \
   -f tag=v1.2.3 \
   -f core_ref=v2.0.0 \
-  -f ui_ref=v0.9.5
+   -f ui_ref=v0.9.5 \
+   -f enable_suite_updates=false
 ```
 
 | Input | Required | Default | Description |
@@ -240,6 +266,10 @@ gh workflow run release.yml \
 | `tag` | yes | — | Existing repo tag to release (e.g. `v1.2.3`) |
 | `core_ref` | no | `main` | `dayshield-core` branch, tag, or SHA to build against |
 | `ui_ref` | no | `main` | `dayshield-ui` branch, tag, or SHA to build against |
+| `enable_suite_updates` | no | `false` | When `true`, include `${SUITE}-updates` in this rootfs build |
+
+`enable_suite_updates=false` keeps the default release policy: include Debian
+security updates while leaving `${SUITE}-updates` disabled.
 
 #### Required permissions
 

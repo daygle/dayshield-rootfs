@@ -6,6 +6,8 @@ ARCH         ?= amd64
 SUITE        ?= trixie
 OUTPUT       ?= rootfs.tar.zst
 MIRROR       ?= https://deb.debian.org/debian
+SECURITY_MIRROR ?= https://deb.debian.org/debian-security
+ENABLE_SUITE_UPDATES ?= 0
 UI_DIR       ?=
 CORE_REPO_DIR ?=
 UI_REPO_DIR   ?=
@@ -24,6 +26,8 @@ rootfs:
 		--suite "$(SUITE)"  \
 		--output "$(OUTPUT)" \
 		--mirror "$(MIRROR)" \
+		--security-mirror "$(SECURITY_MIRROR)" \
+		$(if $(filter 1 true yes TRUE YES,$(ENABLE_SUITE_UPDATES)),--enable-suite-updates) \
 		$(if $(UI_DIR),--ui-dir "$(UI_DIR)") \
 		$(if $(CORE_REPO_DIR),--core-repo-dir "$(CORE_REPO_DIR)") \
 		$(if $(UI_REPO_DIR),--ui-repo-dir "$(UI_REPO_DIR)") \
