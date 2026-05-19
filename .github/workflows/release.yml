@@ -134,18 +134,18 @@ jobs:
       # ── Build rootfs ─────────────────────────────────────────────────────────
       - name: Install rootfs build dependencies
         run: |
-          # Refresh Debian archive keys from Debian itself so trixie-security
-          # signatures validate reliably on Ubuntu runners.
+          # Bootstrap Debian archive keys from bookworm first, then use them
+          # to validate trixie-security during mmdebstrap.
           sudo tee /etc/apt/sources.list.d/debian-keyring.list >/dev/null <<'EOF'
-          deb http://deb.debian.org/debian trixie main
+          deb http://deb.debian.org/debian bookworm main
           EOF
           sudo tee /etc/apt/preferences.d/debian-keyring.pref >/dev/null <<'EOF'
           Package: *
-          Pin: release n=trixie
+          Pin: release n=bookworm
           Pin-Priority: 50
 
           Package: debian-archive-keyring
-          Pin: release n=trixie
+          Pin: release n=bookworm
           Pin-Priority: 990
           EOF
 
