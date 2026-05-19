@@ -203,7 +203,8 @@ jobs:
           updater.
 
           ### Integration
-          Pass this artifact to the \`dayshield-iso\` build pipeline:
+          This workflow does not build ISO images. Build ISO separately in the
+          \`dayshield-iso\` pipeline and pass this artifact as input:
           \`\`\`sh
           make -C ../dayshield-iso iso ROOTFS=/path/to/${ARTIFACT}
           \`\`\`
