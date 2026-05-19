@@ -541,7 +541,7 @@ _print_header() {
     _wide_hr
     printf "  DayShield Console  v%s%s\n" "${DAYSHIELD_VERSION}" "${mode_line}"
     _kv "Host" "${hostname}"
-    _kv "Web UI" "https://<LAN-IP>:8443/"
+    # Web UI link will be shown in Status section below
     _wide_hr
     printf "  Interfaces\n"
     printf "  %-12s %-6s %-6s %-18s %s\n" "Name" "Role" "State" "IPv4" "IPv6"
@@ -593,9 +593,6 @@ _print_header() {
         lan_ip4="${lan_cidr%%/*}"
         _kv "LAN ${LAN_IFACE}" "${lan_cidr:-no address}"
     fi
-    if [[ -z "${WAN_IFACE}" && -z "${LAN_IFACE}" ]]; then
-        _kv "Interfaces" "not assigned"
-    fi
     echo ""
 
     if $LIVE_MODE; then
@@ -620,9 +617,6 @@ _print_header() {
         _kv "Management" "https://${lan_ip4}:8443/"
         echo ""
     fi
-
-    printf "  SSH Host Key Fingerprints\n"
-    _ssh_fingerprints
     _wide_hr
     echo ""
 }
