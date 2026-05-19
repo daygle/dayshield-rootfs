@@ -1292,13 +1292,13 @@ _inst_install_bootloader() {
 #!/bin/sh
 set -e
 cat <<'GRUB_EOF'
-menuentry 'DayShield slot A' --id 'dayshield-a' {
+menuentry 'DayShield Primary System' --id 'dayshield-a' {
     search --no-floppy --fs-uuid --set=root ${boot_uuid}
     linux /dayshield/slot-a/vmlinuz root=UUID=${root_a_uuid} ro quiet splash
     initrd /dayshield/slot-a/initrd.img
 }
 
-menuentry 'DayShield slot B' --id 'dayshield-b' {
+menuentry 'DayShield Secondary System' --id 'dayshield-b' {
     search --no-floppy --fs-uuid --set=root ${boot_uuid}
     linux /dayshield/slot-b/vmlinuz root=UUID=${root_b_uuid} ro quiet splash
     initrd /dayshield/slot-b/initrd.img
