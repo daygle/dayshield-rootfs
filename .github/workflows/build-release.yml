@@ -19,9 +19,9 @@ on:
         required: false
         type: string
       enable_suite_updates:
-        description: 'Include SUITE-updates in this build (default: false)'
+        description: 'Enable SUITE updates when building the rootfs (default: true)'
         required: false
-        default: false
+        default: true
         type: boolean
 
 jobs:
