@@ -73,26 +73,14 @@ jobs:
 
       - name: Install rootfs build dependencies
         run: |
-          # Bootstrap Debian archive keys from bookworm first, then use them
-          # to validate trixie-security during mmdebstrap.
-          sudo tee /etc/apt/sources.list.d/debian-keyring.list >/dev/null <<'EOF'
-          deb http://deb.debian.org/debian bookworm main
-          EOF
-          sudo tee /etc/apt/preferences.d/debian-keyring.pref >/dev/null <<'EOF'
-          Package: *
-          Pin: release n=bookworm
-          Pin-Priority: 50
+          # Bootstrap current Debian archive keys without depending on the
+          # runner already trusting Debian apt metadata.
+          curl -fsSL \
+            -o /tmp/debian-archive-keyring_2025.1_all.deb \
+            https://ftp.debian.org/debian/pool/main/d/debian-archive-keyring/debian-archive-keyring_2025.1_all.deb
+          sudo dpkg -i /tmp/debian-archive-keyring_2025.1_all.deb
+          rm -f /tmp/debian-archive-keyring_2025.1_all.deb
 
-          Package: debian-archive-keyring
-          Pin: release n=bookworm
-          Pin-Priority: 990
-          EOF
-
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends debian-archive-keyring
-
-          sudo rm -f /etc/apt/sources.list.d/debian-keyring.list
-          sudo rm -f /etc/apt/preferences.d/debian-keyring.pref
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends mmdebstrap zstd debian-archive-keyring
 
