@@ -45,6 +45,12 @@ LAN_DHCP_LEASE="12h"
 FIRST_SETUP_DONE=""
 ORIG_CONSOLE_LOGLEVEL=""
 
+# Associative arrays populated from core config JSON (/etc/dayshield/config/config.json)
+declare -A _CORE_IFACE_ROLE=()
+declare -A _CORE_IFACE_DESC=()
+_CORE_CONFIG_LOADED=0
+DAYSHIELD_CORE_CONFIG="/etc/dayshield/config/config.json"
+
 _is_valid_iface_name() {
     [[ "$1" =~ ^[a-zA-Z0-9_.-]+$ ]]
 }
@@ -201,8 +207,86 @@ _iface_ip6() {
         | awk '/inet6 / {print $2}' | paste -sd ', ' -
 }
 
+# ---------------------------------------------------------------------------
+# Core config helpers — read interface role/description from config.json
+# ---------------------------------------------------------------------------
+_load_core_ifaces() {
+    [[ "${_CORE_CONFIG_LOADED}" -eq 1 ]] && return
+    _CORE_CONFIG_LOADED=1
+    [[ -f "${DAYSHIELD_CORE_CONFIG}" ]] || return
+    command -v python3 >/dev/null 2>&1 || return
+    local out
+    out="$(python3 -c "
+import json, sys
+try:
+    with open('${DAYSHIELD_CORE_CONFIG}') as f:
+        data = json.load(f)
+    for iface in data.get('interfaces', []):
+        name = iface.get('name', '').strip()
+        if not name:
+            continue
+        role = 'WAN' if iface.get('wan_mode') else 'LAN'
+        desc = (iface.get('description') or '').strip()
+        print(name + chr(9) + role + chr(9) + desc)
+except Exception:
+    pass
+" 2>/dev/null)"
+    while IFS=$'\t' read -r name role desc; do
+        [[ -n "${name}" ]] || continue
+        _CORE_IFACE_ROLE["${name}"]="${role}"
+        _CORE_IFACE_DESC["${name}"]="${desc}"
+    done <<< "${out}"
+}
+
+# Merge core config values into state variables (only fills blanks left by console-state).
+_load_core_state() {
+    [[ -f "${DAYSHIELD_CORE_CONFIG}" ]] || return
+    command -v python3 >/dev/null 2>&1 || return
+    local out
+    out="$(python3 -c "
+import json, sys
+try:
+    with open('${DAYSHIELD_CORE_CONFIG}') as f:
+        data = json.load(f)
+    ifaces = data.get('interfaces', [])
+    wan = next((i for i in ifaces if i.get('wan_mode')), None)
+    lan = next((i for i in ifaces if not i.get('wan_mode') and i.get('enabled', True)), None)
+    if wan:
+        print('WAN_IFACE=' + wan.get('name', ''))
+        mode = wan.get('wan_mode') or ''
+        print('WAN_TYPE=' + ('pppoe' if str(mode).lower() in ('pppoe', 'ppp_oe') else 'dhcp'))
+    if lan:
+        print('LAN_IFACE=' + lan.get('name', ''))
+        addrs = lan.get('addresses', [])
+        if addrs:
+            parts = str(addrs[0]).split('/')
+            print('LAN_IP=' + parts[0])
+            if len(parts) > 1:
+                print('LAN_PREFIX=' + parts[1])
+except Exception:
+    pass
+" 2>/dev/null)"
+    while IFS='=' read -r key value; do
+        [[ -n "${key}" ]] || continue
+        case "${key}" in
+            WAN_IFACE)  [[ -z "${WAN_IFACE}" ]]  && WAN_IFACE="${value}" ;;
+            WAN_TYPE)   [[ "${WAN_TYPE}" == "dhcp" ]] && WAN_TYPE="${value}" ;;
+            LAN_IFACE)  [[ -z "${LAN_IFACE}" ]]  && LAN_IFACE="${value}" ;;
+            LAN_IP)     [[ -z "${LAN_IP}" ]]     && LAN_IP="${value}" ;;
+            LAN_PREFIX) [[ -z "${LAN_PREFIX}" ]] && LAN_PREFIX="${value}" ;;
+        esac
+    done <<< "${out}"
+}
+
 _iface_role() {
     local iface="$1"
+    _load_core_ifaces
+    # Core config is authoritative
+    if [[ -v _CORE_IFACE_ROLE["${iface}"] ]]; then
+        printf '%s' "${_CORE_IFACE_ROLE[${iface}]}"
+        return
+    fi
+    # Fall back to console-state
     if [[ -n "${WAN_IFACE}" && "${iface}" == "${WAN_IFACE}" ]]; then
         printf 'WAN'
     elif [[ "${WAN_TYPE}" == "pppoe" && "${iface}" == "ppp0" ]]; then
@@ -212,6 +296,12 @@ _iface_role() {
     else
         printf '-'
     fi
+}
+
+_iface_desc() {
+    local iface="$1"
+    _load_core_ifaces
+    printf '%s' "${_CORE_IFACE_DESC[${iface}]:-}"
 }
 
 _live_web_ifaces_with_ip() {
@@ -544,18 +634,19 @@ _print_header() {
     # Web UI link will be shown in Status section below
     _wide_hr
     printf "  Interfaces\n"
-    printf "  %-12s %-6s %-6s %-18s %s\n" "Name" "Role" "State" "IPv4" "IPv6"
+    printf "  %-12s %-6s %-6s %-18s %-20s %s\n" "Name" "Role" "State" "IPv4" "IPv6" "Description"
     _hr
 
     local printed_iface=0
     while IFS= read -r iface; do
-        local ip4 ip6 role state
+        local ip4 ip6 role state desc
         ip4="$(_iface_ip4 "${iface}")"
         ip6="$(_iface_ip6 "${iface}")"
         role="$(_iface_role "${iface}")"
         state="$(_iface_state "${iface}")"
-        printf "  %-12s %-6s %-6s %-18s %s\n" \
-            "${iface}" "${role}" "${state}" "${ip4:-"-"}" "${ip6:-"-"}"
+        desc="$(_iface_desc "${iface}")"
+        printf "  %-12s %-6s %-6s %-18s %-20s %s\n" \
+            "${iface}" "${role}" "${state}" "${ip4:-"-"}" "${ip6:-"-"}" "${desc}"
         printed_iface=1
     done < <(_list_ifaces)
     if [[ "${WAN_TYPE}" == "pppoe" ]] && ip link show ppp0 >/dev/null 2>&1; then
@@ -563,8 +654,8 @@ _print_header() {
         ppp4="$(_iface_ip4 ppp0)"
         ppp6="$(_iface_ip6 ppp0)"
         ppp_state="$(_iface_state ppp0)"
-        printf "  %-12s %-6s %-6s %-18s %s\n" \
-            "ppp0" "WAN" "${ppp_state}" "${ppp4:-"-"}" "${ppp6:-"-"}"
+        printf "  %-12s %-6s %-6s %-18s %-20s %s\n" \
+            "ppp0" "WAN" "${ppp_state}" "${ppp4:-"-"}" "${ppp6:-"-"}" ""
         printed_iface=1
     fi
     [[ "${printed_iface}" -eq 0 ]] && printf "  No network interfaces detected.\n"
@@ -1589,6 +1680,7 @@ _run_install_wizard() {
 # Main loop
 # ---------------------------------------------------------------------------
 _load_state
+_load_core_state
 _console_quiet_enter
 trap _console_quiet_exit EXIT INT TERM
 
