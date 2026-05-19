@@ -27,12 +27,19 @@ if grep -qw installer /proc/cmdline 2>/dev/null; then
     return
 fi
 
-# Restrict to local console-style TTYs, not remote SSH pts sessions.
+# Allow local console TTYs and remote SSH (pts) sessions.
+# Exclude non-interactive contexts (e.g. scp, sftp, rsync).
 TTY_PATH="$(tty 2>/dev/null || true)"
 case "${TTY_PATH}" in
-    /dev/tty1|/dev/ttyS0|/dev/console) ;;
+    /dev/tty[0-9]*|/dev/ttyS*|/dev/console|/dev/pts/*) ;;
     *) return ;;
 esac
+
+# For SSH sessions, skip the menu when a command was passed directly
+# (e.g. scp, rsync, git) — only show for interactive login shells.
+if [ -n "${SSH_CONNECTION:-}" ] && [ -n "${SSH_ORIGINAL_COMMAND:-}" ]; then
+    return
+fi
 
 export DAYSHIELD_CONSOLE_RUNNING=1
 export DAYSHIELD_CONSOLE_MODE=login

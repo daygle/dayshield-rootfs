@@ -1609,22 +1609,22 @@ while true; do
     echo "  Actions"
     _hr
     if [[ "${CONSOLE_MODE}" == "boot" ]]; then
-        echo "  [0] Open shell                  local rescue shell"
+        echo "  [0] Open shell"
     else
-        echo "  [0] Logout                      return to login prompt"
+        echo "  [0] Logout"
     fi
     if $LIVE_MODE; then
-        echo "  [8] Install DayShield           run disk installation wizard"
-        echo "  [9] Setup Web Installer LAN     assign interface and LAN IP"
+        echo "  [8] Install DayShield"
+        echo "  [9] Setup Web Installer LAN"
     else
-        echo "  [1] Assign interfaces           choose WAN and LAN adapters"
-        echo "  [2] Set LAN IP address          configure LAN gateway address"
-        echo "  [3] Configure LAN DHCP server   client address pool"
-        echo "  [4] Change root password        local console/root password"
+        echo "  [1] Assign interfaces"
+        echo "  [2] Set LAN IP address"
+        echo "  [3] Configure LAN DHCP server"
+        echo "  [4] Change root password"
         echo "  [5] Reboot system"
         echo "  [6] Power off system"
         echo "  [7] Run management setup wizard"
-        echo "  [8] Update DayShield            check and apply core/UI/rootfs updates"
+        echo "  [8] Update DayShield"
     fi
     echo ""
 
