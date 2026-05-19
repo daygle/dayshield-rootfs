@@ -1,29 +1,5 @@
 name: Release RootFS
 
-# Triggered by a version tag push (e.g. v1.2.3) or a manual workflow dispatch.
-#
-# Independent versioning model
-# ─────────────────────────────
-# dayshield-core, dayshield-ui, and dayshield-rootfs each maintain their own
-# tag/version.  Releasing a rootfs tag publishes rootfs-vX.Y.Z.tar.zst but
-# does NOT imply any version bump in core or ui.
-#
-# Build inputs
-# ────────────
-# The rootfs artifact depends on:
-#   - this repo's scripts, config, and filesystem layout
-#   - a compiled dayshield-core binary (built from dayshield-core)
-#   - a built dayshield-ui dist (built from dayshield-ui)
-#
-# For a tag-triggered release both deps are built from their current default
-# branch.  Use workflow_dispatch inputs to pin specific refs when needed.
-#
-# Artifact
-# ────────
-# Published as a GitHub Release asset named rootfs-vX.Y.Z.tar.zst with an
-# accompanying SHA-256 checksum file.  The central manifest references this
-# asset URL for the manifest-driven updater.
-
 on:
   push:
     tags:
@@ -35,14 +11,12 @@ on:
         required: true
         type: string
       core_ref:
-        description: 'dayshield-core ref (branch, tag, or commit SHA) to build against'
+        description: 'Override dayshield-core tag (optional)'
         required: false
-        default: 'main'
         type: string
       ui_ref:
-        description: 'dayshield-ui ref (branch, tag, or commit SHA) to build against'
+        description: 'Override dayshield-ui tag (optional)'
         required: false
-        default: 'main'
         type: string
       enable_suite_updates:
         description: 'Include SUITE-updates in this build (default: false)'
@@ -54,12 +28,14 @@ jobs:
   release:
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # required to create the GitHub Release and upload assets
+      contents: write
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
     steps:
-      # ── Resolve version ─────────────────────────────────────────────────────
+      # ─────────────────────────────────────────────────────────────────────────
+      # Resolve rootfs release tag
+      # ─────────────────────────────────────────────────────────────────────────
       - name: Resolve release tag and artifact name
         id: version
         run: |
@@ -68,10 +44,33 @@ jobs:
           else
             TAG="${{ inputs.tag }}"
           fi
-          printf 'tag=%s\n' "${TAG}"       >> "${GITHUB_OUTPUT}"
+          printf 'tag=%s\n' "${TAG}" >> "${GITHUB_OUTPUT}"
           printf 'artifact=rootfs-%s.tar.zst\n' "${TAG}" >> "${GITHUB_OUTPUT}"
 
-      # ── Checkout sources ─────────────────────────────────────────────────────
+      # ─────────────────────────────────────────────────────────────────────────
+      # Auto-detect latest tags for core and ui
+      # ─────────────────────────────────────────────────────────────────────────
+      - name: Resolve latest core/ui tags
+        id: tags
+        run: |
+          CORE_TAG=$(git ls-remote --tags https://github.com/daygle/dayshield-core.git \
+            | awk -F/ '{print $3}' \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+            | sort -V \
+            | tail -n1)
+
+          UI_TAG=$(git ls-remote --tags https://github.com/daygle/dayshield-ui.git \
+            | awk -F/ '{print $3}' \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+            | sort -V \
+            | tail -n1)
+
+          echo "core_tag=${CORE_TAG}" >> $GITHUB_OUTPUT
+          echo "ui_tag=${UI_TAG}" >> $GITHUB_OUTPUT
+
+      # ─────────────────────────────────────────────────────────────────────────
+      # Checkout sources
+      # ─────────────────────────────────────────────────────────────────────────
       - name: Checkout dayshield-rootfs
         uses: actions/checkout@v5
         with:
@@ -82,17 +81,19 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: daygle/dayshield-ui
-          ref: ${{ inputs.ui_ref || 'main' }}
+          ref: ${{ inputs.ui_ref || steps.tags.outputs.ui_tag }}
           path: dayshield-ui-src
 
       - name: Checkout dayshield-core
         uses: actions/checkout@v5
         with:
           repository: daygle/dayshield-core
-          ref: ${{ inputs.core_ref || 'main' }}
+          ref: ${{ inputs.core_ref || steps.tags.outputs.core_tag }}
           path: dayshield-core-src
 
-      # ── Build dayshield-ui dist ──────────────────────────────────────────────
+      # ─────────────────────────────────────────────────────────────────────────
+      # Build UI
+      # ─────────────────────────────────────────────────────────────────────────
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -106,9 +107,11 @@ jobs:
           npm ci --no-audit --no-fund
           npm run build
 
-      # ── Build dayshield-core binary ──────────────────────────────────────────
+      # ─────────────────────────────────────────────────────────────────────────
+      # Build core
+      # ─────────────────────────────────────────────────────────────────────────
       - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # master as of 2026-05-07
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
         with:
           toolchain: "1.88.0"
 
@@ -131,11 +134,11 @@ jobs:
       - name: Copy binary to rootfs workspace
         run: cp dayshield-core-src/target/release/dayshield-core rootfs/dayshield-core
 
-      # ── Build rootfs ─────────────────────────────────────────────────────────
+      # ─────────────────────────────────────────────────────────────────────────
+      # Build rootfs
+      # ─────────────────────────────────────────────────────────────────────────
       - name: Install rootfs build dependencies
         run: |
-          # Bootstrap current Debian archive keys without depending on the
-          # runner already trusting Debian apt metadata.
           curl -fsSL \
             -o /tmp/debian-archive-keyring_2025.1_all.deb \
             https://ftp.debian.org/debian/pool/main/d/debian-archive-keyring/debian-archive-keyring_2025.1_all.deb
@@ -161,7 +164,9 @@ jobs:
             UI_REPO_DIR="${GITHUB_WORKSPACE}/dayshield-ui-src" \
             ROOTFS_REPO_DIR="${GITHUB_WORKSPACE}/rootfs"
 
-      # ── Verify ───────────────────────────────────────────────────────────────
+      # ─────────────────────────────────────────────────────────────────────────
+      # Verify
+      # ─────────────────────────────────────────────────────────────────────────
       - name: Verify rootfs artifact
         working-directory: rootfs
         run: |
@@ -184,14 +189,18 @@ jobs:
             exit 1
           fi
 
-      # ── Checksum ─────────────────────────────────────────────────────────────
+      # ─────────────────────────────────────────────────────────────────────────
+      # Checksum
+      # ─────────────────────────────────────────────────────────────────────────
       - name: Generate SHA-256 checksum
         working-directory: rootfs
         run: |
           sha256sum "${{ steps.version.outputs.artifact }}" \
             > "${{ steps.version.outputs.artifact }}.sha256"
 
-      # ── Publish GitHub Release ───────────────────────────────────────────────
+      # ─────────────────────────────────────────────────────────────────────────
+      # Publish GitHub Release
+      # ─────────────────────────────────────────────────────────────────────────
       - name: Create GitHub Release
         working-directory: rootfs
         env:
@@ -199,8 +208,8 @@ jobs:
         run: |
           TAG="${{ steps.version.outputs.tag }}"
           ARTIFACT="${{ steps.version.outputs.artifact }}"
-          CORE_REF="${{ inputs.core_ref || 'main' }}"
-          UI_REF="${{ inputs.ui_ref || 'main' }}"
+          CORE_REF="${{ inputs.core_ref || steps.tags.outputs.core_tag }}"
+          UI_REF="${{ inputs.ui_ref || steps.tags.outputs.ui_tag }}"
 
           NOTES=$(cat <<EOF
           ## DayShield RootFS ${TAG}
@@ -208,22 +217,18 @@ jobs:
           Deterministic Debian-based root filesystem for the DayShield Firewall appliance.
 
           ### Artifacts
-          - \`${ARTIFACT}\` — compressed rootfs archive (zstd)
-          - \`${ARTIFACT}.sha256\` — SHA-256 checksum
+          - \`${ARTIFACT}\`
+          - \`${ARTIFACT}.sha256\`
 
           ### Build inputs
-          - **dayshield-core ref:** \`${CORE_REF}\`
-          - **dayshield-ui ref:** \`${UI_REF}\`
+          - **dayshield-core tag:** \`${CORE_REF}\`
+          - **dayshield-ui tag:** \`${UI_REF}\`
 
           ### Independent versioning
-          This rootfs release is independent of \`dayshield-core\` and \`dayshield-ui\`
-          releases. Component versions are not required to match. The central manifest
-          resolves the latest installable artifact per component for the manifest-driven
-          updater.
+          RootFS versioning is independent of core and UI.
 
           ### Integration
-          This workflow does not build ISO images. Build ISO separately in the
-          \`dayshield-iso\` pipeline and pass this artifact as input:
+          Use this rootfs when building the ISO:
           \`\`\`sh
           make -C ../dayshield-iso iso ROOTFS=/path/to/${ARTIFACT}
           \`\`\`
