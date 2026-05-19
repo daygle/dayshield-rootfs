@@ -151,9 +151,9 @@ jobs:
       - name: Build rootfs
         working-directory: rootfs
         run: |
-          ENABLE_SUITE_UPDATES=0
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.enable_suite_updates }}" = "true" ]; then
-            ENABLE_SUITE_UPDATES=1
+          ENABLE_SUITE_UPDATES=1
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.enable_suite_updates }}" != "true" ]; then
+            ENABLE_SUITE_UPDATES=0
           fi
 
           sudo make rootfs \
