@@ -7,19 +7,19 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing repository tag to release (e.g. v1.2.3)'
+        description: 'Release Tag (e.g. v1.0.0)'
         required: true
         type: string
       core_ref:
-        description: 'Override dayshield-core tag (optional)'
+        description: 'Override dayshield-core Tag (Optional)'
         required: false
         type: string
       ui_ref:
-        description: 'Override dayshield-ui tag (optional)'
+        description: 'Override dayshield-ui Tag (Optional)'
         required: false
         type: string
       enable_suite_updates:
-        description: 'Enable SUITE updates when building the rootfs (default: true)'
+        description: 'Enable Suite Updates'
         required: false
         default: true
         type: boolean
