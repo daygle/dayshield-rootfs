@@ -69,14 +69,15 @@ EOF
 mkdir -p "${ROOTFS_DIR}/etc/systemd/system"
 ln -sf /dev/null "${ROOTFS_DIR}/etc/systemd/system/unbound-resolvconf.service"
 
-# Kea DHCP should only start when a concrete config exists. This prevents
-# boot-time failures on systems where the package default unit is enabled but
-# /etc/dayshield/kea-dhcp4.conf has not been written yet.
+# Kea DHCP should only start when the packaged config path it actually reads
+# exists. DayShield keeps /etc/dayshield/*.conf as canonical, but the distro
+# Kea units still load /etc/kea/*.conf and will fail hard if the compatibility
+# file is missing.
 mkdir -p "${ROOTFS_DIR}/etc/systemd/system/kea-dhcp4-server.service.d"
 cat > "${ROOTFS_DIR}/etc/systemd/system/kea-dhcp4-server.service.d/dayshield-guard.conf" <<'EOF'
 [Unit]
 ConditionKernelCommandLine=!installer
-ConditionPathExists=/etc/dayshield/kea-dhcp4.conf
+ConditionPathExists=/etc/kea/kea-dhcp4.conf
 
 [Service]
 ConfigurationDirectoryMode=750
@@ -86,7 +87,7 @@ mkdir -p "${ROOTFS_DIR}/etc/systemd/system/kea-dhcp6-server.service.d"
 cat > "${ROOTFS_DIR}/etc/systemd/system/kea-dhcp6-server.service.d/dayshield-guard.conf" <<'EOF'
 [Unit]
 ConditionKernelCommandLine=!installer
-ConditionPathExists=/etc/dayshield/kea-dhcp6.conf
+ConditionPathExists=/etc/kea/kea-dhcp6.conf
 
 [Service]
 ConfigurationDirectoryMode=750
