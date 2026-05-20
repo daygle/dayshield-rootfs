@@ -157,7 +157,7 @@ fi
 
 INSTALLER_FINALIZE="${ROOTFS_DIR}/usr/local/lib/dayshield/installer-finalize.sh"
 if [ -f "${INSTALLER_FINALIZE}" ] && \
-   grep -q 'cp "${target}/etc/dayshield/kea-dhcp4.conf" "${target}/etc/kea/kea-dhcp4.conf"' "${INSTALLER_FINALIZE}"; then
+   grep -Eq 'cp[[:space:]]+.*etc/dayshield/kea-dhcp4\.conf.*etc/kea/kea-dhcp4\.conf' "${INSTALLER_FINALIZE}"; then
     ok "installer finalization mirrors Kea DHCPv4 config to packaged path"
 else
     fail "installer finalization does not mirror /etc/dayshield/kea-dhcp4.conf to /etc/kea/kea-dhcp4.conf"
@@ -165,7 +165,9 @@ fi
 
 CONSOLE_WIZARD="${ROOTFS_DIR}/usr/local/lib/dayshield/console-wizard.sh"
 if [ -f "${CONSOLE_WIZARD}" ] && \
-   grep -q 'cp "${kea_conf}" "${kea_compat_conf}"' "${CONSOLE_WIZARD}"; then
+   grep -q '/etc/dayshield/kea-dhcp4.conf' "${CONSOLE_WIZARD}" && \
+   grep -q '/etc/kea/kea-dhcp4.conf' "${CONSOLE_WIZARD}" && \
+   grep -Eq 'cp[[:space:]]+.*kea_conf.*kea_compat_conf' "${CONSOLE_WIZARD}"; then
     ok "console wizard mirrors Kea DHCPv4 config to packaged path"
 else
     fail "console wizard does not mirror /etc/dayshield/kea-dhcp4.conf to /etc/kea/kea-dhcp4.conf"
