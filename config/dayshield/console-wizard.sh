@@ -418,10 +418,40 @@ EOF
     cp "${kea_conf}" "${kea_compat_conf}"
     chmod 644 "${kea_compat_conf}"
 
-        systemctl enable kea-dhcp4-server >/dev/null 2>&1 || true
-        systemctl restart kea-dhcp4-server >/dev/null 2>&1 || true
+    cat > "/etc/dayshield/kea-dhcp6.conf" <<'EOF'
+{
+  "Dhcp6": {
+    "interfaces-config": {
+      "interfaces": []
+    },
+    "lease-database": {
+      "type": "memfile",
+      "persist": true,
+      "name": "/var/lib/kea/kea-leases6.csv"
+    },
+    "subnet6": [],
+    "loggers": [
+      {
+        "name": "kea-dhcp6",
+        "output_options": [
+          { "output": "/var/log/kea/kea-dhcp6.log" }
+        ],
+        "severity": "INFO"
+      }
+    ]
+  }
+}
+EOF
+    cp "/etc/dayshield/kea-dhcp6.conf" "/etc/kea/kea-dhcp6.conf"
+    chmod 644 "/etc/kea/kea-dhcp6.conf"
+
+    systemctl enable kea-dhcp4-server >/dev/null 2>&1 || true
+    systemctl restart kea-dhcp4-server >/dev/null 2>&1 || true
+    systemctl disable kea-dhcp6-server >/dev/null 2>&1 || true
+    systemctl stop kea-dhcp6-server >/dev/null 2>&1 || true
     else
         systemctl stop kea-dhcp4-server >/dev/null 2>&1 || true
+        systemctl disable kea-dhcp6-server >/dev/null 2>&1 || true
     fi
 }
 

@@ -361,6 +361,34 @@ chmod 644 "${target}/etc/dayshield/kea-dhcp4.conf"
 cp "${target}/etc/dayshield/kea-dhcp4.conf" "${target}/etc/kea/kea-dhcp4.conf"
 chmod 644 "${target}/etc/kea/kea-dhcp4.conf"
 
+cat > "${target}/etc/dayshield/kea-dhcp6.conf" <<'EOF'
+{
+  "Dhcp6": {
+    "interfaces-config": {
+      "interfaces": []
+    },
+    "lease-database": {
+      "type": "memfile",
+      "persist": true,
+      "name": "/var/lib/kea/kea-leases6.csv"
+    },
+    "subnet6": [],
+    "loggers": [
+      {
+        "name": "kea-dhcp6",
+        "output_options": [
+          { "output": "/var/log/kea/kea-dhcp6.log" }
+        ],
+        "severity": "INFO"
+      }
+    ]
+  }
+}
+EOF
+chmod 644 "${target}/etc/dayshield/kea-dhcp6.conf"
+cp "${target}/etc/dayshield/kea-dhcp6.conf" "${target}/etc/kea/kea-dhcp6.conf"
+chmod 644 "${target}/etc/kea/kea-dhcp6.conf"
+
 # Unbound DNS
 mkdir -p "${target}/etc/unbound" "${target}/var/lib/unbound"
 if ! chroot "${target}" /usr/sbin/unbound-anchor -a /var/lib/unbound/root.key >/dev/null 2>&1; then

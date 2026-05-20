@@ -53,6 +53,7 @@ wireguard
 wireguard-tools
 ppp
 pppoe
+wireless-regdb
 
 # SSH remote access
 openssh-server
