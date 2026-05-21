@@ -102,7 +102,7 @@ ProtectSystem=strict
 ProtectHome=yes
 ReadWritePaths=/etc/dayshield /var/lib/dayshield /opt/dayshield-core /opt/dayshield-ui /opt/dayshield-rootfs /usr/local/sbin /usr/local/share
 PrivateTmp=yes
-CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_SYS_ADMIN
 
 [Install]
 WantedBy=multi-user.target
