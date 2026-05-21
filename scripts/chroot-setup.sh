@@ -80,7 +80,7 @@ ConditionKernelCommandLine=!installer
 ConditionPathExists=/etc/kea/kea-dhcp4.conf
 
 [Service]
-ConfigurationDirectoryMode=750
+ConfigurationDirectoryMode=755
 EOF
 
 mkdir -p "${ROOTFS_DIR}/etc/systemd/system/kea-dhcp6-server.service.d"
@@ -90,7 +90,7 @@ ConditionKernelCommandLine=!installer
 ConditionPathExists=/etc/kea/kea-dhcp6.conf
 
 [Service]
-ConfigurationDirectoryMode=750
+ConfigurationDirectoryMode=755
 EOF
 
 mkdir -p "${ROOTFS_DIR}/etc/dayshield" "${ROOTFS_DIR}/etc/kea" "${ROOTFS_DIR}/var/log/kea" "${ROOTFS_DIR}/var/lib/kea"
