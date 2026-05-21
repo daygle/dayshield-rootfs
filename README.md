@@ -56,17 +56,8 @@ make rootfs UI_DIR=../dayshield-ui/dist ARCH=arm64 SUITE=trixie OUTPUT=dayshield
 - A built `dayshield-core` binary is required for the rootfs build
 - Missing inputs cause the build to fail clearly
 
-## Release model
-
-`dayshield-rootfs` is released independently from `dayshield-core` and `dayshield-ui`.
-Release artifacts are versioned by this repo and consumed by the appliance update manifest.
-
 ## Notes
 
 - This repo is focused on root filesystem assembly and packaging.
 - The final archive is consumed by installer and ISO workflows.
 - UI and backend runtime sources live in separate repositories.
-
-## Contributing
-
-Validate changes by running the rootfs build flow and confirming the generated archive is usable in the appliance pipeline.
