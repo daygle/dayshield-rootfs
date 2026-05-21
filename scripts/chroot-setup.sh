@@ -93,6 +93,64 @@ ConditionPathExists=/etc/kea/kea-dhcp6.conf
 ConfigurationDirectoryMode=750
 EOF
 
+mkdir -p "${ROOTFS_DIR}/etc/dayshield" "${ROOTFS_DIR}/etc/kea" "${ROOTFS_DIR}/var/log/kea" "${ROOTFS_DIR}/var/lib/kea"
+chmod 755 "${ROOTFS_DIR}/etc/kea"
+cat > "${ROOTFS_DIR}/etc/dayshield/kea-dhcp4.conf" <<'EOF'
+{
+  "Dhcp4": {
+    "interfaces-config": {
+      "interfaces": []
+    },
+    "lease-database": {
+      "type": "memfile",
+      "persist": true,
+      "name": "/var/lib/kea/kea-leases4.csv"
+    },
+    "subnet4": [],
+    "loggers": [
+      {
+        "name": "kea-dhcp4",
+        "output_options": [
+          { "output": "/var/log/kea/kea-dhcp4.log" }
+        ],
+        "severity": "INFO"
+      }
+    ]
+  }
+}
+EOF
+chmod 644 "${ROOTFS_DIR}/etc/dayshield/kea-dhcp4.conf"
+cp "${ROOTFS_DIR}/etc/dayshield/kea-dhcp4.conf" "${ROOTFS_DIR}/etc/kea/kea-dhcp4.conf"
+chmod 644 "${ROOTFS_DIR}/etc/kea/kea-dhcp4.conf"
+
+cat > "${ROOTFS_DIR}/etc/dayshield/kea-dhcp6.conf" <<'EOF'
+{
+  "Dhcp6": {
+    "interfaces-config": {
+      "interfaces": []
+    },
+    "lease-database": {
+      "type": "memfile",
+      "persist": true,
+      "name": "/var/lib/kea/kea-leases6.csv"
+    },
+    "subnet6": [],
+    "loggers": [
+      {
+        "name": "kea-dhcp6",
+        "output_options": [
+          { "output": "/var/log/kea/kea-dhcp6.log" }
+        ],
+        "severity": "INFO"
+      }
+    ]
+  }
+}
+EOF
+chmod 644 "${ROOTFS_DIR}/etc/dayshield/kea-dhcp6.conf"
+cp "${ROOTFS_DIR}/etc/dayshield/kea-dhcp6.conf" "${ROOTFS_DIR}/etc/kea/kea-dhcp6.conf"
+chmod 644 "${ROOTFS_DIR}/etc/kea/kea-dhcp6.conf"
+
 # ── DayShield directory layout ───────────────────────────────────────────────
 printf '  -> Creating /etc/dayshield directory tree\n'
 mkdir -p \

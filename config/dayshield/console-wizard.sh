@@ -346,7 +346,7 @@ _apply_lan_dhcp_config() {
 
     if [[ "${LAN_DHCP_ENABLE}" == "yes" ]] && [[ -n "${LAN_IFACE}" ]] && [[ -n "${LAN_IP}" ]] && [[ -n "${LAN_DHCP_START}" ]] && [[ -n "${LAN_DHCP_END}" ]]; then
         mkdir -p /etc/dayshield /etc/kea /var/log/kea /var/lib/kea
-        chmod 750 /etc/kea
+        chmod 755 /etc/kea
 
         # Compute network address for Kea subnet (e.g. 192.168.1.0/24)
         local prefix="${LAN_PREFIX:-24}"
@@ -664,19 +664,18 @@ _print_header() {
     # Web UI link will be shown in Status section below
     _wide_hr
     printf "  Interfaces\n"
-    printf "  %-12s %-6s %-6s %-18s %-20s %s\n" "Name" "Role" "State" "IPv4" "IPv6" "Description"
+    printf "  %-12s %-6s %-6s %-18s %-20s\n" "Name" "Role" "State" "IPv4" "IPv6"
     _hr
 
     local printed_iface=0
     while IFS= read -r iface; do
-        local ip4 ip6 role state desc
+        local ip4 ip6 role state
         ip4="$(_iface_ip4 "${iface}")"
         ip6="$(_iface_ip6 "${iface}")"
         role="$(_iface_role "${iface}")"
         state="$(_iface_state "${iface}")"
-        desc="$(_iface_desc "${iface}")"
-        printf "  %-12s %-6s %-6s %-18s %-20s %s\n" \
-            "${iface}" "${role}" "${state}" "${ip4:-"-"}" "${ip6:-"-"}" "${desc}"
+        printf "  %-12s %-6s %-6s %-18s %-20s\n" \
+            "${iface}" "${role}" "${state}" "${ip4:-"-"}" "${ip6:-"-"}"
         printed_iface=1
     done < <(_list_ifaces)
     if [[ "${WAN_TYPE}" == "pppoe" ]] && ip link show ppp0 >/dev/null 2>&1; then
@@ -684,8 +683,8 @@ _print_header() {
         ppp4="$(_iface_ip4 ppp0)"
         ppp6="$(_iface_ip6 ppp0)"
         ppp_state="$(_iface_state ppp0)"
-        printf "  %-12s %-6s %-6s %-18s %-20s %s\n" \
-            "ppp0" "WAN" "${ppp_state}" "${ppp4:-"-"}" "${ppp6:-"-"}" ""
+        printf "  %-12s %-6s %-6s %-18s %-20s\n" \
+            "ppp0" "WAN" "${ppp_state}" "${ppp4:-"-"}" "${ppp6:-"-"}"
         printed_iface=1
     fi
     [[ "${printed_iface}" -eq 0 ]] && printf "  No network interfaces detected.\n"
