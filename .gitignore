@@ -1,0 +1,22 @@
+# Build output
+rootfs.tar.zst
+*.tar.zst
+
+# Local logs and temporary files
+/logs/
+*.log
+*~
+
+# Local Python/VS Code environments
+.venv
+venv
+.vscode/
+
+# Editor directories and files
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
