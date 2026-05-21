@@ -69,6 +69,11 @@ EOF
 mkdir -p "${ROOTFS_DIR}/etc/systemd/system"
 ln -sf /dev/null "${ROOTFS_DIR}/etc/systemd/system/unbound-resolvconf.service"
 
+# Disable the optional systemd SSH VSOCK generator on images that do not
+# expose an AF_VSOCK channel. This prevents systemd-ssh-generator from
+# failing at boot.
+ln -sf /dev/null "${ROOTFS_DIR}/etc/systemd/system/systemd-ssh-generator.service"
+
 # Kea DHCP should only start when the packaged config path it actually reads
 # exists. DayShield keeps /etc/dayshield/*.conf as canonical, but the distro
 # Kea units still load /etc/kea/*.conf and will fail hard if the compatibility
