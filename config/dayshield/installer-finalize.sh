@@ -502,7 +502,7 @@ cat > "${target}/etc/dayshield/config/config.json" <<EOF
         "dnsServers": [],
         "sshEnabled": true,
         "sshPort": 22,
-        "webPort": 443,
+        "webPort": 8443,
         "ipv6Enabled": false,
         "managementTlsAcmeDomain": null
     }
