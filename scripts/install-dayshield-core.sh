@@ -102,7 +102,7 @@ ProtectSystem=strict
 ProtectHome=yes
 ReadWritePaths=/etc/dayshield /var/lib/dayshield /opt/dayshield-core /opt/dayshield-ui /opt/dayshield-rootfs /usr/local/sbin /usr/local/share
 PrivateTmp=yes
-CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_SYS_ADMIN
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE CAP_SYS_ADMIN
 
 [Install]
 WantedBy=multi-user.target
@@ -117,7 +117,12 @@ ReadWritePaths=/etc/unbound
 ReadWritePaths=/etc/chrony
 ReadWritePaths=/etc/systemd
 ReadWritePaths=/etc/suricata
+ReadWritePaths=/etc/kea
+ReadWritePaths=/etc/dhcp
+ReadWritePaths=/var/lib/dhcp
+ReadWritePaths=/var/lib/dhclient
 ReadWritePaths=/etc/wireguard
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE CAP_SYS_ADMIN
 EOF
 
 # ── Installer/live mode guard ────────────────────────────────────────────────

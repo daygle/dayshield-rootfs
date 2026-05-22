@@ -71,6 +71,9 @@ for dir in \
     /var/lib/cloudflared \
     /etc/unbound \
     /etc/nftables \
+    /etc/kea \
+    /var/lib/kea \
+    /var/log/kea \
     /etc/suricata \
     /etc/chrony \
     /etc/crowdsec \
@@ -130,6 +133,14 @@ if [ -f "${DS_INSTALLER_GUARD}" ] && \
     ok "dayshield.service is guarded from installer-live boot"
 else
     fail "dayshield.service missing installer-live guard ConditionKernelCommandLine=!installer"
+fi
+
+DS_ENGINE_PATHS="${ROOTFS_DIR}/etc/systemd/system/dayshield.service.d/dayshield-engine-paths.conf"
+if [ -f "${DS_ENGINE_PATHS}" ] && \
+   grep -Eq '^[[:space:]]*ReadWritePaths[[:space:]]*=[[:space:]]*/etc/kea[[:space:]]*$' "${DS_ENGINE_PATHS}"; then
+    ok "dayshield.service can write the packaged Kea compatibility config path"
+else
+    fail "dayshield.service sandbox missing ReadWritePaths=/etc/kea"
 fi
 
 if [ -f "${ROOTFS_DIR}/etc/systemd/system/console-wizard.service" ] && \

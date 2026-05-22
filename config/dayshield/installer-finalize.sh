@@ -516,6 +516,20 @@ EOF
 # Keep DNS stack deterministic: unbound is authoritative on :53 and DayShield
 # does not ship resolvconf.
 mkdir -p "${target}/etc/systemd/system"
+mkdir -p "${target}/etc/systemd/system/dayshield.service.d"
+cat > "${target}/etc/systemd/system/dayshield.service.d/dayshield-engine-paths.conf" <<'EOF'
+[Service]
+ReadWritePaths=/etc/unbound
+ReadWritePaths=/etc/chrony
+ReadWritePaths=/etc/systemd
+ReadWritePaths=/etc/suricata
+ReadWritePaths=/etc/kea
+ReadWritePaths=/etc/dhcp
+ReadWritePaths=/var/lib/dhcp
+ReadWritePaths=/var/lib/dhclient
+ReadWritePaths=/etc/wireguard
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE CAP_SYS_ADMIN
+EOF
 ln -sf /dev/null "${target}/etc/systemd/system/systemd-resolved.service" 2>/dev/null || true
 ln -sf /dev/null "${target}/etc/systemd/system/unbound-resolvconf.service" 2>/dev/null || true
 printf 'nameserver 127.0.0.1\n' > "${target}/etc/resolv.conf"
