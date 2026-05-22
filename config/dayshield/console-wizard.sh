@@ -208,7 +208,7 @@ _iface_ip6() {
 }
 
 # ---------------------------------------------------------------------------
-# Core config helpers — read interface role/description from config.json
+# Core config helpers - read interface role/description from config.json
 # ---------------------------------------------------------------------------
 _load_core_ifaces() {
     [[ "${_CORE_CONFIG_LOADED}" -eq 1 ]] && return
@@ -1193,7 +1193,7 @@ _inst_partition() {
     _inst_info "Wiping existing signatures on /dev/${dev} ..."
     wipefs -a "/dev/${dev}" >/dev/null 2>&1 || true
 
-    _inst_info "Creating GPT A/B layout (BIOS + EFI + shared boot + root A/B) ..."
+    _inst_info "Creating GPT Primary/Secondary layout (BIOS + EFI + shared boot + primary/secondary rootfs) ..."
     if command -v parted >/dev/null 2>&1; then
         parted -s "/dev/${dev}" \
             mklabel gpt \
@@ -1233,13 +1233,13 @@ _inst_format() {
     mkfs.ext4 -F -L "DAYSHIELD_BOOT" -O "^64bit,metadata_csum" -m 1 \
         "${boot}" >/dev/null 2>&1 || { _inst_err "mkfs.ext4 boot failed."; return 1; }
 
-    _inst_info "Formatting ${root_a} as ext4 (root slot A) ..."
-    mkfs.ext4 -F -L "DAYSHIELD_ROOT_A" -O "^64bit,metadata_csum" -m 1 \
-        "${root_a}" >/dev/null 2>&1 || { _inst_err "mkfs.ext4 root A failed."; return 1; }
+    _inst_info "Formatting ${root_a} as ext4 (primary rootfs slot) ..."
+    mkfs.ext4 -F -L "DS_PRIMARY" -O "^64bit,metadata_csum" -m 1 \
+        "${root_a}" >/dev/null 2>&1 || { _inst_err "mkfs.ext4 primary rootfs failed."; return 1; }
 
-    _inst_info "Formatting ${root_b} as ext4 (root slot B) ..."
-    mkfs.ext4 -F -L "DAYSHIELD_ROOT_B" -O "^64bit,metadata_csum" -m 1 \
-        "${root_b}" >/dev/null 2>&1 || { _inst_err "mkfs.ext4 root B failed."; return 1; }
+    _inst_info "Formatting ${root_b} as ext4 (secondary rootfs slot) ..."
+    mkfs.ext4 -F -L "DS_SECONDARY" -O "^64bit,metadata_csum" -m 1 \
+        "${root_b}" >/dev/null 2>&1 || { _inst_err "mkfs.ext4 secondary rootfs failed."; return 1; }
     return 0
 }
 
@@ -1288,7 +1288,7 @@ _inst_install_rootfs() {
     case "$dev" in nvme*|mmcblk*) pfx="${dev}p" ;; *) pfx="${dev}" ;; esac
     local efi="/dev/${pfx}2" boot="/dev/${pfx}3" root="/dev/${pfx}4"
 
-    _inst_info "Mounting root slot A ..."
+    _inst_info "Mounting primary rootfs slot ..."
     mkdir -p "${target}"
     mount "${root}" "${target}" || { _inst_err "Failed to mount ${root}."; return 1; }
 
@@ -1378,11 +1378,15 @@ _inst_install_bootloader() {
             _inst_err "UEFI grub-install warning (may be non-fatal)"
     fi
 
-    _inst_info "Installing A/B rootfs boot entries ..."
+    _inst_info "Installing Primary/Secondary rootfs boot entries ..."
     local boot_uuid root_a_uuid root_b_uuid kernel initrd
+    local root_a_dev root_b_dev
+    root_a_dev="$(blkid -L DS_PRIMARY 2>/dev/null || blkid -L DAYSHIELD_ROOT_A 2>/dev/null || true)"
+    root_b_dev="$(blkid -L DS_SECONDARY 2>/dev/null || blkid -L DAYSHIELD_ROOT_B 2>/dev/null || true)"
+    [[ -n "${root_a_dev}" && -n "${root_b_dev}" ]] || { _inst_err "Primary/Secondary rootfs labels were not found."; return 1; }
     boot_uuid="$(blkid -s UUID -o value "$(blkid -L DAYSHIELD_BOOT)")"
-    root_a_uuid="$(blkid -s UUID -o value "$(blkid -L DAYSHIELD_ROOT_A)")"
-    root_b_uuid="$(blkid -s UUID -o value "$(blkid -L DAYSHIELD_ROOT_B)")"
+    root_a_uuid="$(blkid -s UUID -o value "${root_a_dev}")"
+    root_b_uuid="$(blkid -s UUID -o value "${root_b_dev}")"
     kernel="$(find "${target}/boot" -maxdepth 1 -name 'vmlinuz*' | sort | tail -n1)"
     initrd="$(find "${target}/boot" -maxdepth 1 -name 'initrd.img*' | sort | tail -n1)"
     if [[ -n "${kernel}" && -n "${initrd}" ]]; then

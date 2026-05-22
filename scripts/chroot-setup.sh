@@ -37,7 +37,7 @@ cat > "${ROOTFS_DIR}/etc/fstab" <<'EOF'
 # NOTE: The installer replaces these entries with UUID= lines.
 #
 # <file system>         <mount point>  <type>  <options>          <dump>  <pass>
-LABEL=DAYSHIELD_ROOT_A  /              ext4    errors=remount-ro  0       1
+LABEL=DS_PRIMARY        /              ext4    errors=remount-ro  0       1
 LABEL=DAYSHIELD_BOOT    /boot          ext4    defaults,noatime   0       2
 LABEL=DS_EFI            /boot/efi      vfat    umask=0077         0       2
 EOF
