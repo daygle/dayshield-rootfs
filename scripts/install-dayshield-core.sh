@@ -121,6 +121,7 @@ ReadWritePaths=/etc/kea
 ReadWritePaths=/etc/dhcp
 ReadWritePaths=/var/lib/dhcp
 ReadWritePaths=/var/lib/dhclient
+ReadWritePaths=/etc/ssh
 ReadWritePaths=/etc/wireguard
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE CAP_SYS_ADMIN
 EOF

@@ -143,6 +143,13 @@ else
     fail "dayshield.service sandbox missing ReadWritePaths=/etc/kea"
 fi
 
+if [ -f "${DS_ENGINE_PATHS}" ] && \
+   grep -Eq '^[[:space:]]*ReadWritePaths[[:space:]]*=[[:space:]]*/etc/ssh[[:space:]]*$' "${DS_ENGINE_PATHS}"; then
+    ok "dayshield.service can write SSH runtime config"
+else
+    fail "dayshield.service sandbox missing ReadWritePaths=/etc/ssh"
+fi
+
 if [ -f "${ROOTFS_DIR}/etc/systemd/system/console-wizard.service" ] && \
    grep -Eq '^[[:space:]]*ConditionPathExists[[:space:]]*=[[:space:]]*!/installer-ui/index.html[[:space:]]*$' "${ROOTFS_DIR}/etc/systemd/system/console-wizard.service"; then
     ok "console/web installer mutual exclusion is configured"
