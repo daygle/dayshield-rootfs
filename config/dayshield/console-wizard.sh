@@ -661,7 +661,7 @@ _print_header() {
     _wide_hr
     printf "  DayShield Console  v%s%s\n" "${DAYSHIELD_VERSION}" "${mode_line}"
     _kv "Host" "${hostname}"
-    # Web UI link will be shown in Status section below
+    # Web UI link will be shown below.
     _wide_hr
     printf "  Interfaces\n"
     printf "  %-12s %-6s %-6s %-18s %-20s\n" "Name" "Role" "State" "IPv4" "IPv6"
@@ -689,21 +689,7 @@ _print_header() {
     fi
     [[ "${printed_iface}" -eq 0 ]] && printf "  No network interfaces detected.\n"
     _wide_hr
-    printf "  Status\n"
 
-    # Interface status
-    if [[ -n "${WAN_IFACE}" ]]; then
-        local wan_cidr wan_type_label
-        if [[ "${WAN_TYPE}" == "pppoe" ]]; then
-            # For PPPoE, show ppp0 address if up
-            wan_cidr="$(_iface_ip4 ppp0 2>/dev/null || true)"
-            wan_type_label="PPPoE"
-        else
-            wan_cidr="$(_iface_ip4 "${WAN_IFACE}")"
-            wan_type_label="DHCP"
-        fi
-        _kv "WAN ${WAN_IFACE} (${wan_type_label})" "${wan_cidr:-no address}"
-    fi
     if [[ -n "${LAN_IFACE}" ]]; then
         local lan_cidr
         lan_cidr="$(_iface_ip4 "${LAN_IFACE}")"
@@ -711,9 +697,7 @@ _print_header() {
             lan_cidr="${LAN_IP}/${LAN_PREFIX}"
         fi
         lan_ip4="${lan_cidr%%/*}"
-        _kv "LAN ${LAN_IFACE}" "${lan_cidr:-no address}"
     fi
-    echo ""
 
     if $LIVE_MODE; then
         local web_rows=()
@@ -1052,8 +1036,6 @@ _update_system() {
         return
     fi
 
-    echo "Current update status:"
-    echo ""
     if ! dayshield-core update-status; then
         echo ""
         echo "Unable to read update status."
@@ -1062,7 +1044,7 @@ _update_system() {
     fi
 
     echo ""
-    read -rp "Check for available updates now? [Y/n]: " do_check
+    read -rp "Run update check now? [Y/n]: " do_check
     if [[ -z "${do_check}" || "${do_check,,}" == "y" ]]; then
         echo ""
         echo "Checking update registry ..."
@@ -1732,7 +1714,7 @@ while true; do
     if [[ "${CONSOLE_MODE}" == "boot" ]]; then
         echo "  [0] Open shell"
     else
-        echo "  [0] Logout"
+        echo "  [0] Open shell"
     fi
     if $LIVE_MODE; then
         echo "  [8] Install DayShield"
@@ -1758,7 +1740,7 @@ while true; do
                 DAYSHIELD_CONSOLE_SUPPRESS=1 /bin/bash --login
                 _console_quiet_enter
             else
-                echo "Logout requested."
+                echo "Opening shell."
                 exit 0
             fi
             ;;
