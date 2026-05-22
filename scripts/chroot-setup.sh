@@ -171,6 +171,12 @@ printf '  -> Creating /etc/wireguard directory\n'
 mkdir -p "${ROOTFS_DIR}/etc/wireguard"
 chmod 700 "${ROOTFS_DIR}/etc/wireguard"
 
+printf '  -> Creating DHCP client state directories\n'
+mkdir -p \
+    "${ROOTFS_DIR}/etc/dhcp" \
+    "${ROOTFS_DIR}/var/lib/dhcp" \
+    "${ROOTFS_DIR}/var/lib/dhclient"
+
 printf '  -> Creating /var/lib/dayshield directory tree\n'
 mkdir -p \
     "${ROOTFS_DIR}/var/lib/dayshield/aliases" \
