@@ -1014,13 +1014,37 @@ _change_password() {
 _reboot() {
     echo ""
     read -rp "Reboot now? [y/N]: " confirm
-    [[ "${confirm,,}" == "y" ]] && systemctl reboot
+    if [[ "${confirm,,}" == "y" ]]; then
+        if command -v systemctl >/dev/null 2>&1; then
+            systemctl --no-block reboot >/dev/null 2>&1 || true
+        fi
+        if command -v reboot >/dev/null 2>&1; then
+            reboot >/dev/null 2>&1 || true
+        fi
+        if command -v shutdown >/dev/null 2>&1; then
+            shutdown -r now >/dev/null 2>&1 || true
+        fi
+        echo "Reboot command attempted. If the system did not reboot, check that systemd or reboot utilities are available."
+        read -rp "Press Enter to continue ... " || true
+    fi
 }
 
 _shutdown() {
     echo ""
     read -rp "Shut down now? [y/N]: " confirm
-    [[ "${confirm,,}" == "y" ]] && systemctl poweroff
+    if [[ "${confirm,,}" == "y" ]]; then
+        if command -v systemctl >/dev/null 2>&1; then
+            systemctl --no-block poweroff >/dev/null 2>&1 || true
+        fi
+        if command -v poweroff >/dev/null 2>&1; then
+            poweroff >/dev/null 2>&1 || true
+        fi
+        if command -v shutdown >/dev/null 2>&1; then
+            shutdown -h now >/dev/null 2>&1 || true
+        fi
+        echo "Poweroff command attempted. If the system did not power off, check system utilities and permissions."
+        read -rp "Press Enter to continue ... " || true
+    fi
 }
 
 _update_system() {
