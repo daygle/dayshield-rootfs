@@ -188,6 +188,16 @@ mkdir -p \
     "${ROOTFS_DIR}/etc/cloudflared" \
     "${ROOTFS_DIR}/var/lib/cloudflared"
 
+printf '  -> Installing cloudflared binary from upstream release\n'
+mkdir -p "${ROOTFS_DIR}/usr/bin"
+if ! chroot "${ROOTFS_DIR}" /bin/sh -c '
+    set -e
+    wget -qO /usr/bin/cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+    chmod 755 /usr/bin/cloudflared
+'; then
+    printf 'WARNING: failed to download cloudflared binary. Cloudflare Tunnel will not be available.\n'
+fi
+
 # ── Install base configs ──────────────────────────────────────────────────────
 printf '  -> Installing sysctl.conf\n'
 cp "${CONFIG_DIR}/sysctl.conf" "${ROOTFS_DIR}/etc/sysctl.d/99-dayshield.conf"

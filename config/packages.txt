@@ -68,7 +68,7 @@ suricata
 
 # Firewall / threat intelligence
 # crowdsec   # available via crowdsec APT repository, added post-build
-# cloudflared # not available in Debian trixie default repos; install separately if needed
+# cloudflared # installed from upstream release during rootfs build
 
 # TLS / certificates
 openssl
