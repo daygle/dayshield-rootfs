@@ -146,6 +146,8 @@ jobs:
           rm -f /tmp/debian-archive-keyring_2025.1_all.deb
 
           sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get -y dist-upgrade
+          sudo apt-get -y autoremove
           sudo apt-get install -y --no-install-recommends mmdebstrap zstd debian-archive-keyring
 
       - name: Build rootfs
