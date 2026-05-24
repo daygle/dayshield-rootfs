@@ -27,23 +27,40 @@ if grep -qw installer /proc/cmdline 2>/dev/null; then
     return
 fi
 
-# Allow local console TTYs and remote SSH (pts) sessions.
-# Exclude non-interactive contexts (e.g. scp, sftp, rsync).
-TTY_PATH="$(tty 2>/dev/null || true)"
-case "${TTY_PATH}" in
-    /dev/tty[0-9]*|/dev/ttyS*|/dev/console|/dev/pts/*) ;;
-    *) return ;;
-esac
-
 # For SSH sessions, skip the menu when a command was passed directly
 # (e.g. scp, rsync, git) — only show for interactive login shells.
 if [ -n "${SSH_CONNECTION:-}" ] && [ -n "${SSH_ORIGINAL_COMMAND:-}" ]; then
     return
 fi
 
+# Allow remote interactive SSH sessions even when tty(1) output is unavailable.
+if [ -n "${SSH_CONNECTION:-}" ]; then
+    if [ -n "${SSH_TTY:-}" ]; then
+        TTY_PATH="${SSH_TTY}"
+    else
+        TTY_PATH="$(tty 2>/dev/null || true)"
+    fi
+else
+    # Local login/session: require a real console/pts tty.
+    TTY_PATH="$(tty 2>/dev/null || true)"
+    case "${TTY_PATH}" in
+        /dev/tty[0-9]*|/dev/ttyS*|/dev/console|/dev/pts/*) ;;
+        *) return ;;
+    esac
+fi
+
+MENU_CMD=""
+if [ -x /usr/local/bin/dayshield-console ]; then
+    MENU_CMD="/usr/local/bin/dayshield-console"
+elif [ -x /usr/local/lib/dayshield/console-wizard.sh ]; then
+    MENU_CMD="/usr/local/lib/dayshield/console-wizard.sh"
+else
+    return
+fi
+
 export DAYSHIELD_CONSOLE_RUNNING=1
 export DAYSHIELD_CONSOLE_MODE=login
 trap 'unset DAYSHIELD_CONSOLE_RUNNING DAYSHIELD_CONSOLE_MODE' EXIT INT TERM HUP
-/usr/local/bin/dayshield-console || true
+"${MENU_CMD}" || true
 trap - EXIT INT TERM HUP
 unset DAYSHIELD_CONSOLE_RUNNING DAYSHIELD_CONSOLE_MODE
