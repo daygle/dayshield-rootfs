@@ -123,6 +123,8 @@ ReadWritePaths=/var/lib/dhcp
 ReadWritePaths=/var/lib/dhclient
 ReadWritePaths=/etc/ssh
 ReadWritePaths=/etc/wireguard
+RuntimeDirectory=dayshield/kea
+RuntimeDirectoryPreserve=yes
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE CAP_SYS_ADMIN
 EOF
 
