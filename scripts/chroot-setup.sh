@@ -42,6 +42,17 @@ LABEL=DAYSHIELD_BOOT    /boot          ext4    defaults,noatime   0       2
 LABEL=DS_EFI            /boot/efi      vfat    umask=0077         0       2
 EOF
 
+# ── Journald persistence ─────────────────────────────────────────────────────
+# Force persistent journald storage so historical/system logs are available
+# after clean install without requiring runtime recovery commands.
+printf '  -> Configuring persistent journald storage\n'
+mkdir -p "${ROOTFS_DIR}/etc/systemd/journald.conf.d"
+cat > "${ROOTFS_DIR}/etc/systemd/journald.conf.d/10-storage.conf" <<'EOF'
+[Journal]
+Storage=persistent
+EOF
+mkdir -p "${ROOTFS_DIR}/var/log/journal"
+
 # Help initramfs-tools resolve the root fs type while building inside chroot.
 # The installer always formats root as ext4.
 mkdir -p "${ROOTFS_DIR}/etc/initramfs-tools/conf.d"

@@ -47,9 +47,17 @@ rm -rf "${ROOTFS_DIR}/var/tmp"/*
 
 # ── Zero out logs ─────────────────────────────────────────────────────────────
 printf '  -> Zeroing logs\n'
-find "${ROOTFS_DIR}/var/log" -type f | while IFS= read -r logfile; do
+find "${ROOTFS_DIR}/var/log" \
+    -type f \
+    ! -path "${ROOTFS_DIR}/var/log/journal/*" | while IFS= read -r logfile; do
     : > "${logfile}"
 done
+
+# Remove any packaged journal files entirely. Binary .journal files must not be
+# truncated because journald can treat them as corrupt and skip them.
+printf '  -> Removing packaged journal files\n'
+rm -rf "${ROOTFS_DIR}/var/log/journal"/*
+mkdir -p "${ROOTFS_DIR}/var/log/journal"
 
 # ── Reproducible timestamps ───────────────────────────────────────────────────
 printf '  -> Normalising timestamps to epoch 0\n'

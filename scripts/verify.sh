@@ -41,6 +41,22 @@ else
     fail "missing /etc/fstab - systemd-remount-fs.service will fail and hang boot"
 fi
 
+# ── journald persistence ─────────────────────────────────────────────────────
+banner "journald persistence"
+JOURNALD_STORAGE_DROPIN="${ROOTFS_DIR}/etc/systemd/journald.conf.d/10-storage.conf"
+if [ -f "${JOURNALD_STORAGE_DROPIN}" ] && \
+   grep -Eq '^[[:space:]]*Storage[[:space:]]*=[[:space:]]*persistent[[:space:]]*$' "${JOURNALD_STORAGE_DROPIN}"; then
+    ok "journald persistent storage drop-in exists"
+else
+    fail "missing journald persistent storage drop-in: /etc/systemd/journald.conf.d/10-storage.conf"
+fi
+
+if [ -d "${ROOTFS_DIR}/var/log/journal" ]; then
+    ok "journal directory exists: /var/log/journal"
+else
+    fail "missing journal directory: /var/log/journal"
+fi
+
 # ── live-boot absent ──────────────────────────────────────────────────────────
 # live-boot and live-config must NOT be installed in the rootfs that is
 # written to disk.  Their initramfs hooks stall the installed system while
