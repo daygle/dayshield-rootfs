@@ -325,7 +325,7 @@ LinkLocalAddressing=no
 EOF
 
 # Kea DHCPv4
-mkdir -p "${target}/etc/dayshield" "${target}/etc/kea" "${target}/var/lib/kea" "${target}/var/log/kea"
+mkdir -p "${target}/etc/dayshield" "${target}/etc/kea" "${target}/var/lib/kea" "${target}/var/log/kea" "${target}/var/log/dayshield"
 chmod 755 "${target}/etc/kea"
 cat > "${target}/etc/dayshield/kea-dhcp4.conf" <<EOF
 {
@@ -528,6 +528,7 @@ ReadWritePaths=/etc/dhcp
 ReadWritePaths=/var/lib/kea
 ReadWritePaths=/var/lib/dhcp
 ReadWritePaths=/var/lib/dhclient
+ReadWritePaths=/var/log/dayshield
 ReadWritePaths=/etc/ssh
 ReadWritePaths=/etc/wireguard
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE CAP_SYS_ADMIN

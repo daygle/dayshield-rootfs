@@ -90,6 +90,7 @@ for dir in \
     /etc/kea \
     /var/lib/kea \
     /var/log/kea \
+    /var/log/dayshield \
     /etc/suricata \
     /etc/chrony \
     /etc/crowdsec \
@@ -171,6 +172,13 @@ if [ -f "${DS_ENGINE_PATHS}" ] && \
     ok "dayshield.service can write Kea lease database path (/var/lib/kea)"
 else
     fail "dayshield.service sandbox missing ReadWritePaths=/var/lib/kea"
+fi
+
+if [ -f "${DS_ENGINE_PATHS}" ] && \
+   grep -Eq '^[[:space:]]*ReadWritePaths[[:space:]]*=[[:space:]]*/var/log/dayshield[[:space:]]*$' "${DS_ENGINE_PATHS}"; then
+    ok "dayshield.service can write DayShield durable log path (/var/log/dayshield)"
+else
+    fail "dayshield.service sandbox missing ReadWritePaths=/var/log/dayshield"
 fi
 
 if [ -f "${ROOTFS_DIR}/etc/systemd/system/console-wizard.service" ] && \

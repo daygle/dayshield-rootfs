@@ -70,6 +70,7 @@ mkdir -p "${ROOTFS_DIR}/opt"
 mkdir -p "${CORE_REPO_DEST}"
 mkdir -p "${UI_REPO_DEST}"
 mkdir -p "${ROOTFS_REPO_DEST}"
+mkdir -p "${ROOTFS_DIR}/var/log/dayshield"
 
 seed_repo "core" "${CORE_REPO_SRC}" "${CORE_REPO_DEST}" "${CORE_REMOTE_URL}"
 seed_repo "ui" "${UI_REPO_SRC}" "${UI_REPO_DEST}" "${UI_REMOTE_URL}"
@@ -100,7 +101,7 @@ RestartSec=5s
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
-ReadWritePaths=/etc/dayshield /var/lib/dayshield /opt/dayshield-core /opt/dayshield-ui /opt/dayshield-rootfs /usr/local/sbin /usr/local/share
+ReadWritePaths=/etc/dayshield /var/lib/dayshield /var/log/dayshield /opt/dayshield-core /opt/dayshield-ui /opt/dayshield-rootfs /usr/local/sbin /usr/local/share
 PrivateTmp=yes
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE CAP_SYS_ADMIN
 
@@ -122,6 +123,7 @@ ReadWritePaths=/etc/dhcp
 ReadWritePaths=/var/lib/kea
 ReadWritePaths=/var/lib/dhcp
 ReadWritePaths=/var/lib/dhclient
+ReadWritePaths=/var/log/dayshield
 ReadWritePaths=/etc/ssh
 ReadWritePaths=/etc/wireguard
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE CAP_SYS_ADMIN

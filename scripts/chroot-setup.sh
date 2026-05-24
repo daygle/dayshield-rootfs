@@ -112,7 +112,7 @@ ConditionPathExists=/etc/kea/kea-dhcp6.conf
 ConfigurationDirectoryMode=755
 EOF
 
-mkdir -p "${ROOTFS_DIR}/etc/dayshield" "${ROOTFS_DIR}/etc/kea" "${ROOTFS_DIR}/var/log/kea" "${ROOTFS_DIR}/var/lib/kea"
+mkdir -p "${ROOTFS_DIR}/etc/dayshield" "${ROOTFS_DIR}/etc/kea" "${ROOTFS_DIR}/var/log/kea" "${ROOTFS_DIR}/var/log/dayshield" "${ROOTFS_DIR}/var/lib/kea"
 chmod 755 "${ROOTFS_DIR}/etc/kea"
 cat > "${ROOTFS_DIR}/etc/dayshield/kea-dhcp4.conf" <<'EOF'
 {
