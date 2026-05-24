@@ -110,33 +110,23 @@ jobs:
           npm run build
 
       # ─────────────────────────────────────────────────────────────────────────
-      # Build core
+      # Fetch core binary from dayshield-core release
       # ─────────────────────────────────────────────────────────────────────────
-      - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
-        with:
-          toolchain: "1.88.0"
-
-      - name: Cache Rust dependencies
-        uses: actions/cache@v4
+      - name: Download dayshield-core release binary
         env:
-          NODE_OPTIONS: --no-deprecation
-        with:
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
-            dayshield-core-src/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('dayshield-core-src/**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          CORE_REF="${{ inputs.core_ref || steps.tags.outputs.core_tag }}"
+          ASSET="core-${CORE_REF}.tar.zst"
+          WORK_DIR="$(mktemp -d)"
 
-      - name: Build dayshield-core binary
-        working-directory: dayshield-core-src
-        run: cargo build --release -p dayshield-core
+          gh release download "${CORE_REF}" \
+            --repo daygle/dayshield-core \
+            --pattern "${ASSET}" \
+            --dir "${WORK_DIR}"
 
-      - name: Copy binary to rootfs workspace
-        run: cp dayshield-core-src/target/release/dayshield-core rootfs/dayshield-core
+          tar --zstd -xf "${WORK_DIR}/${ASSET}" -C "${WORK_DIR}"
+          install -m 0755 "${WORK_DIR}/dayshield-core" rootfs/dayshield-core
 
       # ─────────────────────────────────────────────────────────────────────────
       # Build rootfs
