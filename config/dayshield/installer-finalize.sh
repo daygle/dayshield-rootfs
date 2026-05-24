@@ -525,6 +525,7 @@ ReadWritePaths=/etc/systemd
 ReadWritePaths=/etc/suricata
 ReadWritePaths=/etc/kea
 ReadWritePaths=/etc/dhcp
+ReadWritePaths=/var/lib/kea
 ReadWritePaths=/var/lib/dhcp
 ReadWritePaths=/var/lib/dhclient
 ReadWritePaths=/etc/ssh

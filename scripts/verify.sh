@@ -151,10 +151,10 @@ else
 fi
 
 if [ -f "${DS_ENGINE_PATHS}" ] && \
-   grep -Eq '^[[:space:]]*RuntimeDirectory[[:space:]]*=[[:space:]]*dayshield/kea[[:space:]]*$' "${DS_ENGINE_PATHS}"; then
-    ok "dayshield.service has runtime directory for Kea lease database (/run/dayshield/kea)"
+   grep -Eq '^[[:space:]]*ReadWritePaths[[:space:]]*=[[:space:]]*/var/lib/kea[[:space:]]*$' "${DS_ENGINE_PATHS}"; then
+    ok "dayshield.service can write Kea lease database path (/var/lib/kea)"
 else
-    fail "dayshield.service missing RuntimeDirectory=dayshield/kea (Kea cannot write lease file)"
+    fail "dayshield.service sandbox missing ReadWritePaths=/var/lib/kea"
 fi
 
 if [ -f "${ROOTFS_DIR}/etc/systemd/system/console-wizard.service" ] && \
