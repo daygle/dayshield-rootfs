@@ -257,14 +257,10 @@ if [ ! -f "${REPO_DIR}/dayshield-core" ]; then
     exit 1
 fi
 if [ -z "${CORE_REPO_DIR}" ]; then
-    printf 'ERROR: core repo path not provided and sibling ../dayshield-core was not found\n' >&2
-    printf '       Pass --core-repo-dir <path-to-dayshield-core>\n' >&2
-    exit 1
+    printf 'WARNING: core repo path not provided; /opt/dayshield-core repo seeding will be skipped\n' >&2
 fi
 if [ -z "${UI_REPO_DIR}" ]; then
-    printf 'ERROR: UI repo path not provided and sibling ../dayshield-ui was not found\n' >&2
-    printf '       Pass --ui-repo-dir <path-to-dayshield-ui>\n' >&2
-    exit 1
+    printf 'WARNING: UI repo path not provided; /opt/dayshield-ui repo seeding will be skipped\n' >&2
 fi
 if [ -z "${ROOTFS_REPO_DIR}" ]; then
     printf 'ERROR: rootfs repo path not provided and current repo git metadata was not found\n' >&2

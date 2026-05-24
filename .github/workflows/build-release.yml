@@ -77,37 +77,36 @@ jobs:
           ref: ${{ steps.version.outputs.tag }}
           path: rootfs
 
-      - name: Checkout dayshield-ui
-        uses: actions/checkout@v5
-        with:
-          repository: daygle/dayshield-ui
-          ref: ${{ inputs.ui_ref || steps.tags.outputs.ui_tag }}
-          path: dayshield-ui-src
-
-      - name: Checkout dayshield-core
-        uses: actions/checkout@v5
-        with:
-          repository: daygle/dayshield-core
-          ref: ${{ inputs.core_ref || steps.tags.outputs.core_tag }}
-          path: dayshield-core-src
-
       # ─────────────────────────────────────────────────────────────────────────
-      # Build UI
+      # Fetch UI artifact from dayshield-ui release
       # ─────────────────────────────────────────────────────────────────────────
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
+      - name: Download dayshield-ui release artifact
         env:
-          NODE_OPTIONS: --no-deprecation
-        with:
-          node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: dayshield-ui-src/package-lock.json
-
-      - name: Build dayshield-ui dist
-        working-directory: dayshield-ui-src
+          GH_TOKEN: ${{ github.token }}
         run: |
-          npm ci --no-audit --no-fund
-          npm run build
+          set -euo pipefail
+          UI_REF="${{ inputs.ui_ref || steps.tags.outputs.ui_tag }}"
+          ASSET="ui-${UI_REF}.tar.zst"
+          ASSET_SHA256="${ASSET}.sha256"
+          UI_WORK_DIR="${GITHUB_WORKSPACE}/ui-artifact"
+
+          rm -rf "${UI_WORK_DIR}"
+          mkdir -p "${UI_WORK_DIR}"
+
+          gh release download "${UI_REF}" \
+            --repo daygle/dayshield-ui \
+            --pattern "${ASSET}" \
+            --pattern "${ASSET_SHA256}" \
+            --dir "${UI_WORK_DIR}"
+
+          if [ ! -f "${UI_WORK_DIR}/${ASSET_SHA256}" ]; then
+            echo "ERROR: missing checksum file ${ASSET_SHA256} for UI release ${UI_REF}" >&2
+            exit 1
+          fi
+
+          (cd "${UI_WORK_DIR}" && sha256sum -c "${ASSET_SHA256}")
+
+          tar --zstd -xf "${UI_WORK_DIR}/${ASSET}" -C "${UI_WORK_DIR}"
 
       # ─────────────────────────────────────────────────────────────────────────
       # Fetch core binary from dayshield-core release
@@ -116,6 +115,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           CORE_REF="${{ inputs.core_ref || steps.tags.outputs.core_tag }}"
           ASSET="core-${CORE_REF}.tar.zst"
           WORK_DIR="$(mktemp -d)"
@@ -123,7 +123,23 @@ jobs:
           gh release download "${CORE_REF}" \
             --repo daygle/dayshield-core \
             --pattern "${ASSET}" \
+            --pattern "${ASSET}.sha256" \
+            --pattern "checksums.txt" \
             --dir "${WORK_DIR}"
+
+          if [ -f "${WORK_DIR}/${ASSET}.sha256" ]; then
+            (cd "${WORK_DIR}" && sha256sum -c "${ASSET}.sha256")
+          elif [ -f "${WORK_DIR}/checksums.txt" ]; then
+            CHECKSUM_LINE_COUNT="$(awk -v file="${ASSET}" '$2 == file {count++} END {print count+0}' "${WORK_DIR}/checksums.txt")"
+            if [ "${CHECKSUM_LINE_COUNT}" -ne 1 ]; then
+              echo "ERROR: expected exactly one checksum entry for ${ASSET} in checksums.txt" >&2
+              exit 1
+            fi
+            (cd "${WORK_DIR}" && awk -v file="${ASSET}" '$2 == file {print $1 "  " $2}' checksums.txt > core.sha256 && sha256sum -c core.sha256)
+          else
+            echo "ERROR: missing checksum file for core release ${CORE_REF}" >&2
+            exit 1
+          fi
 
           tar --zstd -xf "${WORK_DIR}/${ASSET}" -C "${WORK_DIR}"
           install -m 0755 "${WORK_DIR}/dayshield-core" rootfs/dayshield-core
@@ -155,9 +171,7 @@ jobs:
           sudo make rootfs \
             OUTPUT="${{ steps.version.outputs.artifact }}" \
             ENABLE_SUITE_UPDATES="${ENABLE_SUITE_UPDATES}" \
-            UI_DIR="${GITHUB_WORKSPACE}/dayshield-ui-src/dist" \
-            CORE_REPO_DIR="${GITHUB_WORKSPACE}/dayshield-core-src" \
-            UI_REPO_DIR="${GITHUB_WORKSPACE}/dayshield-ui-src" \
+            UI_DIR="${GITHUB_WORKSPACE}/ui-artifact/dist" \
             ROOTFS_REPO_DIR="${GITHUB_WORKSPACE}/rootfs"
 
       # ─────────────────────────────────────────────────────────────────────────
