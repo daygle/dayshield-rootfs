@@ -247,6 +247,23 @@ env ROOTFS_DIR="${ROOTFS_DIR}" \
     REPO_DIR="${REPO_DIR}" \
     sh "${SCRIPT_DIR}/chroot-setup.sh"
 
+# ── 2b. Stamp rootfs version ─────────────────────────────────────────────────
+printf '==> Step 2b: stamp version\n'
+_rootfs_tag=""
+if command -v git >/dev/null 2>&1 && [ -n "${ROOTFS_REPO_DIR}" ]; then
+    _rootfs_tag="$(git -C "${ROOTFS_REPO_DIR}" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || true)"
+fi
+if [ -z "${_rootfs_tag}" ]; then
+    _derived="$(basename "${OUTPUT}" | sed 's/^rootfs-//;s/\.tar\.zst$//')"
+    case "${_derived}" in
+        rootfs|"") _rootfs_tag="unknown" ;;
+        *) _rootfs_tag="${_derived#v}" ;;
+    esac
+fi
+mkdir -p "${ROOTFS_DIR}/etc/dayshield"
+printf '%s\n' "${_rootfs_tag}" > "${ROOTFS_DIR}/etc/dayshield/version"
+printf '    Version: %s\n' "${_rootfs_tag}"
+
 # ── 3. Run install-dayshield-core.sh ────────────────────────────────────────
 printf '==> Step 3: install-dayshield-core\n'
 env ROOTFS_DIR="${ROOTFS_DIR}" \

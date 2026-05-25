@@ -7,7 +7,8 @@
 
 set -euo pipefail
 
-DAYSHIELD_VERSION="1.0"
+DAYSHIELD_VERSION="$(cat /etc/dayshield/version 2>/dev/null | tr -d '[:space:]')"
+DAYSHIELD_VERSION="${DAYSHIELD_VERSION:-unknown}"
 DAYSHIELD_SITE="https://github.com/daygle/dayshield"
 
 # ---------------------------------------------------------------------------
