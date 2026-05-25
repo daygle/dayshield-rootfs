@@ -401,55 +401,33 @@ if [ "${ENABLE_OSTREE_COMPOSE}" = "1" ]; then
     OSTREE_REPO_OUTPUT_ABS="$(cd "$(dirname "${OSTREE_REPO_OUTPUT}")" && pwd)/$(basename "${OSTREE_REPO_OUTPUT}")"
     OSTREE_REPO_DIR="${BUILD_DIR}/ostree-repo"
     OSTREE_IMPORT_DIR="${BUILD_DIR}/ostree-import-rootfs"
-    OSTREE_SKIP_LIST="${BUILD_DIR}/ostree-skip-list.txt"
     rm -rf "${OSTREE_REPO_DIR}"
     mkdir -p "${OSTREE_REPO_DIR}"
     rm -rf "${OSTREE_IMPORT_DIR}"
     mkdir -p "${OSTREE_IMPORT_DIR}"
 
-    # Exclude special filesystem nodes (for example /dev/full) that cannot be
-    # represented by ostree commit when importing from a plain directory tree.
-    # OSTree path matching has varied across versions; emit a compatibility
-    # skip-list with relative, absolute, and ./-prefixed forms.
-    find "${ROOTFS_DIR}" \
-        -mindepth 1 \
-        \( -type b -o -type c -o -type p -o -type s \) \
-        -printf '%P\n' \
-        | awk 'NF { print; print "/"$0; print "./"$0 }' \
-        | LC_ALL=C sort -u > "${OSTREE_SKIP_LIST}"
-    if [ -s "${OSTREE_SKIP_LIST}" ]; then
-        _skip_count="$(find "${ROOTFS_DIR}" \
-            -mindepth 1 \
-            \( -type b -o -type c -o -type p -o -type s \) \
-            | wc -l | tr -d '[:space:]')"
-        printf '    Skipping %s special filesystem nodes for OSTree compose\n' "${_skip_count}"
-    fi
-
     # Commit from a staging copy with special nodes physically removed.
     # This avoids `Not a regular file or symlink` failures across OSTree builds.
     cp -a "${ROOTFS_DIR}/." "${OSTREE_IMPORT_DIR}/"
+    _skip_count="$(find "${OSTREE_IMPORT_DIR}" \
+        -mindepth 1 \
+        \( -type b -o -type c -o -type p -o -type s \) \
+        | wc -l | tr -d '[:space:]')"
+    if [ "${_skip_count}" -gt 0 ]; then
+        printf '    Skipping %s special filesystem nodes for OSTree compose\n' "${_skip_count}"
+    fi
     find "${OSTREE_IMPORT_DIR}" \
         -mindepth 1 \
         \( -type b -o -type c -o -type p -o -type s \) \
         -delete
 
     ostree --repo="${OSTREE_REPO_DIR}" init --mode=archive-z2
-    if [ -s "${OSTREE_SKIP_LIST}" ]; then
-        ostree --repo="${OSTREE_REPO_DIR}" commit \
-            --branch="${OSTREE_REF}" \
-            --tree="dir=${OSTREE_IMPORT_DIR}" \
-            --subject="DayShield rootfs ${_rootfs_tag}" \
-            --timestamp="${SOURCE_DATE_EPOCH}" \
-            --skip-list="${OSTREE_SKIP_LIST}" \
-            --add-metadata-string="dayshield.version=${_rootfs_tag}"
-    else
-        ostree --repo="${OSTREE_REPO_DIR}" commit \
-            --branch="${OSTREE_REF}" \
-            --tree="dir=${OSTREE_IMPORT_DIR}" \
-            --subject="DayShield rootfs ${_rootfs_tag}" \
-            --timestamp="${SOURCE_DATE_EPOCH}" \
-            --add-metadata-string="dayshield.version=${_rootfs_tag}"
-    fi
+    ostree --repo="${OSTREE_REPO_DIR}" commit \
+        --branch="${OSTREE_REF}" \
+        --tree="dir=${OSTREE_IMPORT_DIR}" \
+        --subject="DayShield rootfs ${_rootfs_tag}" \
+        --timestamp="${SOURCE_DATE_EPOCH}" \
+        --add-metadata-string="dayshield.version=${_rootfs_tag}"
     ostree --repo="${OSTREE_REPO_DIR}" summary -u
     OSTREE_COMMIT="$(ostree --repo="${OSTREE_REPO_DIR}" rev-parse "${OSTREE_REF}")"
     mkdir -p "${ROOTFS_DIR}/usr/local/share/dayshield-updates"
