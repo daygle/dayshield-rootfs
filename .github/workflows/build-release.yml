@@ -41,6 +41,7 @@ jobs:
           fi
           printf 'tag=%s\n' "${TAG}" >> "${GITHUB_OUTPUT}"
           printf 'artifact=rootfs-%s.tar.zst\n' "${TAG}" >> "${GITHUB_OUTPUT}"
+          printf 'artifact_ostree=rootfs-%s-ostree-repo.tar.zst\n' "${TAG}" >> "${GITHUB_OUTPUT}"
 
       # ─────────────────────────────────────────────────────────────────────────
       # Auto-detect latest tags for core and ui
@@ -162,15 +163,18 @@ jobs:
           rm -f /tmp/debian-archive-keyring_2025.1_all.deb
 
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends mmdebstrap zstd debian-archive-keyring
+          sudo apt-get install -y --no-install-recommends mmdebstrap zstd ostree debian-archive-keyring
 
       - name: Build rootfs
         working-directory: rootfs
         run: |
           ENABLE_SUITE_UPDATES=1
+          OSTREE_REF=dayshield/amd64
 
           sudo make rootfs \
             OUTPUT="${{ steps.version.outputs.artifact }}" \
+            OSTREE_REPO_OUTPUT="${{ steps.version.outputs.artifact_ostree }}" \
+            OSTREE_REF="${OSTREE_REF}" \
             ENABLE_SUITE_UPDATES="${ENABLE_SUITE_UPDATES}" \
             UI_DIR="${GITHUB_WORKSPACE}/ui-artifact/dist" \
             ROOTFS_REPO_DIR="${GITHUB_WORKSPACE}/rootfs"
@@ -202,6 +206,25 @@ jobs:
             FAIL=1
           fi
 
+          echo "==> Checking OSTree artifact"
+          OSTREE_ARTIFACT="${{ steps.version.outputs.artifact_ostree }}"
+          OSTREE_REF=dayshield/amd64
+          OSTREE_DIR="$(mktemp -d)"
+          if [ -f "${OSTREE_ARTIFACT}" ]; then
+            echo "  [PASS] OSTree artifact exists: ${OSTREE_ARTIFACT}"
+            tar --zstd -xf "${OSTREE_ARTIFACT}" -C "${OSTREE_DIR}"
+            if ostree --repo="${OSTREE_DIR}" refs | grep -q "${OSTREE_REF}"; then
+              echo "  [PASS] OSTree ref ${OSTREE_REF} exists"
+            else
+              echo "  [FAIL] OSTree ref ${OSTREE_REF} missing" >&2
+              FAIL=1
+            fi
+          else
+            echo "  [FAIL] OSTree artifact missing: ${OSTREE_ARTIFACT}" >&2
+            FAIL=1
+          fi
+          rm -rf "${OSTREE_DIR}"
+
           sudo rm -rf "${VERIFY_DIR}"
 
           if [ "${FAIL}" -ne 0 ]; then
@@ -216,6 +239,8 @@ jobs:
         run: |
           sha256sum "${{ steps.version.outputs.artifact }}" \
             > "${{ steps.version.outputs.artifact }}.sha256"
+          sha256sum "${{ steps.version.outputs.artifact_ostree }}" \
+            > "${{ steps.version.outputs.artifact_ostree }}.sha256"
 
       # ─────────────────────────────────────────────────────────────────────────
       # Publish GitHub Release
@@ -227,6 +252,7 @@ jobs:
         run: |
           TAG="${{ steps.version.outputs.tag }}"
           ARTIFACT="${{ steps.version.outputs.artifact }}"
+          ARTIFACT_OSTREE="${{ steps.version.outputs.artifact_ostree }}"
           CORE_REF="${{ inputs.core_ref || steps.tags.outputs.core_tag }}"
           UI_REF="${{ inputs.ui_ref || steps.tags.outputs.ui_tag }}"
 
@@ -238,6 +264,8 @@ jobs:
           ### Artifacts
           - \`${ARTIFACT}\`
           - \`${ARTIFACT}.sha256\`
+          - \`${ARTIFACT_OSTREE}\`
+          - \`${ARTIFACT_OSTREE}.sha256\`
 
           ### Build inputs
           - **dayshield-core tag:** \`${CORE_REF}\`
@@ -261,11 +289,15 @@ jobs:
             gh release upload "${TAG}" \
               "${ARTIFACT}" \
               "${ARTIFACT}.sha256" \
+              "${ARTIFACT_OSTREE}" \
+              "${ARTIFACT_OSTREE}.sha256" \
               --clobber
           else
             gh release create "${TAG}" \
               --title "rootfs ${TAG}" \
               --notes "${NOTES}" \
               "${ARTIFACT}" \
-              "${ARTIFACT}.sha256"
+              "${ARTIFACT}.sha256" \
+              "${ARTIFACT_OSTREE}" \
+              "${ARTIFACT_OSTREE}.sha256"
           fi

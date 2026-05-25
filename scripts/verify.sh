@@ -80,6 +80,8 @@ for dir in \
     /etc/dayshield/config \
     /etc/dayshield/certs \
     /etc/dayshield/logs \
+    /var/ostree \
+    /etc/ostree/remotes.d \
     /var/lib/dayshield/aliases \
     /var/lib/dayshield/crowdsec \
     /var/lib/dayshield/acme \
@@ -102,6 +104,35 @@ do
         fail "missing directory: ${dir}"
     fi
 done
+
+# Prefer /sysroot/ostree/repo (canonical OSTree sysroot layout); accept /ostree/repo
+# too for compatibility during transition/installer staging paths.
+if [ -d "${ROOTFS_DIR}/sysroot/ostree/repo" ] || [ -d "${ROOTFS_DIR}/ostree/repo" ]; then
+    ok "OSTree repo path exists (/sysroot/ostree/repo or /ostree/repo)"
+else
+    fail "missing OSTree repo path (/sysroot/ostree/repo or /ostree/repo)"
+fi
+
+# ── OSTree layout/update prerequisites ────────────────────────────────────────
+banner "OSTree layout/update prerequisites"
+if [ -x "${ROOTFS_DIR}/usr/bin/ostree" ]; then
+    ok "ostree binary installed in rootfs"
+else
+    fail "ostree binary missing (/usr/bin/ostree)"
+fi
+
+OSTREE_REMOTE_CONF="${ROOTFS_DIR}/etc/ostree/remotes.d/dayshield.conf"
+if [ -f "${OSTREE_REMOTE_CONF}" ]; then
+    ok "OSTree remote config exists: /etc/ostree/remotes.d/dayshield.conf"
+else
+    fail "missing OSTree remote config: /etc/ostree/remotes.d/dayshield.conf"
+fi
+
+if [ -x "${ROOTFS_DIR}/usr/local/lib/dayshield/ostree-update.sh" ]; then
+    ok "OSTree update helper exists: /usr/local/lib/dayshield/ostree-update.sh"
+else
+    fail "missing OSTree update helper: /usr/local/lib/dayshield/ostree-update.sh"
+fi
 
 # ── Required service unit files ───────────────────────────────────────────────
 banner "Required base service units"

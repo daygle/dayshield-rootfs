@@ -8,6 +8,7 @@ busybox-static
 ca-certificates
 coreutils
 git
+ostree
 dash
 dbus
 e2fsprogs
