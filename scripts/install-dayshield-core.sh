@@ -28,7 +28,6 @@ seed_repo() {
     remote="$4"
 
     if [ -z "${src}" ]; then
-        printf '  -> WARNING: %s repo seed path not provided; updater for this component will require manual repo setup\n' "${component}"
         return 0
     fi
 
