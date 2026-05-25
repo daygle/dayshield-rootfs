@@ -16,6 +16,10 @@ OUTPUT="rootfs.tar.zst"
 MIRROR="https://deb.debian.org/debian"
 SECURITY_MIRROR="https://deb.debian.org/debian-security"
 ENABLE_SUITE_UPDATES="1"
+ENABLE_OSTREE_COMPOSE="1"
+OSTREE_REPO_OUTPUT=""
+OSTREE_REF="daygle/dayshield/${ARCH}"
+OSTREE_REF_SET="0"
 UI_DIR=""
 CORE_REPO_DIR=""
 UI_REPO_DIR=""
@@ -34,6 +38,11 @@ Options:
                                         Debian security mirror URL (default: https://deb.debian.org/debian-security)
     --enable-suite-updates
                         Include SUITE-updates source for stable-style suites (default: disabled)
+    --disable-ostree-compose
+                        Skip host-side OSTree repo/commit generation (default: enabled)
+    --ostree-repo-output FILE
+                        Output file for archived OSTree repo (default: <output>-ostree-repo.tar.zst)
+    --ostree-ref REF   OSTree ref for commits (default: daygle/dayshield/<arch>)
   --ui-dir PATH     Built UI output directory to install into /usr/local/share/dayshield-ui (required)
     --core-repo-dir PATH   Core git repo to seed into /opt/dayshield-core
     --ui-repo-dir PATH     UI git repo to seed into /opt/dayshield-ui
@@ -46,7 +55,7 @@ EOF
 # Parse arguments
 while [ $# -gt 0 ]; do
     case "$1" in
-        --arch|--suite|--output|--mirror|--security-mirror|--ui-dir|--core-repo-dir|--ui-repo-dir|--rootfs-repo-dir)
+        --arch|--suite|--output|--mirror|--security-mirror|--ui-dir|--core-repo-dir|--ui-repo-dir|--rootfs-repo-dir|--ostree-repo-output|--ostree-ref)
             if [ $# -lt 2 ] || [ -z "${2}" ] || [ "${2#--}" != "${2}" ]; then
                 printf 'ERROR: option %s requires a value\n' "$1" >&2
                 exit 1
@@ -57,6 +66,8 @@ while [ $# -gt 0 ]; do
                 --output) OUTPUT="$2" ;;
                 --mirror) MIRROR="$2" ;;
                 --security-mirror) SECURITY_MIRROR="$2" ;;
+                --ostree-repo-output) OSTREE_REPO_OUTPUT="$2" ;;
+                --ostree-ref) OSTREE_REF="$2"; OSTREE_REF_SET="1" ;;
                 --ui-dir) UI_DIR="$2" ;;
                 --core-repo-dir) CORE_REPO_DIR="$2" ;;
                 --ui-repo-dir) UI_REPO_DIR="$2" ;;
@@ -68,6 +79,10 @@ while [ $# -gt 0 ]; do
             ENABLE_SUITE_UPDATES="1"
             shift
             ;;
+        --disable-ostree-compose)
+            ENABLE_OSTREE_COMPOSE="0"
+            shift
+            ;;
         --help)    usage ;;
         *)
             printf 'Unknown option: %s\n' "$1" >&2
@@ -75,6 +90,10 @@ while [ $# -gt 0 ]; do
             ;;
     esac
 done
+
+if [ "${OSTREE_REF_SET}" != "1" ]; then
+    OSTREE_REF="daygle/dayshield/${ARCH}"
+fi
 
 # Validate required inputs
 if [ -z "${UI_DIR}" ]; then
@@ -219,6 +238,11 @@ printf '    UI dir       : %s\n' "${UI_DIR:-<none>}"
 printf '    Core repo    : %s\n' "${CORE_REPO_DIR:-<none>}"
 printf '    UI repo      : %s\n' "${UI_REPO_DIR:-<none>}"
 printf '    RootFS repo  : %s\n' "${ROOTFS_REPO_DIR:-<none>}"
+if [ "${ENABLE_OSTREE_COMPOSE}" = "1" ]; then
+    printf '    OSTree ref   : %s\n' "${OSTREE_REF}"
+else
+    printf '    OSTree ref   : disabled\n'
+fi
 printf '\n'
 
 # ── 1. Run mmdebstrap ────────────────────────────────────────────────────────
@@ -332,8 +356,60 @@ printf '==> Step 6: cleanup\n'
 env ROOTFS_DIR="${ROOTFS_DIR}" \
     sh "${SCRIPT_DIR}/cleanup.sh"
 
-# ── 7. Package the rootfs ───────────────────────────────────────
-printf '==> Step 7: packaging rootfs -> %s\n' "${OUTPUT}"
+# ── 7. Compose OSTree repo commit (host-side) ───────────────────────────────
+if [ "${ENABLE_OSTREE_COMPOSE}" = "1" ]; then
+    printf '==> Step 7: composing OSTree repo\n'
+    if ! command -v ostree >/dev/null 2>&1; then
+        printf 'ERROR: required tool not found: ostree (needed for OSTree compose)\n' >&2
+        printf '       Install ostree or run with --disable-ostree-compose\n' >&2
+        exit 1
+    fi
+    if [ -z "${OSTREE_REPO_OUTPUT}" ]; then
+        _base_output="$(basename "${OUTPUT}")"
+        _base_output="${_base_output%.tar.zst}"
+        OSTREE_REPO_OUTPUT="$(dirname "${OUTPUT}")/${_base_output}-ostree-repo.tar.zst"
+    fi
+    OSTREE_OUTPUT_DIR="$(dirname "${OSTREE_REPO_OUTPUT}")"
+    if [ "${OSTREE_OUTPUT_DIR}" != "." ] && [ ! -d "${OSTREE_OUTPUT_DIR}" ]; then
+        mkdir -p "${OSTREE_OUTPUT_DIR}"
+    fi
+    OSTREE_REPO_OUTPUT_ABS="$(cd "$(dirname "${OSTREE_REPO_OUTPUT}")" && pwd)/$(basename "${OSTREE_REPO_OUTPUT}")"
+    OSTREE_REPO_DIR="${BUILD_DIR}/ostree-repo"
+    rm -rf "${OSTREE_REPO_DIR}"
+    mkdir -p "${OSTREE_REPO_DIR}"
+
+    ostree --repo="${OSTREE_REPO_DIR}" init --mode=archive-z2
+    ostree --repo="${OSTREE_REPO_DIR}" commit \
+        --branch="${OSTREE_REF}" \
+        --tree="dir=${ROOTFS_DIR}" \
+        --subject="DayShield rootfs ${_rootfs_tag}" \
+        --add-metadata-string="dayshield.version=${_rootfs_tag}"
+    ostree --repo="${OSTREE_REPO_DIR}" summary -u
+    OSTREE_COMMIT="$(ostree --repo="${OSTREE_REPO_DIR}" rev-parse "${OSTREE_REF}")"
+    mkdir -p "${ROOTFS_DIR}/usr/local/share/dayshield-updates"
+    cat > "${ROOTFS_DIR}/usr/local/share/dayshield-updates/ostree-build-manifest.json" <<EOF
+{
+  "ref": "${OSTREE_REF}",
+  "commit": "${OSTREE_COMMIT}",
+  "version": "${_rootfs_tag}"
+}
+EOF
+    tar \
+        --sort=name \
+        --mtime='@0' \
+        --owner=0 \
+        --group=0 \
+        --numeric-owner \
+        -C "${OSTREE_REPO_DIR}" \
+        -cf - \
+        . \
+        | zstd -T0 -19 --force -o "${OSTREE_REPO_OUTPUT_ABS}"
+    printf '    OSTree commit : %s\n' "${OSTREE_COMMIT}"
+    printf '    OSTree artifact: %s\n' "${OSTREE_REPO_OUTPUT}"
+fi
+
+# ── 8. Package the rootfs ───────────────────────────────────────
+printf '==> Step 8: packaging rootfs -> %s\n' "${OUTPUT}"
 OUTPUT_DIR="$(dirname "${OUTPUT}")"
 if [ "${OUTPUT_DIR}" != "." ] && [ ! -d "${OUTPUT_DIR}" ]; then
     mkdir -p "${OUTPUT_DIR}"

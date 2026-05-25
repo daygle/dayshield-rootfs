@@ -29,7 +29,7 @@ EOF
 
 # ── /etc/fstab ────────────────────────────────────────────────────────────────
 # A minimal fstab must exist so systemd-remount-fs.service and local-fs.target
-# can operate correctly on the installed system.  The installer is expected to
+# can operate correctly on the installed system. The installer is expected to
 # replace the LABEL values with real partition UUIDs after partitioning.
 printf '  -> Writing placeholder /etc/fstab\n'
 cat > "${ROOTFS_DIR}/etc/fstab" <<'EOF'
@@ -37,7 +37,8 @@ cat > "${ROOTFS_DIR}/etc/fstab" <<'EOF'
 # NOTE: The installer replaces these entries with UUID= lines.
 #
 # <file system>         <mount point>  <type>  <options>          <dump>  <pass>
-LABEL=DS_PRIMARY        /              ext4    errors=remount-ro  0       1
+LABEL=DS_SYSROOT        /              ext4    defaults,noatime   0       1
+LABEL=DS_STATE          /var           ext4    defaults,noatime,nofail,x-systemd.device-timeout=10s  0  2
 LABEL=DAYSHIELD_BOOT    /boot          ext4    defaults,noatime   0       2
 LABEL=DS_EFI            /boot/efi      vfat    umask=0077         0       2
 EOF
@@ -193,6 +194,24 @@ mkdir -p \
     "${ROOTFS_DIR}/var/lib/dayshield/aliases" \
     "${ROOTFS_DIR}/var/lib/dayshield/crowdsec" \
     "${ROOTFS_DIR}/var/lib/dayshield/acme"
+
+printf '  -> Creating OSTree sysroot and writable state layout\n'
+mkdir -p \
+    "${ROOTFS_DIR}/sysroot/ostree/repo" \
+    "${ROOTFS_DIR}/ostree/repo" \
+    "${ROOTFS_DIR}/var/ostree" \
+    "${ROOTFS_DIR}/var/lib/dayshield/ostree" \
+    "${ROOTFS_DIR}/etc/ostree/remotes.d" \
+    "${ROOTFS_DIR}/usr/local/share/dayshield-updates"
+cat > "${ROOTFS_DIR}/etc/ostree/remotes.d/dayshield.conf" <<'EOF'
+[remote "dayshield"]
+url=https://updates.dayshield.local/ostree/repo
+gpg-verify=false
+EOF
+cat > "${ROOTFS_DIR}/usr/local/share/dayshield-updates/README.txt" <<'EOF'
+This directory stores OSTree update metadata generated during rootfs builds.
+It is consumed by DayShield core/UI update workflows.
+EOF
 
 printf '  -> Creating cloudflared runtime directories\n'
 mkdir -p \
@@ -356,6 +375,36 @@ ExecStart=/usr/local/lib/dayshield/rootfs-boot-watchdog.sh
 [Install]
 WantedBy=multi-user.target
 EOF
+
+# Initial OSTree update helper contract for core/UI integration.
+printf '  -> Installing OSTree update helper\n'
+cat > "${ROOTFS_DIR}/usr/local/lib/dayshield/ostree-update.sh" <<'EOF'
+#!/bin/sh
+set -eu
+
+action="${1:-status}"
+remote="${DAYSHIELD_OSTREE_REMOTE:-dayshield}"
+
+case "${action}" in
+    status)
+        exec ostree admin status
+        ;;
+    check)
+        exec ostree remote refs "${remote}"
+        ;;
+    stage|apply)
+        exec ostree admin upgrade --os=dayshield --stage
+        ;;
+    rollback)
+        exec ostree admin rollback --os=dayshield
+        ;;
+    *)
+        printf 'Usage: %s [status|check|stage|apply|rollback]\n' "$0" >&2
+        exit 1
+        ;;
+esac
+EOF
+chmod 755 "${ROOTFS_DIR}/usr/local/lib/dayshield/ostree-update.sh"
 
 # Post-login menu hook for installed system (root local console logins only)
 printf '  -> Installing console login profile hook\n'

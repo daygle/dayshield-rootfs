@@ -34,8 +34,10 @@ if [ -f "${ROOTFS_DIR}/etc/fstab" ]; then
     ok "/etc/fstab exists"
     if grep -qE '^[^#].*[[:space:]]+/[[:space:]]' "${ROOTFS_DIR}/etc/fstab"; then
         ok "/etc/fstab has a root (/) mount entry"
+    elif grep -qE '^[^#].*[[:space:]]+/sysroot[[:space:]]' "${ROOTFS_DIR}/etc/fstab"; then
+        ok "/etc/fstab has an OSTree sysroot mount entry (/sysroot)"
     else
-        fail "/etc/fstab is missing a root (/) mount entry - systemd will hang at local-fs.target"
+        fail "/etc/fstab is missing a root (/) or OSTree sysroot (/sysroot) mount entry - systemd will hang at local-fs.target"
     fi
 else
     fail "missing /etc/fstab - systemd-remount-fs.service will fail and hang boot"
@@ -80,6 +82,10 @@ for dir in \
     /etc/dayshield/config \
     /etc/dayshield/certs \
     /etc/dayshield/logs \
+    /sysroot/ostree/repo \
+    /ostree/repo \
+    /var/ostree \
+    /etc/ostree/remotes.d \
     /var/lib/dayshield/aliases \
     /var/lib/dayshield/crowdsec \
     /var/lib/dayshield/acme \
@@ -102,6 +108,27 @@ do
         fail "missing directory: ${dir}"
     fi
 done
+
+# ── OSTree layout/update prerequisites ────────────────────────────────────────
+banner "OSTree layout/update prerequisites"
+if [ -x "${ROOTFS_DIR}/usr/bin/ostree" ]; then
+    ok "ostree binary installed in rootfs"
+else
+    fail "ostree binary missing (/usr/bin/ostree)"
+fi
+
+OSTREE_REMOTE_CONF="${ROOTFS_DIR}/etc/ostree/remotes.d/dayshield.conf"
+if [ -f "${OSTREE_REMOTE_CONF}" ]; then
+    ok "OSTree remote config exists: /etc/ostree/remotes.d/dayshield.conf"
+else
+    fail "missing OSTree remote config: /etc/ostree/remotes.d/dayshield.conf"
+fi
+
+if [ -x "${ROOTFS_DIR}/usr/local/lib/dayshield/ostree-update.sh" ]; then
+    ok "OSTree update helper exists: /usr/local/lib/dayshield/ostree-update.sh"
+else
+    fail "missing OSTree update helper: /usr/local/lib/dayshield/ostree-update.sh"
+fi
 
 # ── Required service unit files ───────────────────────────────────────────────
 banner "Required base service units"
