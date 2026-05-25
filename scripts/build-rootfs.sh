@@ -406,13 +406,19 @@ if [ "${ENABLE_OSTREE_COMPOSE}" = "1" ]; then
 
     # Exclude special filesystem nodes (for example /dev/full) that cannot be
     # represented by ostree commit when importing from a plain directory tree.
+    # OSTree path matching has varied across versions; emit a compatibility
+    # skip-list with relative, absolute, and ./-prefixed forms.
     find "${ROOTFS_DIR}" \
         -mindepth 1 \
         \( -type b -o -type c -o -type p -o -type s \) \
         -printf '%P\n' \
-        | LC_ALL=C sort > "${OSTREE_SKIP_LIST}"
+        | awk 'NF { print; print "/"$0; print "./"$0 }' \
+        | LC_ALL=C sort -u > "${OSTREE_SKIP_LIST}"
     if [ -s "${OSTREE_SKIP_LIST}" ]; then
-        _skip_count="$(wc -l < "${OSTREE_SKIP_LIST}" | tr -d '[:space:]')"
+        _skip_count="$(find "${ROOTFS_DIR}" \
+            -mindepth 1 \
+            \( -type b -o -type c -o -type p -o -type s \) \
+            | wc -l | tr -d '[:space:]')"
         printf '    Skipping %s special filesystem nodes for OSTree compose\n' "${_skip_count}"
     fi
 
