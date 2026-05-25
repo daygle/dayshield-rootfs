@@ -400,16 +400,39 @@ if [ "${ENABLE_OSTREE_COMPOSE}" = "1" ]; then
     fi
     OSTREE_REPO_OUTPUT_ABS="$(cd "$(dirname "${OSTREE_REPO_OUTPUT}")" && pwd)/$(basename "${OSTREE_REPO_OUTPUT}")"
     OSTREE_REPO_DIR="${BUILD_DIR}/ostree-repo"
+    OSTREE_SKIP_LIST="${BUILD_DIR}/ostree-skip-list.txt"
     rm -rf "${OSTREE_REPO_DIR}"
     mkdir -p "${OSTREE_REPO_DIR}"
 
+    # Exclude special filesystem nodes (for example /dev/full) that cannot be
+    # represented by ostree commit when importing from a plain directory tree.
+    find "${ROOTFS_DIR}" \
+        -mindepth 1 \
+        \( -type b -o -type c -o -type p -o -type s \) \
+        -printf '%P\n' \
+        | LC_ALL=C sort > "${OSTREE_SKIP_LIST}"
+    if [ -s "${OSTREE_SKIP_LIST}" ]; then
+        _skip_count="$(wc -l < "${OSTREE_SKIP_LIST}" | tr -d '[:space:]')"
+        printf '    Skipping %s special filesystem nodes for OSTree compose\n' "${_skip_count}"
+    fi
+
     ostree --repo="${OSTREE_REPO_DIR}" init --mode=archive-z2
-    ostree --repo="${OSTREE_REPO_DIR}" commit \
-        --branch="${OSTREE_REF}" \
-        --tree="dir=${ROOTFS_DIR}" \
-        --subject="DayShield rootfs ${_rootfs_tag}" \
-        --timestamp="${SOURCE_DATE_EPOCH}" \
-        --add-metadata-string="dayshield.version=${_rootfs_tag}"
+    if [ -s "${OSTREE_SKIP_LIST}" ]; then
+        ostree --repo="${OSTREE_REPO_DIR}" commit \
+            --branch="${OSTREE_REF}" \
+            --tree="dir=${ROOTFS_DIR}" \
+            --subject="DayShield rootfs ${_rootfs_tag}" \
+            --timestamp="${SOURCE_DATE_EPOCH}" \
+            --skip-list="${OSTREE_SKIP_LIST}" \
+            --add-metadata-string="dayshield.version=${_rootfs_tag}"
+    else
+        ostree --repo="${OSTREE_REPO_DIR}" commit \
+            --branch="${OSTREE_REF}" \
+            --tree="dir=${ROOTFS_DIR}" \
+            --subject="DayShield rootfs ${_rootfs_tag}" \
+            --timestamp="${SOURCE_DATE_EPOCH}" \
+            --add-metadata-string="dayshield.version=${_rootfs_tag}"
+    fi
     ostree --repo="${OSTREE_REPO_DIR}" summary -u
     OSTREE_COMMIT="$(ostree --repo="${OSTREE_REPO_DIR}" rev-parse "${OSTREE_REF}")"
     mkdir -p "${ROOTFS_DIR}/usr/local/share/dayshield-updates"
