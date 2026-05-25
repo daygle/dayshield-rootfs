@@ -121,6 +121,24 @@ for tool in mmdebstrap zstd tar; do
     fi
 done
 
+# Validate dayshield-core binary and repo paths before starting any build work.
+if [ ! -f "${REPO_DIR}/dayshield-core" ]; then
+    printf 'ERROR: missing dayshield-core binary at %s/dayshield-core\n' "${REPO_DIR}" >&2
+    printf '       Build dayshield-core and copy target/release/dayshield-core there before running rootfs build.\n' >&2
+    exit 1
+fi
+if [ -z "${CORE_REPO_DIR}" ]; then
+    printf 'WARNING: core repo path not provided; /opt/dayshield-core repo seeding will be skipped\n' >&2
+fi
+if [ -z "${UI_REPO_DIR}" ]; then
+    printf 'WARNING: UI repo path not provided; /opt/dayshield-ui repo seeding will be skipped\n' >&2
+fi
+if [ -z "${ROOTFS_REPO_DIR}" ]; then
+    printf 'ERROR: rootfs repo path not provided and current repo git metadata was not found\n' >&2
+    printf '       Pass --rootfs-repo-dir <path-to-dayshield-rootfs>\n' >&2
+    exit 1
+fi
+
 # Load package list (strip comments and blank lines)
 PACKAGES_FILE="${CONFIG_DIR}/packages.txt"
 if [ ! -f "${PACKAGES_FILE}" ]; then
@@ -205,43 +223,22 @@ printf '\n'
 
 # ── 1. Run mmdebstrap ────────────────────────────────────────────────────────
 printf '==> Step 1: mmdebstrap\n'
-if [ -n "${SECURITY_MIRROR_ENTRY}" ] && [ -n "${UPDATES_MIRROR_ENTRY}" ]; then
-    mmdebstrap \
-        --arch="${ARCH}" \
-        --variant=minbase \
-        --include="${PACKAGES}" \
-        --aptopt='Acquire::Languages=none' \
-        --aptopt='Acquire::Retries=0' \
-        --aptopt='Acquire::http::Timeout=10' \
-        "${SUITE}" \
-        "${ROOTFS_DIR}" \
-        "${MIRROR}" \
-        "${SECURITY_MIRROR_ENTRY}" \
-        "${UPDATES_MIRROR_ENTRY}"
-elif [ -n "${SECURITY_MIRROR_ENTRY}" ]; then
-    mmdebstrap \
-        --arch="${ARCH}" \
-        --variant=minbase \
-        --include="${PACKAGES}" \
-        --aptopt='Acquire::Languages=none' \
-        --aptopt='Acquire::Retries=0' \
-        --aptopt='Acquire::http::Timeout=10' \
-        "${SUITE}" \
-        "${ROOTFS_DIR}" \
-        "${MIRROR}" \
-        "${SECURITY_MIRROR_ENTRY}"
-else
-    mmdebstrap \
-        --arch="${ARCH}" \
-        --variant=minbase \
-        --include="${PACKAGES}" \
-        --aptopt='Acquire::Languages=none' \
-        --aptopt='Acquire::Retries=0' \
-        --aptopt='Acquire::http::Timeout=10' \
-        "${SUITE}" \
-        "${ROOTFS_DIR}" \
-        "${MIRROR}"
-fi
+# Build the mmdebstrap positional-argument list dynamically so that optional
+# security and updates sources are only appended when enabled.  By this point
+# in the script all argument parsing is complete so reusing $@ is safe.
+set -- \
+    --arch="${ARCH}" \
+    --variant=minbase \
+    --include="${PACKAGES}" \
+    --aptopt='Acquire::Languages=none' \
+    --aptopt='Acquire::Retries=3' \
+    --aptopt='Acquire::http::Timeout=30' \
+    "${SUITE}" \
+    "${ROOTFS_DIR}" \
+    "${MIRROR}"
+[ -n "${SECURITY_MIRROR_ENTRY}" ] && set -- "$@" "${SECURITY_MIRROR_ENTRY}"
+[ -n "${UPDATES_MIRROR_ENTRY}" ]  && set -- "$@" "${UPDATES_MIRROR_ENTRY}"
+mmdebstrap "$@"
 
 # ── 2. Run chroot-setup.sh ───────────────────────────────────────────────────
 printf '==> Step 2: chroot-setup\n'
@@ -251,22 +248,6 @@ env ROOTFS_DIR="${ROOTFS_DIR}" \
     sh "${SCRIPT_DIR}/chroot-setup.sh"
 
 # ── 3. Run install-dayshield-core.sh ────────────────────────────────────────
-if [ ! -f "${REPO_DIR}/dayshield-core" ]; then
-    printf 'ERROR: missing dayshield-core binary at %s/dayshield-core\n' "${REPO_DIR}" >&2
-    printf '       Build dayshield-core and copy target/release/dayshield-core there before running rootfs build.\n' >&2
-    exit 1
-fi
-if [ -z "${CORE_REPO_DIR}" ]; then
-    printf 'WARNING: core repo path not provided; /opt/dayshield-core repo seeding will be skipped\n' >&2
-fi
-if [ -z "${UI_REPO_DIR}" ]; then
-    printf 'WARNING: UI repo path not provided; /opt/dayshield-ui repo seeding will be skipped\n' >&2
-fi
-if [ -z "${ROOTFS_REPO_DIR}" ]; then
-    printf 'ERROR: rootfs repo path not provided and current repo git metadata was not found\n' >&2
-    printf '       Pass --rootfs-repo-dir <path-to-dayshield-rootfs>\n' >&2
-    exit 1
-fi
 printf '==> Step 3: install-dayshield-core\n'
 env ROOTFS_DIR="${ROOTFS_DIR}" \
     CONFIG_DIR="${CONFIG_DIR}" \
