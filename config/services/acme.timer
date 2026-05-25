@@ -5,7 +5,7 @@ ConditionKernelCommandLine=!installer
 
 [Timer]
 OnBootSec=15m
-OnUnitActiveSec=12h
+OnUnitActiveSec=24h
 Persistent=true
 Unit=acme.service
 
