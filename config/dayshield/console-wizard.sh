@@ -1742,11 +1742,11 @@ while true; do
     _hr
     echo "  [0] Open shell"
     if [[ "${CONSOLE_MODE}" == "login" ]]; then
-        echo "  [q] Logout"
+        echo "  [9] Logout"
     fi
     if $LIVE_MODE; then
-        echo "  [8] Install DayShield"
-        echo "  [9] Setup Web Installer LAN"
+        echo "  [1] Install DayShield"
+        echo "  [2] Setup Web Installer LAN"
     else
         echo "  [1] Assign interfaces"
         echo "  [2] Set LAN IP address"
@@ -1772,22 +1772,27 @@ while true; do
                 exit 0
             fi
             ;;
-        1) ! $LIVE_MODE && _assign_interfaces ;;
-        2) ! $LIVE_MODE && _set_lan_ip ;;
+        1)
+            if $LIVE_MODE; then
+                _run_install_wizard
+            else
+                _assign_interfaces
+            fi
+            ;;
+        2)
+            if $LIVE_MODE; then
+                _assign_interfaces && _set_lan_ip
+            else
+                _set_lan_ip
+            fi
+            ;;
         3) ! $LIVE_MODE && _set_lan_dhcp ;;
         4) ! $LIVE_MODE && _change_password ;;
         5) ! $LIVE_MODE && _reboot ;;
         6) ! $LIVE_MODE && _shutdown ;;
         7) ! $LIVE_MODE && _run_guided_setup ;;
-        8)
-            if $LIVE_MODE; then
-                _run_install_wizard
-            else
-                _update_system
-            fi
-            ;;
-        9) $LIVE_MODE && _assign_interfaces && _set_lan_ip ;;
-        q|Q)
+        8) ! $LIVE_MODE && _update_system ;;
+        9)
             if [[ "${CONSOLE_MODE}" == "login" ]]; then
                 exit 2
             fi
