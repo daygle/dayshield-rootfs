@@ -61,6 +61,12 @@ fi
 export DAYSHIELD_CONSOLE_RUNNING=1
 export DAYSHIELD_CONSOLE_MODE=login
 trap 'unset DAYSHIELD_CONSOLE_RUNNING DAYSHIELD_CONSOLE_MODE' EXIT INT TERM HUP
-"${MENU_CMD}" || true
+"${MENU_CMD}"; _DAYSHIELD_RC=$?
 trap - EXIT INT TERM HUP
 unset DAYSHIELD_CONSOLE_RUNNING DAYSHIELD_CONSOLE_MODE
+# Exit code 2 = user chose "Logout" from the menu → close the login session.
+if [ "${_DAYSHIELD_RC:-0}" -eq 2 ] 2>/dev/null; then
+    unset _DAYSHIELD_RC
+    exit
+fi
+unset _DAYSHIELD_RC

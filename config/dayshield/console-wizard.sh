@@ -1721,7 +1721,8 @@ _run_install_wizard() {
 _load_state
 _load_core_state
 _console_quiet_enter
-trap _console_quiet_exit EXIT INT TERM
+trap '_console_quiet_exit' EXIT
+trap '_console_quiet_exit; exit 0' INT TERM
 
 if [[ "${CONSOLE_MODE}" == "boot" ]]; then
     if $LIVE_MODE; then
@@ -1739,10 +1740,9 @@ while true; do
 
     echo "  Actions"
     _hr
-    if [[ "${CONSOLE_MODE}" == "boot" ]]; then
-        echo "  [0] Open shell"
-    else
-        echo "  [0] Open shell"
+    echo "  [0] Open shell"
+    if [[ "${CONSOLE_MODE}" == "login" ]]; then
+        echo "  [q] Logout"
     fi
     if $LIVE_MODE; then
         echo "  [8] Install DayShield"
@@ -1787,6 +1787,11 @@ while true; do
             fi
             ;;
         9) $LIVE_MODE && _assign_interfaces && _set_lan_ip ;;
+        q|Q)
+            if [[ "${CONSOLE_MODE}" == "login" ]]; then
+                exit 2
+            fi
+            ;;
         *) ;;
     esac
 done
