@@ -116,6 +116,13 @@ case "${SOURCE_DATE_EPOCH}" in
         ;;
 esac
 
+if SOURCE_DATE_UTC="$(date -u -d "@${SOURCE_DATE_EPOCH}" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null)"; then
+    :
+else
+    printf 'ERROR: failed to convert SOURCE_DATE_EPOCH to UTC timestamp: %s\n' "${SOURCE_DATE_EPOCH}" >&2
+    exit 1
+fi
+
 # Validate required inputs
 if [ -z "${UI_DIR}" ]; then
     printf 'ERROR: --ui-dir <path-to-dayshield-ui-dist> is required\n' >&2
@@ -426,7 +433,7 @@ if [ "${ENABLE_OSTREE_COMPOSE}" = "1" ]; then
         --branch="${OSTREE_REF}" \
         --tree="dir=${OSTREE_IMPORT_DIR}" \
         --subject="DayShield rootfs ${_rootfs_tag}" \
-        --timestamp="${SOURCE_DATE_EPOCH}" \
+        --timestamp="${SOURCE_DATE_UTC}" \
         --add-metadata-string="dayshield.version=${_rootfs_tag}"
     ostree --repo="${OSTREE_REPO_DIR}" summary -u
     OSTREE_COMMIT="$(ostree --repo="${OSTREE_REPO_DIR}" rev-parse "${OSTREE_REF}")"
