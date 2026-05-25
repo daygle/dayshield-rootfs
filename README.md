@@ -55,7 +55,7 @@ By default this now produces two artifacts:
 ```sh
 make rootfs UI_DIR=../dayshield-ui/dist ARCH=arm64 SUITE=trixie \
   OUTPUT=dayshield-arm64.tar.zst \
-  OSTREE_REF=daygle/dayshield/arm64
+  OSTREE_REF=dayshield/arm64
 ```
 
 ## Inputs
@@ -100,8 +100,10 @@ make verify ROOTFS_DIR=/path/to/extracted/rootfs
 mkdir -p /tmp/dayshield-ostree
 tar --zstd -xf rootfs-ostree-repo.tar.zst -C /tmp/dayshield-ostree
 ostree --repo=/tmp/dayshield-ostree refs
-ostree --repo=/tmp/dayshield-ostree log daygle/dayshield/amd64
+ostree --repo=/tmp/dayshield-ostree log dayshield/amd64
 ```
+
+Replace `amd64` with your target architecture when using a non-amd64 build/ref.
 
 ## Notes
 

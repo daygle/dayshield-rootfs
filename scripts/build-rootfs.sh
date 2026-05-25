@@ -18,12 +18,13 @@ SECURITY_MIRROR="https://deb.debian.org/debian-security"
 ENABLE_SUITE_UPDATES="1"
 ENABLE_OSTREE_COMPOSE="1"
 OSTREE_REPO_OUTPUT=""
-OSTREE_REF="daygle/dayshield/${ARCH}"
+OSTREE_REF=""
 OSTREE_REF_SET="0"
 UI_DIR=""
 CORE_REPO_DIR=""
 UI_REPO_DIR=""
 ROOTFS_REPO_DIR=""
+SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-}"
 
 usage() {
     cat <<EOF
@@ -42,7 +43,7 @@ Options:
                         Skip host-side OSTree repo/commit generation (default: enabled)
     --ostree-repo-output FILE
                         Output file for archived OSTree repo (default: <output>-ostree-repo.tar.zst)
-    --ostree-ref REF   OSTree ref for commits (default: daygle/dayshield/<arch>)
+    --ostree-ref REF   OSTree ref for commits (default: dayshield/<arch>)
   --ui-dir PATH     Built UI output directory to install into /usr/local/share/dayshield-ui (required)
     --core-repo-dir PATH   Core git repo to seed into /opt/dayshield-core
     --ui-repo-dir PATH     UI git repo to seed into /opt/dayshield-ui
@@ -92,8 +93,28 @@ while [ $# -gt 0 ]; do
 done
 
 if [ "${OSTREE_REF_SET}" != "1" ]; then
-    OSTREE_REF="daygle/dayshield/${ARCH}"
+    OSTREE_REF="dayshield/${ARCH}"
 fi
+
+if [ -z "${SOURCE_DATE_EPOCH}" ] && command -v git >/dev/null 2>&1 && [ -n "${ROOTFS_REPO_DIR}" ]; then
+    if SOURCE_DATE_EPOCH="$(git -C "${ROOTFS_REPO_DIR}" log -1 --format=%ct 2>/dev/null)"; then
+        :
+    else
+        SOURCE_DATE_EPOCH=""
+        printf 'WARNING: failed to derive SOURCE_DATE_EPOCH from git history; using current time\n' >&2
+    fi
+fi
+if [ -z "${SOURCE_DATE_EPOCH}" ]; then
+    printf 'WARNING: SOURCE_DATE_EPOCH not provided and git timestamp unavailable; using current time\n' >&2
+    SOURCE_DATE_EPOCH="$(date +%s)"
+fi
+
+case "${SOURCE_DATE_EPOCH}" in
+    *[!0-9]*)
+        printf 'ERROR: SOURCE_DATE_EPOCH must be an integer epoch timestamp\n' >&2
+        exit 1
+        ;;
+esac
 
 # Validate required inputs
 if [ -z "${UI_DIR}" ]; then
@@ -366,7 +387,11 @@ if [ "${ENABLE_OSTREE_COMPOSE}" = "1" ]; then
     fi
     if [ -z "${OSTREE_REPO_OUTPUT}" ]; then
         _base_output="$(basename "${OUTPUT}")"
-        _base_output="${_base_output%.tar.zst}"
+        case "${_base_output}" in
+            *.tar.zst) _base_output="${_base_output%.tar.zst}" ;;
+            *.tar) _base_output="${_base_output%.tar}" ;;
+        esac
+        [ -n "${_base_output}" ] || _base_output="rootfs"
         OSTREE_REPO_OUTPUT="$(dirname "${OUTPUT}")/${_base_output}-ostree-repo.tar.zst"
     fi
     OSTREE_OUTPUT_DIR="$(dirname "${OSTREE_REPO_OUTPUT}")"
@@ -383,6 +408,7 @@ if [ "${ENABLE_OSTREE_COMPOSE}" = "1" ]; then
         --branch="${OSTREE_REF}" \
         --tree="dir=${ROOTFS_DIR}" \
         --subject="DayShield rootfs ${_rootfs_tag}" \
+        --timestamp="${SOURCE_DATE_EPOCH}" \
         --add-metadata-string="dayshield.version=${_rootfs_tag}"
     ostree --repo="${OSTREE_REPO_DIR}" summary -u
     OSTREE_COMMIT="$(ostree --repo="${OSTREE_REPO_DIR}" rev-parse "${OSTREE_REF}")"
@@ -396,7 +422,7 @@ if [ "${ENABLE_OSTREE_COMPOSE}" = "1" ]; then
 EOF
     tar \
         --sort=name \
-        --mtime='@0' \
+        --mtime="@${SOURCE_DATE_EPOCH}" \
         --owner=0 \
         --group=0 \
         --numeric-owner \
@@ -417,7 +443,7 @@ fi
 OUTPUT_ABS="$(cd "$(dirname "${OUTPUT}")" && pwd)/$(basename "${OUTPUT}")"
 tar \
     --sort=name \
-    --mtime='@0' \
+    --mtime="@${SOURCE_DATE_EPOCH}" \
     --owner=0 \
     --group=0 \
     --numeric-owner \

@@ -34,10 +34,8 @@ if [ -f "${ROOTFS_DIR}/etc/fstab" ]; then
     ok "/etc/fstab exists"
     if grep -qE '^[^#].*[[:space:]]+/[[:space:]]' "${ROOTFS_DIR}/etc/fstab"; then
         ok "/etc/fstab has a root (/) mount entry"
-    elif grep -qE '^[^#].*[[:space:]]+/sysroot[[:space:]]' "${ROOTFS_DIR}/etc/fstab"; then
-        ok "/etc/fstab has an OSTree sysroot mount entry (/sysroot)"
     else
-        fail "/etc/fstab is missing a root (/) or OSTree sysroot (/sysroot) mount entry - systemd will hang at local-fs.target"
+        fail "/etc/fstab is missing a root (/) mount entry - systemd will hang at local-fs.target"
     fi
 else
     fail "missing /etc/fstab - systemd-remount-fs.service will fail and hang boot"
@@ -82,8 +80,6 @@ for dir in \
     /etc/dayshield/config \
     /etc/dayshield/certs \
     /etc/dayshield/logs \
-    /sysroot/ostree/repo \
-    /ostree/repo \
     /var/ostree \
     /etc/ostree/remotes.d \
     /var/lib/dayshield/aliases \
@@ -108,6 +104,14 @@ do
         fail "missing directory: ${dir}"
     fi
 done
+
+# Prefer /sysroot/ostree/repo (canonical OSTree sysroot layout); accept /ostree/repo
+# too for compatibility during transition/installer staging paths.
+if [ -d "${ROOTFS_DIR}/sysroot/ostree/repo" ] || [ -d "${ROOTFS_DIR}/ostree/repo" ]; then
+    ok "OSTree repo path exists (/sysroot/ostree/repo or /ostree/repo)"
+else
+    fail "missing OSTree repo path (/sysroot/ostree/repo or /ostree/repo)"
+fi
 
 # ── OSTree layout/update prerequisites ────────────────────────────────────────
 banner "OSTree layout/update prerequisites"

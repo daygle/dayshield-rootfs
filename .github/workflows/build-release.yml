@@ -169,10 +169,12 @@ jobs:
         working-directory: rootfs
         run: |
           ENABLE_SUITE_UPDATES=1
+          OSTREE_REF=dayshield/amd64
 
           sudo make rootfs \
             OUTPUT="${{ steps.version.outputs.artifact }}" \
             OSTREE_REPO_OUTPUT="${{ steps.version.outputs.artifact_ostree }}" \
+            OSTREE_REF="${OSTREE_REF}" \
             ENABLE_SUITE_UPDATES="${ENABLE_SUITE_UPDATES}" \
             UI_DIR="${GITHUB_WORKSPACE}/ui-artifact/dist" \
             ROOTFS_REPO_DIR="${GITHUB_WORKSPACE}/rootfs"
@@ -206,14 +208,15 @@ jobs:
 
           echo "==> Checking OSTree artifact"
           OSTREE_ARTIFACT="${{ steps.version.outputs.artifact_ostree }}"
+          OSTREE_REF=dayshield/amd64
           OSTREE_DIR="$(mktemp -d)"
           if [ -f "${OSTREE_ARTIFACT}" ]; then
             echo "  [PASS] OSTree artifact exists: ${OSTREE_ARTIFACT}"
             tar --zstd -xf "${OSTREE_ARTIFACT}" -C "${OSTREE_DIR}"
-            if ostree --repo="${OSTREE_DIR}" refs | grep -q "daygle/dayshield/amd64"; then
-              echo "  [PASS] OSTree ref daygle/dayshield/amd64 exists"
+            if ostree --repo="${OSTREE_DIR}" refs | grep -q "${OSTREE_REF}"; then
+              echo "  [PASS] OSTree ref ${OSTREE_REF} exists"
             else
-              echo "  [FAIL] OSTree ref daygle/dayshield/amd64 missing" >&2
+              echo "  [FAIL] OSTree ref ${OSTREE_REF} missing" >&2
               FAIL=1
             fi
           else
