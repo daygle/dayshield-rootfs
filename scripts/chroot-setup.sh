@@ -334,55 +334,6 @@ cp "${CONFIG_DIR}/dayshield/disable-offloads.sh" \
     "${ROOTFS_DIR}/usr/local/lib/dayshield/disable-offloads.sh"
 chmod 755 "${ROOTFS_DIR}/usr/local/lib/dayshield/disable-offloads.sh"
 
-printf '  -> Installing rootfs trial boot watchdog\n'
-cat > "${ROOTFS_DIR}/usr/local/lib/dayshield/rootfs-boot-watchdog.sh" <<'EOF'
-#!/bin/sh
-# Reboot back to the previous rootfs slot if DayShield never confirms a trial boot.
-set -eu
-
-STATE_FILE="${DAYSHIELD_UPDATE_STATE:-/etc/dayshield/config/updates_state.json}"
-SLOT_FILE="${DAYSHIELD_ROOTFS_SLOT_FILE:-/etc/dayshield/rootfs-slot}"
-DELAY="${DAYSHIELD_ROOTFS_WATCHDOG_DELAY:-300}"
-
-sleep "${DELAY}"
-
-[ -f "${STATE_FILE}" ] || exit 0
-[ -f "${SLOT_FILE}" ] || exit 0
-
-if ! grep -Eq '"status"[[:space:]]*:[[:space:]]*"(staged|booted)"' "${STATE_FILE}"; then
-    exit 0
-fi
-
-target_slot="$(sed -n 's/.*"targetSlot"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "${STATE_FILE}" | tail -n1)"
-previous_slot="$(sed -n 's/.*"previousSlot"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "${STATE_FILE}" | tail -n1)"
-current_slot="$(tr -d '[:space:]' < "${SLOT_FILE}")"
-
-[ -n "${target_slot}" ] || exit 0
-[ -n "${previous_slot}" ] || exit 0
-[ "${current_slot}" = "${target_slot}" ] || exit 0
-
-logger -t dayshield-rootfs-watchdog "rootfs slot ${target_slot} was not confirmed; rebooting to slot ${previous_slot}"
-if command -v grub-reboot >/dev/null 2>&1; then
-    grub-reboot "dayshield-${previous_slot}" || true
-fi
-systemctl reboot || reboot || true
-EOF
-chmod 755 "${ROOTFS_DIR}/usr/local/lib/dayshield/rootfs-boot-watchdog.sh"
-
-cat > "${ROOTFS_DIR}/etc/systemd/system/dayshield-rootfs-watchdog.service" <<'EOF'
-[Unit]
-Description=DayShield rootfs trial boot watchdog
-After=multi-user.target
-ConditionPathExists=/etc/dayshield/config/updates_state.json
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/lib/dayshield/rootfs-boot-watchdog.sh
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
 # Initial OSTree update helper contract for core/UI integration.
 printf '  -> Installing OSTree update helper\n'
 cat > "${ROOTFS_DIR}/usr/local/lib/dayshield/ostree-update.sh" <<'EOF'

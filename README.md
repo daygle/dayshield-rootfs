@@ -67,7 +67,7 @@ make rootfs UI_DIR=../dayshield-ui/dist ARCH=arm64 SUITE=trixie \
 ## OSTree architecture (initial slice)
 
 The rootfs build now composes an OSTree commit and repository artifact on the build host.
-This is the first step toward immutable image-based updates without A/B rootfs slots.
+This is the first step toward immutable image-based updates driven by OSTree deployments.
 
 ### Build-time outputs
 
