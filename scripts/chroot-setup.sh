@@ -35,12 +35,12 @@ printf '  -> Writing placeholder /etc/fstab\n'
 cat > "${ROOTFS_DIR}/etc/fstab" <<'EOF'
 # /etc/fstab: static file system information.
 # NOTE: The installer replaces these entries with UUID= lines for both
-#       DAYSHIELD_SYSROOT (the deployment root filesystem mounted at /) and
+#       DAYSHIELD_ROOT (the deployment root filesystem mounted at /) and
 #       DAYSHIELD_STATE (/var persistent state)
 #       to support OSTree-style immutable rootfs + mutable runtime data separation.
 #
 # <file system>         <mount point>  <type>  <options>          <dump>  <pass>
-LABEL=DAYSHIELD_SYSROOT /              ext4    defaults,noatime   0       1
+LABEL=DAYSHIELD_ROOT    /              ext4    defaults,noatime   0       1
 LABEL=DAYSHIELD_STATE   /var           ext4    defaults,noatime   0       2
 LABEL=DAYSHIELD_BOOT    /boot          ext4    defaults,noatime   0       2
 LABEL=DS_EFI            /boot/efi      vfat    umask=0077         0       2

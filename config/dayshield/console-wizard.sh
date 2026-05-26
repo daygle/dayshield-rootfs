@@ -1259,7 +1259,7 @@ _inst_format() {
         "${boot}" >/dev/null 2>&1 || { _inst_err "mkfs.ext4 boot failed."; return 1; }
 
     _inst_info "Formatting ${sysroot} as ext4 (OSTree sysroot) ..."
-    mkfs.ext4 -F -L "DAYSHIELD_SYSROOT" -O "^64bit,metadata_csum" -m 1 \
+    mkfs.ext4 -F -L "DAYSHIELD_ROOT" -O "^64bit,metadata_csum" -m 1 \
         "${sysroot}" >/dev/null 2>&1 || { _inst_err "mkfs.ext4 sysroot failed."; return 1; }
 
     _inst_info "Formatting ${state} as ext4 (persistent state /var) ..."
