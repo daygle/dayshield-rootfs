@@ -225,14 +225,57 @@ mkdir -p \
     "${ROOTFS_DIR}/etc/cloudflared" \
     "${ROOTFS_DIR}/var/lib/cloudflared"
 
-printf '  -> Installing cloudflared binary from upstream release\n'
+printf '  -> Installing cloudflared binary from configured source\n'
 mkdir -p "${ROOTFS_DIR}/usr/bin"
-if ! chroot "${ROOTFS_DIR}" /bin/sh -c '
-    set -e
-    wget -qO /usr/bin/cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
-    chmod 755 /usr/bin/cloudflared
-'; then
-    printf 'WARNING: failed to download cloudflared binary. Cloudflare Tunnel will not be available.\n'
+CLOUDFLARED_TARGET="${ROOTFS_DIR}/usr/bin/cloudflared"
+_CLOUDFLARED_DEFAULT_URL="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
+if [ -n "${CLOUDFLARED_PATH:-}" ] && [ -f "${CLOUDFLARED_PATH}" ]; then
+    cp "${CLOUDFLARED_PATH}" "${CLOUDFLARED_TARGET}"
+    chmod 755 "${CLOUDFLARED_TARGET}"
+    printf '    Installed cloudflared from CLOUDFLARED_PATH=%s\n' "${CLOUDFLARED_PATH}"
+elif [ -f "${CONFIG_DIR}/cloudflared/cloudflared" ]; then
+    cp "${CONFIG_DIR}/cloudflared/cloudflared" "${CLOUDFLARED_TARGET}"
+    chmod 755 "${CLOUDFLARED_TARGET}"
+    printf '    Installed cloudflared from config/cloudflared/cloudflared\n'
+else
+    _url="${CLOUDFLARED_URL:-${_CLOUDFLARED_DEFAULT_URL}}"
+    # When using the default URL, auto-derive the checksum URL from the same release.
+    # Set CLOUDFLARED_CHECKSUM_URL='' to explicitly skip verification.
+    _cksum_url="${CLOUDFLARED_CHECKSUM_URL:-}"
+    if [ -z "${_cksum_url}" ] && [ -z "${CLOUDFLARED_URL:-}" ]; then
+        _cksum_url="https://github.com/cloudflare/cloudflared/releases/latest/download/checksums.txt"
+    fi
+    printf '    Downloading cloudflared from %s\n' "${_url}"
+    _cf_tmp="$(mktemp)"
+    if ! wget -qO "${_cf_tmp}" "${_url}"; then
+        printf 'ERROR: failed to download cloudflared from %s\n' "${_url}" >&2
+        rm -f "${_cf_tmp}"
+        exit 1
+    fi
+    if [ -n "${_cksum_url}" ]; then
+        _cksum_tmp="$(mktemp)"
+        if wget -qO "${_cksum_tmp}" "${_cksum_url}"; then
+            _cf_expected="$(grep 'cloudflared-linux-amd64$' "${_cksum_tmp}" | awk '{print $1}')"
+            if [ -n "${_cf_expected}" ]; then
+                _cf_actual="$(sha256sum "${_cf_tmp}" | awk '{print $1}')"
+                if [ "${_cf_actual}" != "${_cf_expected}" ]; then
+                    printf 'ERROR: cloudflared SHA256 mismatch\n  expected: %s\n  actual:   %s\n' "${_cf_expected}" "${_cf_actual}" >&2
+                    rm -f "${_cf_tmp}" "${_cksum_tmp}"
+                    exit 1
+                fi
+                printf '    SHA256 verified: %s\n' "${_cf_actual}"
+            else
+                printf 'WARNING: cloudflared-linux-amd64 not found in checksums.txt; skipping verification\n' >&2
+            fi
+        else
+            printf 'WARNING: could not fetch cloudflared checksums from %s; skipping verification\n' "${_cksum_url}" >&2
+        fi
+        rm -f "${_cksum_tmp}"
+    fi
+    cp "${_cf_tmp}" "${CLOUDFLARED_TARGET}"
+    rm -f "${_cf_tmp}"
+    chmod 755 "${CLOUDFLARED_TARGET}"
+    printf '    Installed cloudflared from %s\n' "${_url}"
 fi
 
 # ── Install base configs ──────────────────────────────────────────────────────
@@ -313,6 +356,8 @@ do
     src="${CONFIG_DIR}/services/${unit}"
     if [ -f "${src}" ]; then
         cp "${src}" "${ROOTFS_DIR}/etc/systemd/system/${unit}"
+    else
+        printf 'WARNING: service unit not found, skipping: %s\n' "${src}" >&2
     fi
 done
 
@@ -336,34 +381,8 @@ chmod 755 "${ROOTFS_DIR}/usr/local/lib/dayshield/disable-offloads.sh"
 
 # Initial OSTree update helper contract for core/UI integration.
 printf '  -> Installing OSTree update helper\n'
-cat > "${ROOTFS_DIR}/usr/local/lib/dayshield/ostree-update.sh" <<'EOF'
-#!/bin/sh
-set -eu
-
-action="${1:-status}"
-# Optional override when installer/finalizer renames the default "dayshield" OSTree remote.
-# Set DAYSHIELD_OSTREE_REMOTE to override the default "dayshield" remote name.
-remote="${DAYSHIELD_OSTREE_REMOTE:-dayshield}"
-
-case "${action}" in
-    status)
-        exec ostree admin status
-        ;;
-    check)
-        exec ostree remote refs "${remote}"
-        ;;
-    stage|apply)
-        exec ostree admin upgrade --os=dayshield --stage
-        ;;
-    rollback)
-        exec ostree admin rollback --os=dayshield
-        ;;
-    *)
-        printf 'Usage: DAYSHIELD_OSTREE_REMOTE=<remote> %s [status|check|stage|apply|rollback]\n' "$0" >&2
-        exit 1
-        ;;
-esac
-EOF
+mkdir -p "${ROOTFS_DIR}/usr/local/lib/dayshield"
+cp "${CONFIG_DIR}/templates/ostree-update.sh" "${ROOTFS_DIR}/usr/local/lib/dayshield/ostree-update.sh"
 chmod 755 "${ROOTFS_DIR}/usr/local/lib/dayshield/ostree-update.sh"
 
 # Post-login menu hook for installed system (root local console logins only)

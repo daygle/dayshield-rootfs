@@ -44,6 +44,8 @@ Options:
     --ostree-repo-output FILE
                         Output file for archived OSTree repo (default: <output>-ostree-repo.tar.zst)
     --ostree-ref REF   OSTree ref for commits (default: dayshield/<arch>)
+    --source-date-epoch EPOCH
+                        Explicit SOURCE_DATE_EPOCH for reproducible builds
   --ui-dir PATH     Built UI output directory to install into /usr/local/share/dayshield-ui (required)
     --core-repo-dir PATH   Core git repo to seed into /opt/dayshield-core
     --ui-repo-dir PATH     UI git repo to seed into /opt/dayshield-ui
@@ -56,7 +58,7 @@ EOF
 # Parse arguments
 while [ $# -gt 0 ]; do
     case "$1" in
-        --arch|--suite|--output|--mirror|--security-mirror|--ui-dir|--core-repo-dir|--ui-repo-dir|--rootfs-repo-dir|--ostree-repo-output|--ostree-ref)
+        --arch|--suite|--output|--mirror|--security-mirror|--ui-dir|--core-repo-dir|--ui-repo-dir|--rootfs-repo-dir|--ostree-repo-output|--ostree-ref|--source-date-epoch)
             if [ $# -lt 2 ] || [ -z "${2}" ] || [ "${2#--}" != "${2}" ]; then
                 printf 'ERROR: option %s requires a value\n' "$1" >&2
                 exit 1
@@ -69,6 +71,7 @@ while [ $# -gt 0 ]; do
                 --security-mirror) SECURITY_MIRROR="$2" ;;
                 --ostree-repo-output) OSTREE_REPO_OUTPUT="$2" ;;
                 --ostree-ref) OSTREE_REF="$2"; OSTREE_REF_SET="1" ;;
+                --source-date-epoch) SOURCE_DATE_EPOCH="$2" ;;
                 --ui-dir) UI_DIR="$2" ;;
                 --core-repo-dir) CORE_REPO_DIR="$2" ;;
                 --ui-repo-dir) UI_REPO_DIR="$2" ;;
@@ -101,13 +104,13 @@ if [ -z "${SOURCE_DATE_EPOCH}" ] && command -v git >/dev/null 2>&1 && [ -n "${RO
         :
     else
         SOURCE_DATE_EPOCH=""
-        printf 'WARNING: failed to derive SOURCE_DATE_EPOCH from git history; using current time\n' >&2
     fi
 fi
 if [ -z "${SOURCE_DATE_EPOCH}" ]; then
-    printf 'WARNING: SOURCE_DATE_EPOCH not provided and git timestamp unavailable; using current time\n' >&2
-    SOURCE_DATE_EPOCH="$(date +%s)"
+    printf 'ERROR: SOURCE_DATE_EPOCH not provided and git timestamp unavailable; set SOURCE_DATE_EPOCH or pass --source-date-epoch\n' >&2
+    exit 1
 fi
+export DEBIAN_FRONTEND=noninteractive
 
 case "${SOURCE_DATE_EPOCH}" in
     *[!0-9]*)

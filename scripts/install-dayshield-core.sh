@@ -9,6 +9,7 @@ set -eu
 
 BINARY_SRC="${REPO_DIR}/dayshield-core"
 SERVICE_SRC="${REPO_DIR}/config/services/dayshield.service"
+TEMPLATE_DIR="${REPO_DIR}/config/templates"
 CORE_REPO_SRC="${DAYSHIELD_CORE_REPO_DIR:-}"
 UI_REPO_SRC="${DAYSHIELD_UI_REPO_DIR:-}"
 ROOTFS_REPO_SRC="${DAYSHIELD_ROOTFS_REPO_DIR:-}"
@@ -78,62 +79,30 @@ seed_repo "rootfs" "${ROOTFS_REPO_SRC}" "${ROOTFS_REPO_DEST}" "${ROOTFS_REMOTE_U
 # ── Systemd service unit ──────────────────────────────────────────────────────
 mkdir -p "${ROOTFS_DIR}/etc/systemd/system"
 
-if [ -f "${SERVICE_SRC}" ]; then
-    printf '  -> Installing dayshield.service\n'
-    cp "${SERVICE_SRC}" "${ROOTFS_DIR}/etc/systemd/system/dayshield.service"
-else
-    printf '  -> Writing default dayshield.service\n'
-    cat > "${ROOTFS_DIR}/etc/systemd/system/dayshield.service" <<'UNIT'
-[Unit]
-Description=DayShield Firewall Core
-Documentation=https://github.com/daygle/dayshield
-After=network-online.target nftables.service unbound.service
-Wants=network-online.target
-Requires=nftables.service
-
-[Service]
-Type=exec
-Environment=DAYSHIELD_PORT=8443
-ExecStart=/usr/local/sbin/dayshield-core
-Restart=on-failure
-RestartSec=5s
-NoNewPrivileges=yes
-ProtectSystem=strict
-ProtectHome=yes
-ReadWritePaths=/etc/dayshield /var/lib/dayshield /var/log/dayshield /opt/dayshield-core /opt/dayshield-ui /opt/dayshield-rootfs /usr/local/sbin /usr/local/share
-PrivateTmp=yes
-CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE CAP_SYS_ADMIN
-
-[Install]
-WantedBy=multi-user.target
-UNIT
+if [ ! -f "${SERVICE_SRC}" ]; then
+    printf 'ERROR: dayshield.service not found at %s\n' "${SERVICE_SRC}" >&2
+    exit 1
 fi
+printf '  -> Installing dayshield.service\n'
+cp "${SERVICE_SRC}" "${ROOTFS_DIR}/etc/systemd/system/dayshield.service"
 
 # Ensure engines can update their config files under ProtectSystem=strict.
 mkdir -p "${ROOTFS_DIR}/etc/systemd/system/dayshield.service.d"
-cat > "${ROOTFS_DIR}/etc/systemd/system/dayshield.service.d/dayshield-engine-paths.conf" <<'EOF'
-[Service]
-ReadWritePaths=/etc/unbound
-ReadWritePaths=/etc/chrony
-ReadWritePaths=/etc/systemd
-ReadWritePaths=/etc/suricata
-ReadWritePaths=/etc/kea
-ReadWritePaths=/etc/dhcp
-ReadWritePaths=/var/lib/kea
-ReadWritePaths=/var/lib/dhcp
-ReadWritePaths=/var/lib/dhclient
-ReadWritePaths=/var/log/dayshield
-ReadWritePaths=/etc/ssh
-ReadWritePaths=/etc/wireguard
-CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE CAP_SYS_ADMIN
-EOF
+if [ -f "${TEMPLATE_DIR}/dayshield-engine-paths.conf" ]; then
+    cp "${TEMPLATE_DIR}/dayshield-engine-paths.conf" "${ROOTFS_DIR}/etc/systemd/system/dayshield.service.d/dayshield-engine-paths.conf"
+else
+    printf 'ERROR: missing template %s\n' "${TEMPLATE_DIR}/dayshield-engine-paths.conf" >&2
+    exit 1
+fi
 
 # ── Installer/live mode guard ────────────────────────────────────────────────
 # dayshield-core must not start while booted as installer live media.
-cat > "${ROOTFS_DIR}/etc/systemd/system/dayshield.service.d/dayshield-installer.conf" <<'EOF'
-[Unit]
-ConditionKernelCommandLine=!installer
-EOF
+if [ -f "${TEMPLATE_DIR}/dayshield-installer.conf" ]; then
+    cp "${TEMPLATE_DIR}/dayshield-installer.conf" "${ROOTFS_DIR}/etc/systemd/system/dayshield.service.d/dayshield-installer.conf"
+else
+    printf 'ERROR: missing template %s\n' "${TEMPLATE_DIR}/dayshield-installer.conf" >&2
+    exit 1
+fi
 
 # ── Required Management UI assets ───────────────────────────────────────────
 if [ -z "${DAYSHIELD_UI_DIR:-}" ]; then

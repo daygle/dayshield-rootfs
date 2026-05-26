@@ -59,6 +59,18 @@ printf '  -> Removing packaged journal files\n'
 rm -rf "${ROOTFS_DIR}/var/log/journal"/*
 mkdir -p "${ROOTFS_DIR}/var/log/journal"
 
+# ── Remove special filesystem nodes ───────────────────────────────────────────
+printf '  -> Removing special filesystem nodes\n'
+find "${ROOTFS_DIR}" \
+    -mindepth 1 \
+    \( -type b -o -type c -o -type p -o -type s \) \
+    -delete 2>/dev/null || true
+
+# Recreate runtime temp directories after cleanup
+mkdir -p "${ROOTFS_DIR}/tmp" "${ROOTFS_DIR}/run" "${ROOTFS_DIR}/var/tmp"
+chmod 1777 "${ROOTFS_DIR}/tmp" 2>/dev/null || true
+chmod 1777 "${ROOTFS_DIR}/var/tmp" 2>/dev/null || true
+
 # ── Reproducible timestamps ───────────────────────────────────────────────────
 printf '  -> Normalising timestamps to epoch 0\n'
 find "${ROOTFS_DIR}" \

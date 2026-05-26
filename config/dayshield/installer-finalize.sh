@@ -401,7 +401,7 @@ cat > "${target}/etc/unbound/unbound.conf" <<EOF
 server:
   interface: 0.0.0.0
   port: 53
-    pidfile: "/run/unbound/unbound.pid"
+  pidfile: "/run/unbound/unbound.pid"
   do-ip4: yes
   do-ip6: no
   do-udp: yes
@@ -417,7 +417,7 @@ server:
   qname-minimisation: no
   aggressive-nsec: no
   use-caps-for-id: yes
-    module-config: "validator iterator"
+  module-config: "validator iterator"
   hide-identity: yes
   hide-version: yes
   edns-buffer-size: 1232
