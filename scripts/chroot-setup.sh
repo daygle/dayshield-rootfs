@@ -229,6 +229,7 @@ printf '  -> Installing cloudflared binary from configured source\n'
 mkdir -p "${ROOTFS_DIR}/usr/bin"
 CLOUDFLARED_TARGET="${ROOTFS_DIR}/usr/bin/cloudflared"
 _CLOUDFLARED_DEFAULT_URL="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
+_CLOUDFLARED_DEFAULT_CHECKSUM_URL="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.sha256"
 if [ -n "${CLOUDFLARED_PATH:-}" ] && [ -f "${CLOUDFLARED_PATH}" ]; then
     cp "${CLOUDFLARED_PATH}" "${CLOUDFLARED_TARGET}"
     chmod 755 "${CLOUDFLARED_TARGET}"
@@ -243,7 +244,7 @@ else
     # Set CLOUDFLARED_CHECKSUM_URL='' to explicitly skip verification.
     _cksum_url="${CLOUDFLARED_CHECKSUM_URL:-}"
     if [ -z "${_cksum_url}" ] && [ -z "${CLOUDFLARED_URL:-}" ]; then
-        _cksum_url="https://github.com/cloudflare/cloudflared/releases/latest/download/checksums.txt"
+        _cksum_url="${_CLOUDFLARED_DEFAULT_CHECKSUM_URL}"
     fi
     printf '    Downloading cloudflared from %s\n' "${_url}"
     _cf_tmp="$(mktemp)"
@@ -255,7 +256,8 @@ else
     if [ -n "${_cksum_url}" ]; then
         _cksum_tmp="$(mktemp)"
         if wget -qO "${_cksum_tmp}" "${_cksum_url}"; then
-            _cf_expected="$(grep 'cloudflared-linux-amd64$' "${_cksum_tmp}" | awk '{print $1}')"
+            # .sha256 files contain "hash  filename" or just "hash"
+            _cf_expected="$(awk '{print $1}' "${_cksum_tmp}")"
             if [ -n "${_cf_expected}" ]; then
                 _cf_actual="$(sha256sum "${_cf_tmp}" | awk '{print $1}')"
                 if [ "${_cf_actual}" != "${_cf_expected}" ]; then
