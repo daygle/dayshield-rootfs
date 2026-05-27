@@ -636,36 +636,59 @@ _ssh_fingerprints() {
 }
 
 # ---------------------------------------------------------------------------
+# Color / style constants  (empty when stdout is not a tty)
+# ---------------------------------------------------------------------------
+if [[ -t 1 ]]; then
+    _CR=$'\e[0m'      # reset
+    _CB=$'\e[1m'      # bold
+    _CD=$'\e[2m'      # dim
+    _CG=$'\e[32m'     # green
+    _CRED=$'\e[31m'   # red
+    _CY=$'\e[33m'     # yellow
+    _CC=$'\e[36m'     # cyan
+    _CW=$'\e[97m'     # bright white
+else
+    _CR='' _CB='' _CD='' _CG='' _CRED='' _CY='' _CC='' _CW=''
+fi
+
+# ---------------------------------------------------------------------------
 # Header / status display
 # ---------------------------------------------------------------------------
 _hr() {
-    printf '  ------------------------------------------------------------\n'
+    local b; printf -v b '─%.0s' {1..74}; printf "${_CD}  %s${_CR}\n" "${b}"
 }
 
 _wide_hr() {
-    printf '  ==========================================================================\n'
+    local b; printf -v b '═%.0s' {1..74}; printf "${_CB}  %s${_CR}\n" "${b}"
 }
 
 _kv() {
-    printf '  %-20s %s\n' "$1" "$2"
+    printf "  ${_CB}%-20s${_CR} %s\n" "$1" "$2"
 }
 
 _print_header() {
     local hostname
     hostname="$(hostname -f 2>/dev/null || hostname)"
-    local lan_ip4
-    lan_ip4=""
+    local lan_ip4=""
 
     local mode_line=""
-    $LIVE_MODE && mode_line=" - LIVE INSTALLER SESSION"
+    $LIVE_MODE && mode_line=" — LIVE INSTALLER"
+
+    # Title bar: "DayShield  vX.Y.Z" left, "Host: <name>" right
+    local title_plain="DayShield  v${DAYSHIELD_VERSION}${mode_line}"
+    local host_str="Host: ${hostname}"
+    local pad=$(( 74 - ${#title_plain} - ${#host_str} ))
+    [[ ${pad} -lt 2 ]] && pad=2
 
     _wide_hr
-    printf "  DayShield Console  v%s%s\n" "${DAYSHIELD_VERSION}" "${mode_line}"
-    _kv "Host" "${hostname}"
-    # Web UI link will be shown below.
+    printf "  ${_CB}${_CW}DayShield${_CR}  ${_CC}v%s%s${_CR}%*s${_CD}Host:${_CR} ${_CB}%s${_CR}\n" \
+        "${DAYSHIELD_VERSION}" "${mode_line}" "${pad}" "" "${hostname}"
     _wide_hr
-    printf "  Interfaces\n"
-    printf "  %-12s %-6s %-6s %-18s %-20s\n" "Name" "Role" "State" "IPv4" "IPv6"
+    echo ""
+
+    # Interfaces table
+    printf "  ${_CB}Interfaces${_CR}\n"
+    printf "${_CD}  %-12s %-6s %-7s %-18s %-20s${_CR}\n" "Name" "Role" "State" "IPv4" "IPv6"
     _hr
 
     local printed_iface=0
@@ -675,8 +698,18 @@ _print_header() {
         ip6="$(_iface_ip6 "${iface}")"
         role="$(_iface_role "${iface}")"
         state="$(_iface_state "${iface}")"
-        printf "  %-12s %-6s %-6s %-18s %-20s\n" \
-            "${iface}" "${role}" "${state}" "${ip4:-"-"}" "${ip6:-"-"}"
+        printf "  %-12s " "${iface}"
+        case "${role}" in
+            WAN) printf "${_CY}%-6s${_CR} " "${role}" ;;
+            LAN) printf "${_CC}%-6s${_CR} " "${role}" ;;
+            *)   printf "%-6s " "${role}" ;;
+        esac
+        if [[ "${state}" == "UP" ]]; then
+            printf "${_CG}%-7s${_CR}" "${state}"
+        else
+            printf "${_CRED}%-7s${_CR}" "${state}"
+        fi
+        printf "%-18s %-20s\n" "${ip4:--}" "${ip6:--}"
         printed_iface=1
     done < <(_list_ifaces)
     if [[ "${WAN_TYPE}" == "pppoe" ]] && ip link show ppp0 >/dev/null 2>&1; then
@@ -684,13 +717,19 @@ _print_header() {
         ppp4="$(_iface_ip4 ppp0)"
         ppp6="$(_iface_ip6 ppp0)"
         ppp_state="$(_iface_state ppp0)"
-        printf "  %-12s %-6s %-6s %-18s %-20s\n" \
-            "ppp0" "WAN" "${ppp_state}" "${ppp4:-"-"}" "${ppp6:-"-"}"
+        printf "  %-12s ${_CY}%-6s${_CR} " "ppp0" "WAN"
+        if [[ "${ppp_state}" == "UP" ]]; then
+            printf "${_CG}%-7s${_CR}" "${ppp_state}"
+        else
+            printf "${_CRED}%-7s${_CR}" "${ppp_state}"
+        fi
+        printf "%-18s %-20s\n" "${ppp4:--}" "${ppp6:--}"
         printed_iface=1
     fi
-    [[ "${printed_iface}" -eq 0 ]] && printf "  No network interfaces detected.\n"
-    _wide_hr
+    [[ "${printed_iface}" -eq 0 ]] && printf "  ${_CD}No network interfaces detected.${_CR}\n"
+    _hr
 
+    # Resolve LAN IP for management URL
     if [[ -n "${LAN_IFACE}" ]]; then
         local lan_cidr
         lan_cidr="$(_iface_ip4 "${LAN_IFACE}")"
@@ -700,6 +739,7 @@ _print_header() {
         lan_ip4="${lan_cidr%%/*}"
     fi
 
+    echo ""
     if $LIVE_MODE; then
         local web_rows=()
         while IFS=$'\t' read -r iface ip; do
@@ -707,21 +747,20 @@ _print_header() {
         done < <(_live_web_ifaces_with_ip)
 
         if [[ ${#web_rows[@]} -gt 0 ]]; then
-            _kv "Web Installer" "${web_rows[0]}"
+            printf "  ${_CB}Web Installer${_CR}   ${_CB}${_CC}%s${_CR}\n" "${web_rows[0]}"
             local idx
             for idx in "${!web_rows[@]}"; do
                 [[ "${idx}" -eq 0 ]] && continue
-                _kv "" "${web_rows[${idx}]}"
+                printf "  %-17s${_CB}${_CC}%s${_CR}\n" "" "${web_rows[${idx}]}"
             done
         else
-            _kv "Web Installer" "no IPv4 address detected yet"
-            _kv "Hint" "use option 9 to configure LAN for Web Installer"
+            printf "  ${_CB}Web Installer${_CR}   ${_CD}no IPv4 address detected yet${_CR}\n"
+            printf "  ${_CD}Hint: use option 9 to configure LAN for Web Installer${_CR}\n"
         fi
-        echo ""
     elif [[ -n "${lan_ip4}" ]] && [[ "${lan_ip4}" != "no address" ]]; then
-        _kv "Management" "https://${lan_ip4}:8443/"
-        echo ""
+        printf "  ${_CB}Management${_CR}      ${_CB}${_CC}https://%s:8443/${_CR}\n" "${lan_ip4}"
     fi
+    echo ""
     _wide_hr
     echo ""
 }
@@ -1746,28 +1785,30 @@ while true; do
     clear
     _print_header
 
-    echo "  Actions"
+    printf "  ${_CB}Actions${_CR}\n"
     _hr
-    echo "  [0] Open shell"
+    printf "   ${_CB}${_CY}[0]${_CR}  Open shell\n"
     if [[ "${CONSOLE_MODE}" == "login" ]]; then
-        echo "  [9] Logout"
+        printf "   ${_CB}${_CY}[9]${_CR}  Logout\n"
     fi
     if $LIVE_MODE; then
-        echo "  [1] Install DayShield"
-        echo "  [2] Setup Web Installer LAN"
+        printf "   ${_CB}${_CY}[1]${_CR}  Install DayShield\n"
+        printf "   ${_CB}${_CY}[2]${_CR}  Setup Web Installer LAN\n"
     else
-        echo "  [1] Assign interfaces"
-        echo "  [2] Set LAN IP address"
-        echo "  [3] Configure LAN DHCP server"
-        echo "  [4] Change root password"
-        echo "  [5] Reboot system"
-        echo "  [6] Power off system"
-        echo "  [7] Run management setup wizard"
-        echo "  [8] Update DayShield"
+        printf "   ${_CB}${_CY}[1]${_CR}  Assign interfaces\n"
+        printf "   ${_CB}${_CY}[2]${_CR}  Set LAN IP address\n"
+        printf "   ${_CB}${_CY}[3]${_CR}  Configure LAN DHCP server\n"
+        printf "   ${_CB}${_CY}[4]${_CR}  Change root password\n"
+        printf "   ${_CB}${_CY}[5]${_CR}  Reboot system\n"
+        printf "   ${_CB}${_CY}[6]${_CR}  Power off system\n"
+        printf "   ${_CB}${_CY}[7]${_CR}  Run management setup wizard\n"
+        printf "   ${_CB}${_CY}[8]${_CR}  Update DayShield\n"
     fi
+    _hr
     echo ""
 
-    read -rp "Select option: " opt
+    printf "${_CB}  Select option: ${_CR}"
+    read -r opt
     case "${opt}" in
         0)
             if [[ "${CONSOLE_MODE}" == "boot" ]]; then
