@@ -189,6 +189,14 @@ else
 fi
 
 DS_ENGINE_PATHS="${ROOTFS_DIR}/etc/systemd/system/dayshield.service.d/dayshield-engine-paths.conf"
+DS_BASE_SVC="${ROOTFS_DIR}/etc/systemd/system/dayshield.service"
+if [ -f "${DS_BASE_SVC}" ] && \
+   grep -Eq 'ReadWritePaths=.*/usr/local/lib/dayshield([[:space:]]|$)' "${DS_BASE_SVC}"; then
+    ok "dayshield.service can write bundled OSTree helper path (/usr/local/lib/dayshield)"
+else
+    fail "dayshield.service sandbox missing ReadWritePaths=/usr/local/lib/dayshield (OSTree helper live-update path)"
+fi
+
 if [ -f "${DS_ENGINE_PATHS}" ] && \
    grep -Eq '^[[:space:]]*ReadWritePaths[[:space:]]*=[[:space:]]*/etc/kea[[:space:]]*$' "${DS_ENGINE_PATHS}"; then
     ok "dayshield.service can write the packaged Kea compatibility config path"
