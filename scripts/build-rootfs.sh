@@ -38,7 +38,7 @@ Options:
     --security-mirror URL
                                         Debian security mirror URL (default: https://deb.debian.org/debian-security)
     --enable-suite-updates
-                        Include SUITE-updates source for stable-style suites (default: disabled)
+                        Include SUITE-updates source for stable-style suites (default: enabled)
     --disable-ostree-compose
                         Skip host-side OSTree repo/commit generation (default: enabled)
     --ostree-repo-output FILE

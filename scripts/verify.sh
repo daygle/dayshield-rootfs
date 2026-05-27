@@ -270,7 +270,7 @@ else
     fail "installer finalization does not mirror /etc/dayshield/kea-dhcp4.conf to /etc/kea/kea-dhcp4.conf"
 fi
 
-CONSOLE_WIZARD="${ROOTFS_DIR}/usr/local/lib/dayshield/console-wizard.sh"
+CONSOLE_WIZARD="${ROOTFS_DIR}/usr/local/bin/dayshield-console"
 if [ -f "${CONSOLE_WIZARD}" ] && \
    grep -q '/etc/dayshield/kea-dhcp4.conf' "${CONSOLE_WIZARD}" && \
    grep -q '/etc/kea/kea-dhcp4.conf' "${CONSOLE_WIZARD}" && \

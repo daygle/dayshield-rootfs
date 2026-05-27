@@ -27,8 +27,9 @@ systemd-sysv
 chrony
 udev
 util-linux
-vim-tiny
+vim
 wget
+curl
 zstd
 
 # NOTE: squashfs-tools and zstd are needed on the HOST by the ISO builder,
@@ -44,7 +45,6 @@ linux-image-amd64
 # Networking
 nftables
 ethtool
-isc-dhcp-client
 kea-dhcp4-server
 kea-dhcp6-server
 radvd
