@@ -1308,6 +1308,24 @@ _inst_find_rootfs() {
     return 1
 }
 
+_inst_require_ostree_tooling() {
+    local target="$1" missing=0
+
+    if [[ ! -x "${target}/usr/bin/ostree" ]]; then
+        _inst_err "Installed target is missing /usr/bin/ostree."
+        missing=1
+    fi
+    if [[ ! -x "${target}/usr/local/lib/dayshield/ostree-update.sh" ]]; then
+        _inst_err "Installed target is missing /usr/local/lib/dayshield/ostree-update.sh."
+        missing=1
+    fi
+
+    if (( missing )); then
+        _inst_err "Input rootfs is missing required DayShield OSTree update tooling; rebuild dayshield-rootfs and recreate the ISO."
+        return 1
+    fi
+}
+
 _inst_install_rootfs() {
     local dev="$1" rootfs="$2" pfx target="/mnt/target"
     case "$dev" in nvme*|mmcblk*) pfx="${dev}p" ;; *) pfx="${dev}" ;; esac
@@ -1361,6 +1379,7 @@ _inst_install_rootfs() {
     else
         _inst_err "Neither zstd nor GNU tar available."; return 1
     fi
+    _inst_require_ostree_tooling "${target}" || return 1
     local root_uuid boot_uuid efi_uuid state_uuid
     root_uuid="$(blkid -s UUID -o value "${root}")"
     boot_uuid="$(blkid -s UUID -o value "${boot}")"

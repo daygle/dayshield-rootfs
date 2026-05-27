@@ -387,6 +387,17 @@ printf '==> Step 6: cleanup\n'
 env ROOTFS_DIR="${ROOTFS_DIR}" \
     sh "${SCRIPT_DIR}/cleanup.sh"
 
+printf '==> Step 6b: validate OSTree update tooling\n'
+if [ ! -x "${ROOTFS_DIR}/usr/bin/ostree" ]; then
+    printf '    ERROR: missing executable /usr/bin/ostree in rootfs\n' >&2
+    exit 1
+fi
+if [ ! -x "${ROOTFS_DIR}/usr/local/lib/dayshield/ostree-update.sh" ]; then
+    printf '    ERROR: missing executable /usr/local/lib/dayshield/ostree-update.sh in rootfs\n' >&2
+    exit 1
+fi
+printf '    OSTree update tooling present\n'
+
 # ── 7. Compose OSTree repo commit (host-side) ───────────────────────────────
 if [ "${ENABLE_OSTREE_COMPOSE}" = "1" ]; then
     printf '==> Step 7: composing OSTree repo\n'
