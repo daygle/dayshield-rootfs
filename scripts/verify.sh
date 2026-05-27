@@ -127,6 +127,11 @@ if [ -f "${OSTREE_REMOTE_CONF}" ]; then
 else
     fail "missing OSTree remote config: /etc/ostree/remotes.d/dayshield.conf"
 fi
+if grep -qF '@DAYSHIELD_OSTREE_REMOTE_URL@' "${OSTREE_REMOTE_CONF}" 2>/dev/null; then
+    ok "OSTree remote URL placeholder present (replaced by installer-finalize.sh at install time)"
+else
+    fail "OSTree remote config is missing expected URL placeholder @DAYSHIELD_OSTREE_REMOTE_URL@"
+fi
 
 if [ -x "${ROOTFS_DIR}/usr/local/lib/dayshield/ostree-update.sh" ]; then
     ok "OSTree update helper exists: /usr/local/lib/dayshield/ostree-update.sh"

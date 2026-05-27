@@ -256,6 +256,17 @@ LAN_DHCP_START=${dhcp_start}
 LAN_DHCP_END=${dhcp_end}
 EOF
 
+# OSTree remote URL
+_ostree_conf="${target}/etc/ostree/remotes.d/dayshield.conf"
+if [[ -f "${_ostree_conf}" ]]; then
+    sed -i 's|url=@DAYSHIELD_OSTREE_REMOTE_URL@|url=https://github.com/daygle/dayshield-rootfs|' \
+        "${_ostree_conf}"
+    if grep -qF '@DAYSHIELD_OSTREE_REMOTE_URL@' "${_ostree_conf}"; then
+        _fin_err "OSTree remote URL placeholder was not replaced in ${_ostree_conf}"
+        exit 1
+    fi
+fi
+
 # systemd-networkd
 netdir="${target}/etc/systemd/network"
 mkdir -p "${netdir}"
