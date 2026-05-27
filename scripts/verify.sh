@@ -197,6 +197,20 @@ else
     fail "dayshield.service sandbox missing ReadWritePaths=/usr/local/lib/dayshield (OSTree helper live-update path)"
 fi
 
+if [ -f "${DS_BASE_SVC}" ] && \
+   grep -Eq 'ReadWritePaths=.*/sysroot([[:space:]]|$)' "${DS_BASE_SVC}"; then
+    ok "dayshield.service can write OSTree sysroot (/sysroot)"
+else
+    fail "dayshield.service sandbox missing ReadWritePaths=/sysroot (required for ostree admin deploy)"
+fi
+
+if [ -f "${DS_BASE_SVC}" ] && \
+   grep -Eq 'StateDirectory=.*dayshield-updates|ReadWritePaths=.*/var/lib/dayshield-updates([[:space:]]|$)' "${DS_BASE_SVC}"; then
+    ok "dayshield.service provisions OSTree download workspace (/var/lib/dayshield-updates)"
+else
+    fail "dayshield.service missing StateDirectory=dayshield-updates (OSTree artifact download path)"
+fi
+
 if [ -f "${DS_ENGINE_PATHS}" ] && \
    grep -Eq '^[[:space:]]*ReadWritePaths[[:space:]]*=[[:space:]]*/etc/kea[[:space:]]*$' "${DS_ENGINE_PATHS}"; then
     ok "dayshield.service can write the packaged Kea compatibility config path"
