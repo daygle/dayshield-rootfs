@@ -399,12 +399,6 @@ cp "${CONFIG_DIR}/dayshield/disable-offloads.sh" \
     "${ROOTFS_DIR}/usr/local/lib/dayshield/disable-offloads.sh"
 chmod 755 "${ROOTFS_DIR}/usr/local/lib/dayshield/disable-offloads.sh"
 
-# Initial OSTree update helper contract for core/UI integration.
-printf '  -> Installing OSTree update helper\n'
-mkdir -p "${ROOTFS_DIR}/usr/local/lib/dayshield"
-cp "${CONFIG_DIR}/templates/ostree-update.sh" "${ROOTFS_DIR}/usr/local/lib/dayshield/ostree-update.sh"
-chmod 755 "${ROOTFS_DIR}/usr/local/lib/dayshield/ostree-update.sh"
-
 # Post-login menu hook for installed system (root local console logins only)
 printf '  -> Installing console login profile hook\n'
 mkdir -p "${ROOTFS_DIR}/etc/profile.d"

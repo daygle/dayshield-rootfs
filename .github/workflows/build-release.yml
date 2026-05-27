@@ -150,6 +150,7 @@ jobs:
 
           tar --zstd -xf "${WORK_DIR}/${ASSET}" -C "${WORK_DIR}"
           install -m 0755 "${WORK_DIR}/dayshield-core" rootfs/dayshield-core
+          install -m 0755 "${WORK_DIR}/ostree-update.sh" rootfs/ostree-update.sh
 
       # ─────────────────────────────────────────────────────────────────────────
       # Build rootfs

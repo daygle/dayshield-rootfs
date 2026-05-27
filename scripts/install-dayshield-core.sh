@@ -63,6 +63,18 @@ else
     exit 1
 fi
 
+# ── OSTree update helper ──────────────────────────────────────────────────────
+OSTREE_HELPER_SRC="${REPO_DIR}/ostree-update.sh"
+if [ -f "${OSTREE_HELPER_SRC}" ]; then
+    printf '  -> Installing OSTree update helper\n'
+    mkdir -p "${ROOTFS_DIR}/usr/local/lib/dayshield"
+    install -m 0755 "${OSTREE_HELPER_SRC}" "${ROOTFS_DIR}/usr/local/lib/dayshield/ostree-update.sh"
+else
+    printf 'ERROR: ostree-update.sh not found at %s\n' "${OSTREE_HELPER_SRC}" >&2
+    printf '       Ensure the dayshield-core release artifact includes ostree-update.sh.\n' >&2
+    exit 1
+fi
+
 # ── Seed update repositories for runtime updater ─────────────────────────────
 # Ensure /opt/dayshield-* directories exist for the runtime updater,
 # whether or not repos are seeded during build.
