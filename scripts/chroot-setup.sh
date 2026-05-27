@@ -201,9 +201,27 @@ mkdir -p \
 printf '  -> Creating OSTree sysroot and writable state layout\n'
 # /sysroot/ostree/repo is the canonical OSTree sysroot location.
 # /ostree/repo is kept for compatibility with tooling expecting that path.
-mkdir -p \
+# Both receive a minimal valid repo skeleton so `ostree admin status` does not
+# fail with "opendir(objects): No such file or directory" on fresh installs.
+for _repo_dir in \
     "${ROOTFS_DIR}/sysroot/ostree/repo" \
-    "${ROOTFS_DIR}/ostree/repo" \
+    "${ROOTFS_DIR}/ostree/repo"
+do
+    mkdir -p \
+        "${_repo_dir}/objects" \
+        "${_repo_dir}/tmp" \
+        "${_repo_dir}/refs/heads" \
+        "${_repo_dir}/refs/remotes" \
+        "${_repo_dir}/state" \
+        "${_repo_dir}/extensions"
+    cat > "${_repo_dir}/config" <<'OSTREE_CONFIG'
+[core]
+repo_version=1
+mode=bare
+OSTREE_CONFIG
+done
+mkdir -p \
+    "${ROOTFS_DIR}/ostree/deploy" \
     "${ROOTFS_DIR}/var/ostree" \
     "${ROOTFS_DIR}/var/lib/dayshield/ostree" \
     "${ROOTFS_DIR}/etc/ostree/remotes.d" \
