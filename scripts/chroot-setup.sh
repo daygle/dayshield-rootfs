@@ -260,6 +260,7 @@ else
     _url="${CLOUDFLARED_URL:-${_CLOUDFLARED_DEFAULT_URL}}"
     # When using the default URL, auto-derive the checksum URL from the same release.
     # Set CLOUDFLARED_CHECKSUM_URL='' to explicitly skip verification.
+    # Default cloudflared releases do not always publish a .sha256 asset.
     _cksum_url="${CLOUDFLARED_CHECKSUM_URL:-}"
     if [ -z "${_cksum_url}" ] && [ -z "${CLOUDFLARED_URL:-}" ]; then
         _cksum_url="${_CLOUDFLARED_DEFAULT_CHECKSUM_URL}"
@@ -288,7 +289,11 @@ else
                 printf 'WARNING: cloudflared-linux-amd64 not found in checksums.txt; skipping verification\n' >&2
             fi
         else
-            printf 'WARNING: could not fetch cloudflared checksums from %s; skipping verification\n' "${_cksum_url}" >&2
+            if [ -n "${CLOUDFLARED_CHECKSUM_URL:-}" ]; then
+                printf 'WARNING: could not fetch cloudflared checksums from %s; skipping verification\n' "${_cksum_url}" >&2
+            else
+                printf '    cloudflared checksum asset not available for this release; skipping verification\n'
+            fi
         fi
         rm -f "${_cksum_tmp}"
     fi
