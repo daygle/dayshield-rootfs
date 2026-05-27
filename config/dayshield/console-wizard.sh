@@ -1113,7 +1113,15 @@ _update_system() {
     echo ""
     echo "Applying update ..."
     echo ""
-    if dayshield-core update-apply "${component}"; then
+    if [[ "${component}" == "rootfs" ]]; then
+        if /usr/local/lib/dayshield/ostree-update.sh apply; then
+            echo ""
+            echo "Update command completed."
+        else
+            echo ""
+            echo "Update command failed. Review the output above and system logs."
+        fi
+    elif dayshield-core update-apply "${component}"; then
         echo ""
         echo "Update command completed."
     else
