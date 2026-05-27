@@ -471,6 +471,10 @@ EOF
         | zstd -T0 -19 --force -o "${OSTREE_REPO_OUTPUT_ABS}"
     printf '    OSTree commit : %s\n' "${OSTREE_COMMIT}"
     printf '    OSTree artifact: %s\n' "${OSTREE_REPO_OUTPUT}"
+    printf '    Installing OSTree repo into live rootfs image\n'
+    mkdir -p "${ROOTFS_DIR}/ostree/repo" "${ROOTFS_DIR}/sysroot/ostree/repo"
+    cp -a "${OSTREE_REPO_DIR}/." "${ROOTFS_DIR}/ostree/repo/"
+    cp -a "${OSTREE_REPO_DIR}/." "${ROOTFS_DIR}/sysroot/ostree/repo/"
 fi
 
 # ── 8. Package the rootfs ───────────────────────────────────────
