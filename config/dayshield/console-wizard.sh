@@ -45,6 +45,7 @@ LAN_DHCP_END=""
 LAN_DHCP_LEASE="12h"
 FIRST_SETUP_DONE=""
 ORIG_CONSOLE_LOGLEVEL=""
+MANAGEMENT_HTTPS_ENABLED="false"
 
 # Associative arrays populated from core config JSON (/etc/dayshield/config/config.json)
 declare -A _CORE_IFACE_ROLE=()
@@ -264,6 +265,9 @@ try:
             print('LAN_IP=' + parts[0])
             if len(parts) > 1:
                 print('LAN_PREFIX=' + parts[1])
+    sys_settings = data.get('system_settings') or {}
+    https_on = sys_settings.get('management_https_enabled', False)
+    print('MANAGEMENT_HTTPS_ENABLED=' + ('true' if https_on else 'false'))
 except Exception:
     pass
 " 2>/dev/null)"
@@ -275,6 +279,7 @@ except Exception:
             LAN_IFACE)  [[ -z "${LAN_IFACE}" ]]  && LAN_IFACE="${value}" ;;
             LAN_IP)     [[ -z "${LAN_IP}" ]]     && LAN_IP="${value}" ;;
             LAN_PREFIX) [[ -z "${LAN_PREFIX}" ]] && LAN_PREFIX="${value}" ;;
+            MANAGEMENT_HTTPS_ENABLED) MANAGEMENT_HTTPS_ENABLED="${value}" ;;
         esac
     done <<< "${out}"
 }
@@ -758,7 +763,9 @@ _print_header() {
             printf "  ${_CD}Hint: use option 9 to configure LAN for Web Installer${_CR}\n"
         fi
     elif [[ -n "${lan_ip4}" ]] && [[ "${lan_ip4}" != "no address" ]]; then
-        printf "  ${_CB}Management${_CR}      ${_CB}${_CC}https://%s:8443/${_CR}\n" "${lan_ip4}"
+        local mgmt_scheme="http"
+        [[ "${MANAGEMENT_HTTPS_ENABLED}" == "true" ]] && mgmt_scheme="https"
+        printf "  ${_CB}Management${_CR}      ${_CB}${_CC}%s://%s:8443/${_CR}\n" "${mgmt_scheme}" "${lan_ip4}"
     fi
     echo ""
     _wide_hr
@@ -1788,9 +1795,6 @@ while true; do
     printf "  ${_CB}Actions${_CR}\n"
     _hr
     printf "   ${_CB}${_CY}[0]${_CR}  Open shell\n"
-    if [[ "${CONSOLE_MODE}" == "login" ]]; then
-        printf "   ${_CB}${_CY}[9]${_CR}  Logout\n"
-    fi
     if $LIVE_MODE; then
         printf "   ${_CB}${_CY}[1]${_CR}  Install DayShield\n"
         printf "   ${_CB}${_CY}[2]${_CR}  Setup Web Installer LAN\n"
@@ -1803,6 +1807,9 @@ while true; do
         printf "   ${_CB}${_CY}[6]${_CR}  Power off system\n"
         printf "   ${_CB}${_CY}[7]${_CR}  Run management setup wizard\n"
         printf "   ${_CB}${_CY}[8]${_CR}  Update DayShield\n"
+    fi
+    if [[ "${CONSOLE_MODE}" == "login" ]]; then
+        printf "   ${_CB}${_CY}[9]${_CR}  Logout\n"
     fi
     _hr
     echo ""
