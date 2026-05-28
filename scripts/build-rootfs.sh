@@ -382,6 +382,26 @@ else
     printf '    ERROR: /boot directory not found in rootfs\n'
     exit 1
 fi
+# ── 5c. Create kernel module symlinks for OSTree 2025+ detection ─────────────
+# OSTree 2025+ uses /usr/lib/modules/<version>/vmlinuz as the primary kernel
+# detection path.  Debian places the kernel at /boot/vmlinuz-<version> with no
+# symlink in the modules directory, so we create it here.
+printf '==> Step 5c: creating kernel module symlinks\n'
+for _kmod_dir in "${ROOTFS_DIR}/usr/lib/modules"/*/; do
+    [ -d "${_kmod_dir}" ] || continue
+    _kv="$(basename "${_kmod_dir}")"
+    _kfile="${ROOTFS_DIR}/boot/vmlinuz-${_kv}"
+    _ifile="${ROOTFS_DIR}/boot/initrd.img-${_kv}"
+    if [ -f "${_kfile}" ] && [ ! -e "${_kmod_dir}/vmlinuz" ]; then
+        ln -sf "/boot/vmlinuz-${_kv}" "${_kmod_dir}/vmlinuz"
+        printf '    vmlinuz  -> /boot/vmlinuz-%s\n' "${_kv}"
+    fi
+    if [ -f "${_ifile}" ] && [ ! -e "${_kmod_dir}/initrd" ]; then
+        ln -sf "/boot/initrd.img-${_kv}" "${_kmod_dir}/initrd"
+        printf '    initrd   -> /boot/initrd.img-%s\n' "${_kv}"
+    fi
+done
+
 # ── 6. Run cleanup.sh ────────────────────────────────────────────────────────
 printf '==> Step 6: cleanup\n'
 env ROOTFS_DIR="${ROOTFS_DIR}" \
