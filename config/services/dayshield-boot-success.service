@@ -1,0 +1,13 @@
+[Unit]
+Description=DayShield rootfs boot success signal
+Documentation=https://github.com/daygle/dayshield-rootfs
+After=local-fs.target
+ConditionPathExists=/var/lib/dayshield/rootfs-update/pending.json
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/dayshield-core signal-boot-success
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
