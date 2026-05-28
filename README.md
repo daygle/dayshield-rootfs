@@ -5,30 +5,30 @@
 ## What this repo contains
 
 - deterministic Debian rootfs build scripts
-- package and service configuration for the appliance runtime
-- packaging of the `dayshield-core` backend and built UI assets
-- output archive for installer/ISO pipeline consumption
+- package, service, and runtime configuration for the appliance image
+- installation of `dayshield-core` binary, built UI assets, and updater tooling
+- packaging of rootfs and OSTree artifacts consumed by installer/ISO workflows
 
 ## Requirements
 
 - `mmdebstrap` >= 0.8.4
 - `zstd` >= 1.4
-- `ostree` (host-side OSTree commit/repo compose)
 - GNU `tar`
-- `systemd-container` / `systemd-nspawn` (optional)
+- `ostree` (required when OSTree compose is enabled, default: enabled)
+- `git` (optional; required only to seed source repos under `/opt` and to derive `SOURCE_DATE_EPOCH`)
 
-Install on Debian/Ubuntu:
+On Debian/Ubuntu:
 
 ```sh
 sudo apt-get update
-sudo apt-get install mmdebstrap zstd ostree systemd-container
+sudo apt-get install mmdebstrap zstd tar ostree git
 ```
 
 ## Build
 
-The rootfs build is primarily produced by GitHub Actions. Local builds are supported for development and debugging.
+The rootfs build is primarily produced by CI, but local builds are supported for development and debugging.
 
-### Build steps
+### Local build steps
 
 1. Build the UI assets:
 
@@ -38,75 +38,72 @@ npm install
 npm run build
 ```
 
-2. Build the rootfs archive:
+2. Build the DayShield core binary and place it in the rootfs repo root:
+
+```sh
+cd ../dayshield-core
+cargo build --release
+cp target/release/dayshield-core ../dayshield-rootfs/
+```
+
+3. Build the rootfs archive:
 
 ```sh
 cd ../dayshield-rootfs
 make rootfs UI_DIR=../dayshield-ui/dist
 ```
 
-By default this now produces two artifacts:
+If `git` is available and the current rootfs repository is a git repo, the build will automatically derive `SOURCE_DATE_EPOCH` from the latest commit timestamp.
 
-- `rootfs.tar.zst` (rootfs archive)
-- `rootfs-ostree-repo.tar.zst` (archived OSTree repository containing the composed commit)
+### Required inputs
 
-### Custom options
+- `UI_DIR` must point to a built UI output directory containing `index.html`
+- `dayshield-core` must exist as `dayshield-core` in the `dayshield-rootfs` repository root
+- `ROOTFS_REPO_DIR` is auto-detected from the current repo if it contains `.git`
+
+### Optional repo seeding
+
+The build can optionally seed source repositories inside the rootfs image:
+
+- `CORE_REPO_DIR` seeds `/opt/dayshield-core`
+- `UI_REPO_DIR` seeds `/opt/dayshield-ui`
+- `ROOTFS_REPO_DIR` seeds `/opt/dayshield-rootfs`
+
+These paths are not required for the runtime image, but they are used to populate the packaged repository metadata when provided.
+
+### Example custom build
 
 ```sh
 make rootfs UI_DIR=../dayshield-ui/dist ARCH=arm64 SUITE=trixie \
-  OUTPUT=dayshield-arm64.tar.zst \
-  OSTREE_REF=dayshield/arm64
+  OUTPUT=dayshield-arm64.tar.zst OSTREE_REF=dayshield/arm64
 ```
 
-## Inputs
+## Outputs
 
-- `UI_DIR` must point to built frontend output, usually `../dayshield-ui/dist`
-- A built `dayshield-core` binary is required for the rootfs build
-- Missing inputs cause the build to fail clearly
+By default, the build produces:
 
-## OSTree architecture (initial slice)
+- `rootfs.tar.zst`: the packaged root filesystem archive
+- `rootfs-ostree-repo.tar.zst`: the host-side OSTree repository archive containing the composed commit
 
-The rootfs build now composes an OSTree commit and repository artifact on the build host.
-This is the first step toward immutable image-based updates driven by OSTree deployments.
+If OSTree compose is disabled with `ENABLE_OSTREE_COMPOSE=0` or `--disable-ostree-compose`, only `rootfs.tar.zst` is produced.
 
-### Build-time outputs
+## Rootfs and OSTree behavior
 
-- Rootfs archive for installer/ISO integration (`*.tar.zst`)
-- OSTree repository archive (`*-ostree-repo.tar.zst`) containing:
-  - the composed commit for `OSTREE_REF`
-  - repository metadata (`summary`)
+- The build installs UI assets under `/usr/local/share/dayshield-ui`
+- `dayshield-core` is installed to `/usr/local/sbin/dayshield-core`
+- OSTree tooling and update helper are installed in the rootfs
+- The build writes a version marker to `/etc/dayshield/version`
+- When OSTree compose is enabled, the rootfs image also contains an OSTree repo at `/ostree/repo` and `/sysroot/ostree/repo`
 
-### Runtime layout assumptions
-
-- Managed OS tree is deployed via OSTree (`/sysroot` + `/ostree`)
-- Persistent writable state is expected under `/var`
-- DayShield app writable data remains under `/var/lib/dayshield` and `/var/log/dayshield`
-
-### Update/boot assumptions
-
-- OSTree remote stub is installed at `/etc/ostree/remotes.d/dayshield.conf`
-- Initial helper exists at `/usr/local/lib/dayshield/ostree-update.sh`
-  - `status`, `check`, `stage`, `rollback`
-- Installer/ISO workflows are expected to finalize target partition labels/UUIDs and
-  set the correct OSTree ref/remote URL for production environments.
-
-### Local validation
+## Verification
 
 ```sh
-# Verify extracted rootfs layout
 make verify ROOTFS_DIR=/path/to/extracted/rootfs
-
-# Inspect composed OSTree commit
-mkdir -p /tmp/dayshield-ostree
-tar --zstd -xf rootfs-ostree-repo.tar.zst -C /tmp/dayshield-ostree
-ostree --repo=/tmp/dayshield-ostree refs
-ostree --repo=/tmp/dayshield-ostree log dayshield/amd64
 ```
 
-Replace `amd64` with your target architecture when using a non-amd64 build/ref.
+The verification target checks boot artifacts, required directories, systemd units, OSTree layout, and update tooling.
 
 ## Notes
 
-- This repo is focused on root filesystem assembly and packaging.
-- The rootfs and OSTree artifacts are consumed by installer and ISO workflows.
-- UI and backend runtime sources live in separate repositories.
+- This repository assembles the appliance runtime rootfs; it does not itself build the backend or frontend sources.
+- The rootfs archive is consumed by installer and ISO pipelines under `dayshield-installer-ui` and `dayshield-iso`.
