@@ -12,8 +12,7 @@ versioned rootfs artifacts for installer, ISO, and system-update flows.
 
 ## Update model
 
-DayShield is migrating away from OSTree-based rootfs deployment to a seamless
-image-based update flow:
+DayShield uses a seamless image-based update flow:
 
 - users see versions and update status, not slots or A/B terminology
 - `dayshield-rootfs` publishes versioned rootfs artifacts to GitHub releases
