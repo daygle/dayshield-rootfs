@@ -155,6 +155,9 @@ if [ -n "${ROOTFS_REPO_DIR}" ] && [ ! -d "${ROOTFS_REPO_DIR}/.git" ]; then
     exit 1
 fi
 
+# All listed host tools are mandatory for the current build contract: the
+# builder always emits the rootfs archive, immutable squashfs image, and release
+# manifest in a single run.
 for tool in mmdebstrap zstd tar mksquashfs sha256sum; do
     if ! command -v "${tool}" >/dev/null 2>&1; then
         printf 'ERROR: required tool not found: %s\n' "${tool}" >&2

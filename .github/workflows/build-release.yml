@@ -164,6 +164,8 @@ jobs:
           rm -f /tmp/debian-archive-keyring_2025.1_all.deb
 
           sudo apt-get update -qq
+          # mksquashfs is provided by the squashfs-tools package and is required
+          # by scripts/build-rootfs.sh for the immutable rootfs image artifact.
           sudo apt-get install -y --no-install-recommends mmdebstrap zstd squashfs-tools debian-archive-keyring
 
       - name: Build rootfs
