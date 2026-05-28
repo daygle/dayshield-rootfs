@@ -28,6 +28,30 @@ if [[ -z "${CONSOLE_MODE}" ]]; then
         CONSOLE_MODE="login"
     fi
 fi
+CONSOLE_IDLE_TIMEOUT="${DAYSHIELD_CONSOLE_IDLE_TIMEOUT:-0}"
+
+_console_idle_timeout_enabled() {
+    [[ "${CONSOLE_MODE}" == "login" ]] || return 1
+    [[ -t 0 ]] || return 1
+    [[ "${CONSOLE_IDLE_TIMEOUT}" =~ ^[0-9]+$ ]] || return 1
+    (( CONSOLE_IDLE_TIMEOUT > 0 ))
+}
+
+read() {
+    local rc
+    if _console_idle_timeout_enabled; then
+        if builtin read -t "${CONSOLE_IDLE_TIMEOUT}" "$@"; then
+            return 0
+        fi
+        rc=$?
+        if (( rc > 128 )); then
+            printf '\nConsole idle timeout reached; logging out.\n'
+            exit 2
+        fi
+        return "${rc}"
+    fi
+    builtin read "$@"
+}
 
 # ---------------------------------------------------------------------------
 # Persistent state

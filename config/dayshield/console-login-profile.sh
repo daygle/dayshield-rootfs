@@ -49,6 +49,22 @@ else
     esac
 fi
 
+if [ -z "${SSH_CONNECTION:-}" ]; then
+    # Local console sessions should not stay authenticated indefinitely.
+    # DAYSHIELD_CONSOLE_IDLE_TIMEOUT=0 disables the menu/shell idle logout.
+    DAYSHIELD_CONSOLE_IDLE_TIMEOUT="${DAYSHIELD_CONSOLE_IDLE_TIMEOUT:-600}"
+    case "${DAYSHIELD_CONSOLE_IDLE_TIMEOUT}" in
+        ''|*[!0-9]*|0)
+            unset DAYSHIELD_CONSOLE_IDLE_TIMEOUT
+            ;;
+        *)
+            export DAYSHIELD_CONSOLE_IDLE_TIMEOUT
+            TMOUT="${DAYSHIELD_CONSOLE_IDLE_TIMEOUT}"
+            export TMOUT
+            ;;
+    esac
+fi
+
 MENU_CMD=""
 if [ -x /usr/local/bin/dayshield-console ]; then
     MENU_CMD="/usr/local/bin/dayshield-console"
