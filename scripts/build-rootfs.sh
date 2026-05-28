@@ -223,6 +223,13 @@ cleanup_build() {
 }
 trap cleanup_build EXIT
 
+print_step() {
+    printf '\n'
+    printf -- '------------------------------------------------------------\n'
+    printf 'STEP: %s\n' "$1"
+    printf -- '------------------------------------------------------------\n'
+}
+
 security_suite_enabled() {
     case "$1" in
         unstable|sid|testing|experimental)
@@ -265,8 +272,7 @@ printf '    UI repo      : %s\n' "${UI_REPO_DIR:-<none>}"
 printf '    RootFS repo  : %s\n' "${ROOTFS_REPO_DIR:-<none>}"
 printf '\n'
 
-# ── 1. Run mmdebstrap ────────────────────────────────────────────────────────
-printf '==> Step 1: mmdebstrap\n'
+print_step "mmdebstrap"
 # Build the mmdebstrap positional-argument list dynamically so that optional
 # security and updates sources are only appended when enabled.  By this point
 # in the script all argument parsing is complete so reusing $@ is safe.
@@ -284,15 +290,13 @@ set -- \
 [ -n "${UPDATES_MIRROR_ENTRY}" ]  && set -- "$@" "${UPDATES_MIRROR_ENTRY}"
 mmdebstrap "$@"
 
-# ── 2. Run chroot-setup.sh ───────────────────────────────────────────────────
-printf '==> Step 2: chroot-setup\n'
+print_step "chroot-setup.sh"
 env ROOTFS_DIR="${ROOTFS_DIR}" \
     CONFIG_DIR="${CONFIG_DIR}" \
     REPO_DIR="${REPO_DIR}" \
     sh "${SCRIPT_DIR}/chroot-setup.sh"
 
-# ── 2b. Stamp rootfs version ─────────────────────────────────────────────────
-printf '==> Step 2b: stamp version\n'
+print_step "stamp-version"
 _rootfs_tag=""
 if command -v git >/dev/null 2>&1 && [ -n "${ROOTFS_REPO_DIR}" ]; then
     _rootfs_tag="$(git -C "${ROOTFS_REPO_DIR}" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || true)"
@@ -308,8 +312,7 @@ mkdir -p "${ROOTFS_DIR}/etc/dayshield"
 printf '%s\n' "${_rootfs_tag}" > "${ROOTFS_DIR}/etc/dayshield/version"
 printf '    Version: %s\n' "${_rootfs_tag}"
 
-# ── 3. Run install-dayshield-core.sh ────────────────────────────────────────
-printf '==> Step 3: install-dayshield-core\n'
+print_step "install-dayshield-core.sh"
 env ROOTFS_DIR="${ROOTFS_DIR}" \
     CONFIG_DIR="${CONFIG_DIR}" \
     REPO_DIR="${REPO_DIR}" \
@@ -319,18 +322,15 @@ env ROOTFS_DIR="${ROOTFS_DIR}" \
     DAYSHIELD_ROOTFS_REPO_DIR="${ROOTFS_REPO_DIR}" \
     sh "${SCRIPT_DIR}/install-dayshield-core.sh"
 
-# ── 4. Run enable-services.sh ────────────────────────────────────────────────
-printf '==> Step 4: enable-services\n'
+print_step "enable-services.sh"
 env ROOTFS_DIR="${ROOTFS_DIR}" \
     CONFIG_DIR="${CONFIG_DIR}" \
     sh "${SCRIPT_DIR}/enable-services.sh"
 
-# ── 5. Run harden-ipv4.sh default hardening ──────────────────────────────────
-printf '==> Step 5: harden-ipv4\n'
+print_step "harden-ipv4.sh"
 env ROOTFS_DIR="${ROOTFS_DIR}" \
     sh "${SCRIPT_DIR}/harden-ipv4.sh"
-# ── 5b. Generate initramfs (required for boot) ──────────────────
-printf '==> Step 5b: generating initramfs\n'
+print_step "generate-initramfs"
 if [ -d "${ROOTFS_DIR}/boot" ]; then
     FSTAB_PATH="${ROOTFS_DIR}/etc/fstab"
     FSTAB_BACKUP="${ROOTFS_DIR}/etc/fstab.dayshield-build.bak"
@@ -371,11 +371,7 @@ else
     printf '    ERROR: /boot directory not found in rootfs\n'
     exit 1
 fi
-# ── 5c. Create kernel module symlinks for initramfs-driven boot flows ────────
-# Debian places the kernel at /boot/vmlinuz-<version> with no symlink in the
-# modules directory, so create stable references used by downstream boot/update
-# tooling.
-printf '==> Step 5c: creating kernel module symlinks\n'
+print_step "kernel-module-symlinks"
 for _kmod_dir in "${ROOTFS_DIR}/usr/lib/modules"/*/; do
     [ -d "${_kmod_dir}" ] || continue
     _kv="$(basename "${_kmod_dir}")"
@@ -391,12 +387,11 @@ for _kmod_dir in "${ROOTFS_DIR}/usr/lib/modules"/*/; do
     fi
 done
 
-# ── 6. Run cleanup.sh ────────────────────────────────────────────────────────
-printf '==> Step 6: cleanup\n'
+print_step "cleanup.sh"
 env ROOTFS_DIR="${ROOTFS_DIR}" \
     sh "${SCRIPT_DIR}/cleanup.sh"
 
-printf '==> Step 6b: validate rootfs update tooling\n'
+print_step "validate-update-tooling"
 if [ ! -x "${ROOTFS_DIR}/usr/local/lib/dayshield/rootfs-update.sh" ]; then
     printf '    ERROR: missing executable /usr/local/lib/dayshield/rootfs-update.sh in rootfs\n' >&2
     exit 1
@@ -442,8 +437,8 @@ cat > "${ROOTFS_DIR}/usr/local/share/dayshield-updates/rootfs-image-layout.json"
 }
 EOF
 
-# ── 7. Package the rootfs archive ─────────────────────────────────────────────
-printf '==> Step 7: packaging rootfs archive -> %s\n' "${OUTPUT}"
+print_step "package-rootfs-archive"
+printf '    output: %s\n' "${OUTPUT}"
 OUTPUT_DIR="$(dirname "${OUTPUT}")"
 if [ "${OUTPUT_DIR}" != "." ] && [ ! -d "${OUTPUT_DIR}" ]; then
     mkdir -p "${OUTPUT_DIR}"
@@ -460,8 +455,8 @@ tar \
     . \
     | zstd -T0 -19 --force -o "${OUTPUT_ABS}"
 
-# ── 8. Build immutable squashfs artifact ──────────────────────────────────────
-printf '==> Step 8: building immutable rootfs image -> %s\n' "${ROOTFS_IMAGE_OUTPUT}"
+print_step "build-squashfs"
+printf '    output: %s\n' "${ROOTFS_IMAGE_OUTPUT}"
 IMAGE_OUTPUT_DIR="$(dirname "${ROOTFS_IMAGE_OUTPUT}")"
 if [ "${IMAGE_OUTPUT_DIR}" != "." ] && [ ! -d "${IMAGE_OUTPUT_DIR}" ]; then
     mkdir -p "${IMAGE_OUTPUT_DIR}"
@@ -483,8 +478,8 @@ else
     exit 1
 fi
 
-# ── 9. Emit host-side release manifest ────────────────────────────────────────
-printf '==> Step 9: writing release manifest -> %s\n' "${ROOTFS_MANIFEST_OUTPUT}"
+print_step "write-manifest"
+printf '    output: %s\n' "${ROOTFS_MANIFEST_OUTPUT}"
 MANIFEST_OUTPUT_DIR="$(dirname "${ROOTFS_MANIFEST_OUTPUT}")"
 if [ "${MANIFEST_OUTPUT_DIR}" != "." ] && [ ! -d "${MANIFEST_OUTPUT_DIR}" ]; then
     mkdir -p "${MANIFEST_OUTPUT_DIR}"
