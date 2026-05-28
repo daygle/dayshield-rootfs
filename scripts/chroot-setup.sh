@@ -197,8 +197,19 @@ mkdir -p \
 printf '  -> Creating /var/lib/dayshield directory tree\n'
 mkdir -p \
     "${ROOTFS_DIR}/var/lib/dayshield/aliases" \
+    "${ROOTFS_DIR}/var/lib/dayshield/config" \
     "${ROOTFS_DIR}/var/lib/dayshield/crowdsec" \
     "${ROOTFS_DIR}/var/lib/dayshield/acme"
+# nft-ifaces.conf lives in /var (OSTree-immune) so rootfs updates never clobber
+# user interface assignments. The /etc symlink below makes nftables find it at
+# the path it has always included.
+cat > "${ROOTFS_DIR}/var/lib/dayshield/config/nft-ifaces.conf" <<'EOF'
+# /var/lib/dayshield/config/nft-ifaces.conf — interface definitions for nftables.
+# Written by the installer / console wizard when interfaces are assigned.
+# Uses loopback as a safe placeholder until the wizard runs.
+define WAN_IF = lo
+define LAN_IF = lo
+EOF
 
 printf '  -> Creating OSTree sysroot and writable state layout\n'
 # /sysroot/ostree/repo is the canonical OSTree sysroot location.
@@ -339,6 +350,10 @@ cp "${CONFIG_DIR}/sshd_config" "${ROOTFS_DIR}/etc/ssh/sshd_config"
 printf '  -> Copying config/dayshield skeleton\n'
 cp -r "${CONFIG_DIR}/dayshield/config/." "${ROOTFS_DIR}/etc/dayshield/config/"
 cp -r "${CONFIG_DIR}/dayshield/certs/."  "${ROOTFS_DIR}/etc/dayshield/certs/"
+# nft-ifaces.conf is stored in /var (OSTree-immune); expose it under /etc via
+# a symlink so /etc/nftables.conf can include it at its canonical path.
+ln -sf /var/lib/dayshield/config/nft-ifaces.conf \
+    "${ROOTFS_DIR}/etc/dayshield/config/nft-ifaces.conf"
 
 # ── systemd-networkd-wait-online - don't block boot ──────────────────────────
 # In installer mode there are no configured interfaces yet (wizard hasn't run),

@@ -462,8 +462,10 @@ EOF
 }
 
 _apply_nftables_config() {
-    local nft_ifaces="/etc/dayshield/config/nft-ifaces.conf"
-    mkdir -p /etc/dayshield/config
+    # Write to /var (OSTree-immune); /etc/dayshield/config/nft-ifaces.conf is a
+    # symlink to this path so nftables finds it at its canonical include path.
+    local nft_ifaces="/var/lib/dayshield/config/nft-ifaces.conf"
+    mkdir -p /var/lib/dayshield/config
     # PPPoE traffic exits via ppp0, not the physical WAN interface.
     local effective_wan="${WAN_IFACE:-lo}"
     [[ "${WAN_TYPE}" == "pppoe" ]] && effective_wan="ppp0"

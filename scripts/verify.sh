@@ -83,6 +83,7 @@ for dir in \
     /var/ostree \
     /etc/ostree/remotes.d \
     /var/lib/dayshield/aliases \
+    /var/lib/dayshield/config \
     /var/lib/dayshield/crowdsec \
     /var/lib/dayshield/acme \
     /etc/cloudflared \
@@ -137,6 +138,20 @@ if [ -x "${ROOTFS_DIR}/usr/local/lib/dayshield/ostree-update.sh" ]; then
     ok "OSTree update helper exists: /usr/local/lib/dayshield/ostree-update.sh"
 else
     fail "missing OSTree update helper: /usr/local/lib/dayshield/ostree-update.sh"
+fi
+
+# nft-ifaces.conf must be a symlink in /etc pointing to /var so OSTree upgrades
+# cannot clobber user interface assignments.
+_nft_symlink="${ROOTFS_DIR}/etc/dayshield/config/nft-ifaces.conf"
+if [ -L "${_nft_symlink}" ]; then
+    ok "nft-ifaces.conf is a symlink in /etc/dayshield/config/ (OSTree-safe)"
+else
+    fail "/etc/dayshield/config/nft-ifaces.conf must be a symlink to /var/lib/dayshield/config/nft-ifaces.conf"
+fi
+if [ -f "${ROOTFS_DIR}/var/lib/dayshield/config/nft-ifaces.conf" ]; then
+    ok "nft-ifaces.conf placeholder exists in /var/lib/dayshield/config/"
+else
+    fail "missing /var/lib/dayshield/config/nft-ifaces.conf placeholder"
 fi
 
 # ── Required service unit files ───────────────────────────────────────────────
