@@ -11,13 +11,12 @@ Environment=DAYSHIELD_PORT=8443
 ExecStart=/usr/local/sbin/dayshield-core
 Restart=on-failure
 RestartSec=5s
-NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
 ReadWritePaths=/etc/dayshield /var/lib/dayshield /var/log/dayshield /opt/dayshield-core /opt/dayshield-ui /opt/dayshield-rootfs /usr/local/sbin /usr/local/lib/dayshield /usr/local/share /sysroot
 StateDirectory=dayshield-updates
 PrivateTmp=yes
-CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE CAP_SYS_ADMIN CAP_CHOWN CAP_FSETID CAP_LINUX_IMMUTABLE CAP_SETFCAP
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE CAP_SYS_ADMIN CAP_CHOWN CAP_FSETID CAP_LINUX_IMMUTABLE CAP_SETFCAP CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH
 
 [Install]
 WantedBy=multi-user.target
