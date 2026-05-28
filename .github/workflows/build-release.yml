@@ -223,24 +223,7 @@ jobs:
           MANIFEST_ARTIFACT="${{ steps.version.outputs.artifact_manifest }}"
           if [ -f "${MANIFEST_ARTIFACT}" ]; then
             echo "  [PASS] rootfs manifest exists: ${MANIFEST_ARTIFACT}"
-            python3 - "${MANIFEST_ARTIFACT}" <<'PY'
-            import json
-            import sys
-            path = sys.argv[1]
-            with open(path, 'r', encoding='utf-8') as fh:
-                data = json.load(fh)
-            assert data.get("component") == "rootfs", (
-                f"Expected component 'rootfs', got {data.get('component')!r}"
-            )
-            strategy = data.get("update_strategy", {})
-            assert strategy.get("type") == "initramfs-image", (
-                f"Expected update strategy 'initramfs-image', got {strategy.get('type')!r}"
-            )
-            image = data.get("artifacts", {}).get("image", {})
-            assert image.get("format") == "squashfs", (
-                f"Expected image format 'squashfs', got {image.get('format')!r}"
-            )
-            PY
+            python3 scripts/verify-manifest.py "${MANIFEST_ARTIFACT}"
             echo "  [PASS] rootfs manifest schema validated"
           else
             echo "  [FAIL] rootfs manifest missing: ${MANIFEST_ARTIFACT}" >&2
