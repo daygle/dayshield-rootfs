@@ -1,0 +1,104 @@
+#!/bin/sh
+# Boot-time initramfs script: apply a pending DayShield rootfs image update.
+#
+# Runs at the local-premount stage — before the root partition is mounted by
+# mountroot().  If /boot/dayshield/next is a symlink to a squashfs image, that
+# image is extracted over the root partition so the system boots into the
+# updated rootfs.
+#
+# On success:
+#   - /boot/dayshield/next symlink is removed
+#   - /boot/dayshield/current symlink is advanced to the new image
+#   - /boot/dayshield/previous symlink is set to the old current
+#   - Normal boot continues; dayshield-boot-success.service promotes
+#     pending.json -> current.json after the first healthy boot
+#
+# On failure (extraction error, missing image, missing partition):
+#   - /boot/dayshield/next is left intact so the update is retried next boot
+#   - The existing rootfs is booted unchanged
+
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case $1 in prereqs) prereqs; exit 0 ;; esac
+
+. /scripts/functions
+
+BOOT_LABEL="DAYSHIELD_BOOT"
+BOOT_MNT="/run/dayshield-boot"
+SYSROOT_MNT="/run/dayshield-sysroot"
+
+# ── Locate and mount the boot partition ──────────────────────────────────────
+
+boot_dev="$(blkid -L "${BOOT_LABEL}" 2>/dev/null || true)"
+if [ -z "${boot_dev}" ]; then
+    exit 0
+fi
+
+mkdir -p "${BOOT_MNT}"
+if ! mount -t ext4 -o ro "${boot_dev}" "${BOOT_MNT}" 2>/dev/null; then
+    log_warning_msg "DayShield: could not mount boot partition (${boot_dev}); skipping update check"
+    exit 0
+fi
+
+# ── Check for a pending image ─────────────────────────────────────────────────
+
+next_link="${BOOT_MNT}/dayshield/next"
+if [ ! -L "${next_link}" ]; then
+    umount "${BOOT_MNT}"
+    exit 0
+fi
+
+squashfs_rel="$(readlink "${next_link}")"
+squashfs_path="${BOOT_MNT}/dayshield/${squashfs_rel}"
+
+if [ ! -f "${squashfs_path}" ]; then
+    log_warning_msg "DayShield: queued image not found (${squashfs_path}); booting existing rootfs"
+    umount "${BOOT_MNT}"
+    exit 0
+fi
+
+# ── Apply the squashfs to the root partition ──────────────────────────────────
+
+if [ -z "${ROOT}" ]; then
+    log_warning_msg "DayShield: root device unknown; skipping update application"
+    umount "${BOOT_MNT}"
+    exit 0
+fi
+
+log_begin_msg "DayShield: applying rootfs update (${squashfs_rel})"
+
+modprobe squashfs 2>/dev/null || true
+
+mkdir -p "${SYSROOT_MNT}"
+if ! mount -t ext4 "${ROOT}" "${SYSROOT_MNT}" 2>/dev/null; then
+    log_failure_msg "DayShield: could not mount root partition (${ROOT}); aborting update"
+    umount "${BOOT_MNT}"
+    exit 0
+fi
+
+if ! unsquashfs -f -d "${SYSROOT_MNT}" "${squashfs_path}" >/dev/null 2>&1; then
+    log_failure_msg "DayShield: image extraction failed; booting existing rootfs"
+    umount "${SYSROOT_MNT}"
+    umount "${BOOT_MNT}"
+    exit 0
+fi
+
+umount "${SYSROOT_MNT}"
+
+# ── Advance the boot symlinks ─────────────────────────────────────────────────
+
+umount "${BOOT_MNT}"
+if mount -t ext4 -o rw "${boot_dev}" "${BOOT_MNT}" 2>/dev/null; then
+    image_name="$(basename "${squashfs_path}")"
+    dayshield_dir="${BOOT_MNT}/dayshield"
+    if [ -L "${dayshield_dir}/current" ]; then
+        prev_target="$(readlink "${dayshield_dir}/current")"
+        ln -sfn "${prev_target}" "${dayshield_dir}/previous"
+    fi
+    ln -sfn "images/${image_name}" "${dayshield_dir}/current"
+    rm -f "${dayshield_dir}/next"
+    sync
+    umount "${BOOT_MNT}"
+fi
+
+log_end_msg 0

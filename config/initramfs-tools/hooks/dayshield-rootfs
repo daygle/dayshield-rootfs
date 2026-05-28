@@ -1,0 +1,18 @@
+#!/bin/sh
+# Build-time initramfs hook: bundle the tools needed for DayShield rootfs
+# image updates into the initramfs.  Runs during update-initramfs -c.
+
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case $1 in prereqs) prereqs; exit 0 ;; esac
+
+. /usr/share/initramfs-tools/hook-functions
+
+# squashfs module — needed to mount/read squashfs images at boot
+manual_add_modules squashfs
+
+# unsquashfs — extracts the staged squashfs image onto the root partition
+copy_exec /usr/sbin/unsquashfs /sbin
+
+# blkid — finds the DAYSHIELD_BOOT partition by label at boot time
+copy_exec /sbin/blkid /sbin

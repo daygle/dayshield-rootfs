@@ -365,7 +365,8 @@ for unit in \
     wireguard.service \
     acme.service \
     acme.timer \
-    console-wizard.service
+    console-wizard.service \
+    dayshield-boot-success.service
 do
     src="${CONFIG_DIR}/services/${unit}"
     if [ -f "${src}" ]; then
@@ -399,3 +400,19 @@ mkdir -p "${ROOTFS_DIR}/etc/profile.d"
 cp "${CONFIG_DIR}/dayshield/console-login-profile.sh" \
     "${ROOTFS_DIR}/etc/profile.d/dayshield-console.sh"
 chmod 644 "${ROOTFS_DIR}/etc/profile.d/dayshield-console.sh"
+
+# ── DayShield initramfs hooks for image-based rootfs updates ─────────────────
+# These are picked up by update-initramfs (step 5b in build-rootfs.sh) and
+# bundled into the initramfs image.  The hook copies unsquashfs + blkid into
+# the initramfs; the local-premount script applies any pending squashfs image
+# to the root partition before mountroot() mounts it.
+printf '  -> Installing initramfs hooks for rootfs image updates\n'
+mkdir -p \
+    "${ROOTFS_DIR}/etc/initramfs-tools/hooks" \
+    "${ROOTFS_DIR}/etc/initramfs-tools/scripts/local-premount"
+install -m 0755 \
+    "${CONFIG_DIR}/initramfs-tools/hooks/dayshield-rootfs" \
+    "${ROOTFS_DIR}/etc/initramfs-tools/hooks/dayshield-rootfs"
+install -m 0755 \
+    "${CONFIG_DIR}/initramfs-tools/scripts/local-premount/dayshield-rootfs" \
+    "${ROOTFS_DIR}/etc/initramfs-tools/scripts/local-premount/dayshield-rootfs"
