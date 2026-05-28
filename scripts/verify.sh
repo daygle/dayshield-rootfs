@@ -80,12 +80,13 @@ for dir in \
     /etc/dayshield/config \
     /etc/dayshield/certs \
     /etc/dayshield/logs \
-    /var/ostree \
-    /etc/ostree/remotes.d \
+    /boot/dayshield/images \
+    /boot/dayshield/metadata \
     /var/lib/dayshield/aliases \
     /var/lib/dayshield/config \
     /var/lib/dayshield/crowdsec \
     /var/lib/dayshield/acme \
+    /var/lib/dayshield/images \
     /etc/cloudflared \
     /var/lib/cloudflared \
     /etc/unbound \
@@ -106,45 +107,33 @@ do
     fi
 done
 
-# Prefer /sysroot/ostree/repo (canonical OSTree sysroot layout); accept /ostree/repo
-# too for compatibility during transition/installer staging paths.
-if [ -d "${ROOTFS_DIR}/sysroot/ostree/repo" ] || [ -d "${ROOTFS_DIR}/ostree/repo" ]; then
-    ok "OSTree repo path exists (/sysroot/ostree/repo or /ostree/repo)"
+# ── Rootfs image layout/update prerequisites ──────────────────────────────────
+banner "Rootfs image layout/update prerequisites"
+if [ -x "${ROOTFS_DIR}/usr/local/lib/dayshield/rootfs-update.sh" ]; then
+    ok "rootfs update helper exists: /usr/local/lib/dayshield/rootfs-update.sh"
 else
-    fail "missing OSTree repo path (/sysroot/ostree/repo or /ostree/repo)"
+    fail "missing rootfs update helper: /usr/local/lib/dayshield/rootfs-update.sh"
 fi
 
-# ── OSTree layout/update prerequisites ────────────────────────────────────────
-banner "OSTree layout/update prerequisites"
-if [ -x "${ROOTFS_DIR}/usr/bin/ostree" ]; then
-    ok "ostree binary installed in rootfs"
+ROOTFS_LAYOUT_MANIFEST="${ROOTFS_DIR}/usr/local/share/dayshield-updates/rootfs-image-layout.json"
+if [ -f "${ROOTFS_LAYOUT_MANIFEST}" ]; then
+    ok "rootfs image layout manifest exists: /usr/local/share/dayshield-updates/rootfs-image-layout.json"
 else
-    fail "ostree binary missing (/usr/bin/ostree)"
+    fail "missing rootfs image layout manifest: /usr/local/share/dayshield-updates/rootfs-image-layout.json"
 fi
 
-OSTREE_REMOTE_CONF="${ROOTFS_DIR}/etc/ostree/remotes.d/dayshield.conf"
-if [ -f "${OSTREE_REMOTE_CONF}" ]; then
-    ok "OSTree remote config exists: /etc/ostree/remotes.d/dayshield.conf"
+if grep -Eq '"boot_mode"[[:space:]]*:[[:space:]]*"initramfs-image"' "${ROOTFS_LAYOUT_MANIFEST}" 2>/dev/null || \
+   grep -Eq '"type"[[:space:]]*:[[:space:]]*"initramfs-image"' "${ROOTFS_LAYOUT_MANIFEST}" 2>/dev/null; then
+    ok "rootfs image layout manifest declares initramfs-image semantics"
 else
-    fail "missing OSTree remote config: /etc/ostree/remotes.d/dayshield.conf"
-fi
-if grep -qF '@DAYSHIELD_OSTREE_REMOTE_URL@' "${OSTREE_REMOTE_CONF}" 2>/dev/null; then
-    ok "OSTree remote URL placeholder present (replaced by installer-finalize.sh at install time)"
-else
-    fail "OSTree remote config is missing expected URL placeholder @DAYSHIELD_OSTREE_REMOTE_URL@"
+    fail "rootfs image layout manifest is missing initramfs-image semantics"
 fi
 
-if [ -x "${ROOTFS_DIR}/usr/local/lib/dayshield/ostree-update.sh" ]; then
-    ok "OSTree update helper exists: /usr/local/lib/dayshield/ostree-update.sh"
-else
-    fail "missing OSTree update helper: /usr/local/lib/dayshield/ostree-update.sh"
-fi
-
-# nft-ifaces.conf must be a symlink in /etc pointing to /var so OSTree upgrades
-# cannot clobber user interface assignments.
+# nft-ifaces.conf must be a symlink in /etc pointing to /var so image-based
+# updates cannot clobber user interface assignments.
 _nft_symlink="${ROOTFS_DIR}/etc/dayshield/config/nft-ifaces.conf"
 if [ -L "${_nft_symlink}" ]; then
-    ok "nft-ifaces.conf is a symlink in /etc/dayshield/config/ (OSTree-safe)"
+    ok "nft-ifaces.conf is a symlink in /etc/dayshield/config/ (image-update safe)"
 else
     fail "/etc/dayshield/config/nft-ifaces.conf must be a symlink to /var/lib/dayshield/config/nft-ifaces.conf"
 fi
@@ -207,23 +196,23 @@ DS_ENGINE_PATHS="${ROOTFS_DIR}/etc/systemd/system/dayshield.service.d/dayshield-
 DS_BASE_SVC="${ROOTFS_DIR}/etc/systemd/system/dayshield.service"
 if [ -f "${DS_BASE_SVC}" ] && \
    grep -Eq 'ReadWritePaths=.*/usr/local/lib/dayshield([[:space:]]|$)' "${DS_BASE_SVC}"; then
-    ok "dayshield.service can write bundled OSTree helper path (/usr/local/lib/dayshield)"
+   ok "dayshield.service can write bundled helper path (/usr/local/lib/dayshield)"
 else
-    fail "dayshield.service sandbox missing ReadWritePaths=/usr/local/lib/dayshield (OSTree helper live-update path)"
+   fail "dayshield.service sandbox missing ReadWritePaths=/usr/local/lib/dayshield"
 fi
 
 if [ -f "${DS_BASE_SVC}" ] && \
-   grep -Eq 'ReadWritePaths=.*/sysroot([[:space:]]|$)' "${DS_BASE_SVC}"; then
-    ok "dayshield.service can write OSTree sysroot (/sysroot)"
+   grep -Eq 'ReadWritePaths=.*/boot([[:space:]]|$)' "${DS_BASE_SVC}"; then
+   ok "dayshield.service can write the boot image store (/boot)"
 else
-    fail "dayshield.service sandbox missing ReadWritePaths=/sysroot (required for ostree admin deploy)"
+   fail "dayshield.service sandbox missing ReadWritePaths=/boot"
 fi
 
 if [ -f "${DS_BASE_SVC}" ] && \
    grep -Eq 'StateDirectory=.*dayshield-updates|ReadWritePaths=.*/var/lib/dayshield-updates([[:space:]]|$)' "${DS_BASE_SVC}"; then
-    ok "dayshield.service provisions OSTree download workspace (/var/lib/dayshield-updates)"
+   ok "dayshield.service provisions the rootfs update workspace (/var/lib/dayshield-updates)"
 else
-    fail "dayshield.service missing StateDirectory=dayshield-updates (OSTree artifact download path)"
+   fail "dayshield.service missing StateDirectory=dayshield-updates"
 fi
 
 if [ -f "${DS_ENGINE_PATHS}" ] && \

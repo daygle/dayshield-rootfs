@@ -41,7 +41,8 @@ jobs:
           fi
           printf 'tag=%s\n' "${TAG}" >> "${GITHUB_OUTPUT}"
           printf 'artifact=rootfs-%s.tar.zst\n' "${TAG}" >> "${GITHUB_OUTPUT}"
-          printf 'artifact_ostree=rootfs-%s-ostree-repo.tar.zst\n' "${TAG}" >> "${GITHUB_OUTPUT}"
+          printf 'artifact_image=rootfs-%s.squashfs\n' "${TAG}" >> "${GITHUB_OUTPUT}"
+          printf 'artifact_manifest=rootfs-%s-manifest.json\n' "${TAG}" >> "${GITHUB_OUTPUT}"
 
       # ─────────────────────────────────────────────────────────────────────────
       # Auto-detect latest tags for core and ui
@@ -150,7 +151,6 @@ jobs:
 
           tar --zstd -xf "${WORK_DIR}/${ASSET}" -C "${WORK_DIR}"
           install -m 0755 "${WORK_DIR}/dayshield-core" rootfs/dayshield-core
-          install -m 0755 "${WORK_DIR}/ostree-update.sh" rootfs/ostree-update.sh
 
       # ─────────────────────────────────────────────────────────────────────────
       # Build rootfs
@@ -164,18 +164,17 @@ jobs:
           rm -f /tmp/debian-archive-keyring_2025.1_all.deb
 
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends mmdebstrap zstd ostree debian-archive-keyring
+          sudo apt-get install -y --no-install-recommends mmdebstrap zstd squashfs-tools debian-archive-keyring
 
       - name: Build rootfs
         working-directory: rootfs
         run: |
           ENABLE_SUITE_UPDATES=1
-          OSTREE_REF=dayshield/amd64
 
           sudo make rootfs \
             OUTPUT="${{ steps.version.outputs.artifact }}" \
-            OSTREE_REPO_OUTPUT="${{ steps.version.outputs.artifact_ostree }}" \
-            OSTREE_REF="${OSTREE_REF}" \
+            ROOTFS_IMAGE_OUTPUT="${{ steps.version.outputs.artifact_image }}" \
+            ROOTFS_MANIFEST_OUTPUT="${{ steps.version.outputs.artifact_manifest }}" \
             ENABLE_SUITE_UPDATES="${ENABLE_SUITE_UPDATES}" \
             UI_DIR="${GITHUB_WORKSPACE}/ui-artifact/dist" \
             ROOTFS_REPO_DIR="${GITHUB_WORKSPACE}/rootfs"
@@ -207,24 +206,36 @@ jobs:
             FAIL=1
           fi
 
-          echo "==> Checking OSTree artifact"
-          OSTREE_ARTIFACT="${{ steps.version.outputs.artifact_ostree }}"
-          OSTREE_REF=dayshield/amd64
-          OSTREE_DIR="$(mktemp -d)"
-          if [ -f "${OSTREE_ARTIFACT}" ]; then
-            echo "  [PASS] OSTree artifact exists: ${OSTREE_ARTIFACT}"
-            tar --zstd -xf "${OSTREE_ARTIFACT}" -C "${OSTREE_DIR}"
-            if ostree --repo="${OSTREE_DIR}" refs | grep -q "${OSTREE_REF}"; then
-              echo "  [PASS] OSTree ref ${OSTREE_REF} exists"
-            else
-              echo "  [FAIL] OSTree ref ${OSTREE_REF} missing" >&2
-              FAIL=1
-            fi
+          echo "==> Checking immutable rootfs image artifact"
+          IMAGE_ARTIFACT="${{ steps.version.outputs.artifact_image }}"
+          if [ -f "${IMAGE_ARTIFACT}" ]; then
+            echo "  [PASS] rootfs image artifact exists: ${IMAGE_ARTIFACT}"
+            unsquashfs -s "${IMAGE_ARTIFACT}" >/dev/null
+            echo "  [PASS] squashfs image metadata is readable"
           else
-            echo "  [FAIL] OSTree artifact missing: ${OSTREE_ARTIFACT}" >&2
+            echo "  [FAIL] rootfs image artifact missing: ${IMAGE_ARTIFACT}" >&2
             FAIL=1
           fi
-          rm -rf "${OSTREE_DIR}"
+
+          echo "==> Checking rootfs release manifest"
+          MANIFEST_ARTIFACT="${{ steps.version.outputs.artifact_manifest }}"
+          if [ -f "${MANIFEST_ARTIFACT}" ]; then
+            echo "  [PASS] rootfs manifest exists: ${MANIFEST_ARTIFACT}"
+            python3 - "${MANIFEST_ARTIFACT}" <<'PY'
+            import json
+            import sys
+            path = sys.argv[1]
+            with open(path, 'r', encoding='utf-8') as fh:
+                data = json.load(fh)
+            assert data["component"] == "rootfs"
+            assert data["update_strategy"]["type"] == "initramfs-image"
+            assert data["artifacts"]["image"]["format"] == "squashfs"
+            PY
+            echo "  [PASS] rootfs manifest schema validated"
+          else
+            echo "  [FAIL] rootfs manifest missing: ${MANIFEST_ARTIFACT}" >&2
+            FAIL=1
+          fi
 
           sudo rm -rf "${VERIFY_DIR}"
 
@@ -240,8 +251,10 @@ jobs:
         run: |
           sha256sum "${{ steps.version.outputs.artifact }}" \
             > "${{ steps.version.outputs.artifact }}.sha256"
-          sha256sum "${{ steps.version.outputs.artifact_ostree }}" \
-            > "${{ steps.version.outputs.artifact_ostree }}.sha256"
+          sha256sum "${{ steps.version.outputs.artifact_image }}" \
+            > "${{ steps.version.outputs.artifact_image }}.sha256"
+          sha256sum "${{ steps.version.outputs.artifact_manifest }}" \
+            > "${{ steps.version.outputs.artifact_manifest }}.sha256"
 
       # ─────────────────────────────────────────────────────────────────────────
       # Publish GitHub Release
@@ -253,7 +266,8 @@ jobs:
         run: |
           TAG="${{ steps.version.outputs.tag }}"
           ARTIFACT="${{ steps.version.outputs.artifact }}"
-          ARTIFACT_OSTREE="${{ steps.version.outputs.artifact_ostree }}"
+          ARTIFACT_IMAGE="${{ steps.version.outputs.artifact_image }}"
+          ARTIFACT_MANIFEST="${{ steps.version.outputs.artifact_manifest }}"
           CORE_REF="${{ inputs.core_ref || steps.tags.outputs.core_tag }}"
           UI_REF="${{ inputs.ui_ref || steps.tags.outputs.ui_tag }}"
 
@@ -265,8 +279,10 @@ jobs:
           ### Artifacts
           - \`${ARTIFACT}\`
           - \`${ARTIFACT}.sha256\`
-          - \`${ARTIFACT_OSTREE}\`
-          - \`${ARTIFACT_OSTREE}.sha256\`
+          - \`${ARTIFACT_IMAGE}\`
+          - \`${ARTIFACT_IMAGE}.sha256\`
+          - \`${ARTIFACT_MANIFEST}\`
+          - \`${ARTIFACT_MANIFEST}.sha256\`
 
           ### Build inputs
           - **dayshield-core tag:** \`${CORE_REF}\`
@@ -276,7 +292,12 @@ jobs:
           RootFS versioning is independent of core and UI.
 
           ### Integration
-          Use this rootfs when building the ISO:
+          Download the manifest to discover the GitHub-hosted archive and squashfs
+          image for a given rootfs version. Updaters should compare the running
+          \`/etc/dayshield/version\` value with the manifest's \`version\`, then
+          stage the squashfs image for initramfs-driven deployment.
+
+          Use the archive artifact when building the ISO:
           \`\`\`sh
           make -C ../dayshield-iso iso ROOTFS=/path/to/${ARTIFACT}
           \`\`\`
@@ -290,8 +311,10 @@ jobs:
             gh release upload "${TAG}" \
               "${ARTIFACT}" \
               "${ARTIFACT}.sha256" \
-              "${ARTIFACT_OSTREE}" \
-              "${ARTIFACT_OSTREE}.sha256" \
+              "${ARTIFACT_IMAGE}" \
+              "${ARTIFACT_IMAGE}.sha256" \
+              "${ARTIFACT_MANIFEST}" \
+              "${ARTIFACT_MANIFEST}.sha256" \
               --clobber
           else
             gh release create "${TAG}" \
@@ -299,6 +322,8 @@ jobs:
               --notes "${NOTES}" \
               "${ARTIFACT}" \
               "${ARTIFACT}.sha256" \
-              "${ARTIFACT_OSTREE}" \
-              "${ARTIFACT_OSTREE}.sha256"
+              "${ARTIFACT_IMAGE}" \
+              "${ARTIFACT_IMAGE}.sha256" \
+              "${ARTIFACT_MANIFEST}" \
+              "${ARTIFACT_MANIFEST}.sha256"
           fi

@@ -486,7 +486,7 @@ EOF
 }
 
 _apply_nftables_config() {
-    # Write to /var (OSTree-immune); /etc/dayshield/config/nft-ifaces.conf is a
+    # Write to /var (image-update safe); /etc/dayshield/config/nft-ifaces.conf is a
     # symlink to this path so nftables finds it at its canonical include path.
     local nft_ifaces="/var/lib/dayshield/config/nft-ifaces.conf"
     mkdir -p /var/lib/dayshield/config
@@ -1175,7 +1175,7 @@ _update_system() {
 
     echo ""
     if [[ "${component}" == "rootfs" ]]; then
-        echo "Root filesystem updates stage a new OSTree deployment and require a reboot."
+        echo "Root filesystem updates stage a new verified system image and require a reboot."
     else
         echo "Runtime updates may restart DayShield services while they are applied."
     fi
@@ -1186,7 +1186,7 @@ _update_system() {
     echo "Applying update ..."
     echo ""
     if [[ "${component}" == "rootfs" ]]; then
-        if /usr/local/lib/dayshield/ostree-update.sh apply; then
+        if /usr/local/lib/dayshield/rootfs-update.sh apply; then
             echo ""
             echo "Update command completed."
         else
@@ -1298,7 +1298,7 @@ _inst_partition() {
     _inst_info "Wiping existing signatures on /dev/${dev} ..."
     wipefs -a "/dev/${dev}" >/dev/null 2>&1 || true
 
-    _inst_info "Creating GPT layout (BIOS + EFI + shared boot + OSTree sysroot + persistent state) ..."
+    _inst_info "Creating GPT layout (BIOS + EFI + shared boot + system root + persistent state) ..."
     if command -v parted >/dev/null 2>&1; then
         parted -s "/dev/${dev}" \
             mklabel gpt \
@@ -1338,7 +1338,7 @@ _inst_format() {
     mkfs.ext4 -F -L "DAYSHIELD_BOOT" -O "^64bit,metadata_csum" -m 1 \
         "${boot}" >/dev/null 2>&1 || { _inst_err "mkfs.ext4 boot failed."; return 1; }
 
-    _inst_info "Formatting ${sysroot} as ext4 (OSTree sysroot) ..."
+    _inst_info "Formatting ${sysroot} as ext4 (system root) ..."
     mkfs.ext4 -F -L "DAYSHIELD_ROOT" -O "^64bit,metadata_csum" -m 1 \
         "${sysroot}" >/dev/null 2>&1 || { _inst_err "mkfs.ext4 sysroot failed."; return 1; }
 
@@ -1388,20 +1388,20 @@ _inst_find_rootfs() {
     return 1
 }
 
-_inst_require_ostree_tooling() {
+_inst_require_rootfs_update_tooling() {
     local target="$1" missing=0
 
-    if [[ ! -x "${target}/usr/bin/ostree" ]]; then
-        _inst_err "Installed target is missing /usr/bin/ostree."
+    if [[ ! -x "${target}/usr/local/lib/dayshield/rootfs-update.sh" ]]; then
+        _inst_err "Installed target is missing /usr/local/lib/dayshield/rootfs-update.sh."
         missing=1
     fi
-    if [[ ! -x "${target}/usr/local/lib/dayshield/ostree-update.sh" ]]; then
-        _inst_err "Installed target is missing /usr/local/lib/dayshield/ostree-update.sh."
+    if [[ ! -f "${target}/usr/local/share/dayshield-updates/rootfs-image-layout.json" ]]; then
+        _inst_err "Installed target is missing /usr/local/share/dayshield-updates/rootfs-image-layout.json."
         missing=1
     fi
 
     if (( missing )); then
-        _inst_err "Input rootfs is missing required DayShield OSTree update tooling; rebuild dayshield-rootfs and recreate the ISO."
+        _inst_err "Input rootfs is missing required DayShield rootfs image update tooling; rebuild dayshield-rootfs and recreate the ISO."
         return 1
     fi
 }
@@ -1411,7 +1411,7 @@ _inst_install_rootfs() {
     case "$dev" in nvme*|mmcblk*) pfx="${dev}p" ;; *) pfx="${dev}" ;; esac
     local efi="/dev/${pfx}2" boot="/dev/${pfx}3" root="/dev/${pfx}4" state="/dev/${pfx}5"
 
-    _inst_info "Mounting OSTree sysroot partition ..."
+    _inst_info "Mounting system root partition ..."
     mkdir -p "${target}"
     mount "${root}" "${target}" || { _inst_err "Failed to mount ${root}."; return 1; }
 
@@ -1459,7 +1459,7 @@ _inst_install_rootfs() {
     else
         _inst_err "Neither zstd nor GNU tar available."; return 1
     fi
-    _inst_require_ostree_tooling "${target}" || return 1
+    _inst_require_rootfs_update_tooling "${target}" || return 1
     local root_uuid boot_uuid efi_uuid state_uuid
     root_uuid="$(blkid -s UUID -o value "${root}")"
     boot_uuid="$(blkid -s UUID -o value "${boot}")"
@@ -1513,7 +1513,7 @@ _inst_install_bootloader() {
             _inst_err "UEFI grub-install warning (may be non-fatal)"
     fi
 
-    _inst_info "Using standard GRUB boot entry generation for OSTree deployments ..."
+    _inst_info "Using standard GRUB boot entry generation for DayShield system images ..."
     if [[ -f "${target}/etc/default/grub" ]]; then
         sed -i 's/^GRUB_DEFAULT=.*/GRUB_DEFAULT=saved/' "${target}/etc/default/grub" 2>/dev/null || true
         grep -q '^GRUB_DEFAULT=' "${target}/etc/default/grub" || printf 'GRUB_DEFAULT=saved\n' >> "${target}/etc/default/grub"

@@ -215,7 +215,7 @@ else
     exit 1
 fi
 
-# nftables interface mapping — written to /var (OSTree-immune) so upgrades
+# nftables interface mapping — written to /var so system-image refreshes
 # never clobber user interface assignments. /etc/dayshield/config/nft-ifaces.conf
 # is a symlink to this file (created during rootfs build).
 _effective_wan_if="${wan_iface:-lo}"
@@ -256,17 +256,6 @@ LAN_DHCP_ENABLE=yes
 LAN_DHCP_START=${dhcp_start}
 LAN_DHCP_END=${dhcp_end}
 EOF
-
-# OSTree remote URL
-_ostree_conf="${target}/etc/ostree/remotes.d/dayshield.conf"
-if [[ -f "${_ostree_conf}" ]]; then
-    sed -i 's|url=@DAYSHIELD_OSTREE_REMOTE_URL@|url=https://github.com/daygle/dayshield-rootfs|' \
-        "${_ostree_conf}"
-    if grep -qF '@DAYSHIELD_OSTREE_REMOTE_URL@' "${_ostree_conf}"; then
-        _fin_err "OSTree remote URL placeholder was not replaced in ${_ostree_conf}"
-        exit 1
-    fi
-fi
 
 # systemd-networkd
 netdir="${target}/etc/systemd/network"
