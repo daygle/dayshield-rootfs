@@ -1,32 +1,50 @@
 # DayShield RootFS
 
-`dayshield-rootfs` builds the appliance root filesystem archive used by DayShield installers and ISO images.
+`dayshield-rootfs` builds the DayShield appliance root filesystem and publishes
+versioned rootfs artifacts for installer, ISO, and system-update flows.
 
 ## What this repo contains
 
 - deterministic Debian rootfs build scripts
 - package, service, and runtime configuration for the appliance image
-- installation of `dayshield-core` binary, built UI assets, and updater tooling
-- packaging of rootfs and OSTree artifacts consumed by installer/ISO workflows
+- installation of `dayshield-core`, built UI assets, and DayShield helper hooks
+- versioned rootfs archive, immutable squashfs image, and release manifest output
+
+## Update model
+
+DayShield is migrating away from OSTree-based rootfs deployment to a seamless
+image-based update flow:
+
+- users see versions and update status, not slots or A/B terminology
+- `dayshield-rootfs` publishes versioned rootfs artifacts to GitHub releases
+- a release manifest describes the archive and immutable rootfs image for a
+  specific rootfs version
+- updater/boot logic in other DayShield repos can stage the squashfs image and
+  hand off to initramfs for verified boot into the next rootfs version
+
+The running system keeps version discoverability via `/etc/dayshield/version`
+and `/usr/local/share/dayshield-updates/rootfs-image-layout.json`.
 
 ## Requirements
 
 - `mmdebstrap` >= 0.8.4
 - `zstd` >= 1.4
 - GNU `tar`
-- `ostree` (required when OSTree compose is enabled, default: enabled)
-- `git` (optional; required only to seed source repos under `/opt` and to derive `SOURCE_DATE_EPOCH`)
+- `squashfs-tools`
+- `git` (optional; required only to seed source repos under `/opt` and to derive
+  `SOURCE_DATE_EPOCH`)
 
 On Debian/Ubuntu:
 
 ```sh
 sudo apt-get update
-sudo apt-get install mmdebstrap zstd tar ostree git
+sudo apt-get install mmdebstrap zstd tar squashfs-tools git
 ```
 
 ## Build
 
-The rootfs build is primarily produced by CI, but local builds are supported for development and debugging.
+The rootfs build is primarily produced by CI, but local builds are supported for
+development and debugging.
 
 ### Local build steps
 
@@ -46,19 +64,21 @@ cargo build --release
 cp target/release/dayshield-core ../dayshield-rootfs/
 ```
 
-3. Build the rootfs archive:
+3. Build the rootfs artifacts:
 
 ```sh
 cd ../dayshield-rootfs
-make rootfs UI_DIR=../dayshield-ui/dist
+sudo make rootfs UI_DIR=../dayshield-ui/dist
 ```
 
-If `git` is available and the current rootfs repository is a git repo, the build will automatically derive `SOURCE_DATE_EPOCH` from the latest commit timestamp.
+If `git` is available and the current rootfs repository is a git repo, the build
+automatically derives `SOURCE_DATE_EPOCH` from the latest commit timestamp.
 
 ### Required inputs
 
 - `UI_DIR` must point to a built UI output directory containing `index.html`
-- `dayshield-core` must exist as `dayshield-core` in the `dayshield-rootfs` repository root
+- `dayshield-core` must exist as `dayshield-core` in the `dayshield-rootfs`
+  repository root
 - `ROOTFS_REPO_DIR` is auto-detected from the current repo if it contains `.git`
 
 ### Optional repo seeding
@@ -69,31 +89,48 @@ The build can optionally seed source repositories inside the rootfs image:
 - `UI_REPO_DIR` seeds `/opt/dayshield-ui`
 - `ROOTFS_REPO_DIR` seeds `/opt/dayshield-rootfs`
 
-These paths are not required for the runtime image, but they are used to populate the packaged repository metadata when provided.
+These paths are not required for the runtime image, but they are used to
+populate packaged repository metadata when provided.
 
 ### Example custom build
 
 ```sh
-make rootfs UI_DIR=../dayshield-ui/dist ARCH=arm64 SUITE=trixie \
-  OUTPUT=dayshield-arm64.tar.zst OSTREE_REF=dayshield/arm64
+sudo make rootfs UI_DIR=../dayshield-ui/dist ARCH=arm64 SUITE=trixie \
+  OUTPUT=rootfs-v1.2.3.tar.zst \
+  ROOTFS_IMAGE_OUTPUT=rootfs-v1.2.3.squashfs \
+  ROOTFS_MANIFEST_OUTPUT=rootfs-v1.2.3-manifest.json
 ```
 
 ## Outputs
 
 By default, the build produces:
 
-- `rootfs.tar.zst`: the packaged root filesystem archive
-- `rootfs-ostree-repo.tar.zst`: the host-side OSTree repository archive containing the composed commit
+- `rootfs.tar.zst`: packaged root filesystem archive used by installer/ISO flows
+- `rootfs.squashfs`: immutable rootfs image for initramfs-driven system updates
+- `rootfs-manifest.json`: machine-readable metadata describing the version,
+  archive/image artifact names, and update strategy
 
-If OSTree compose is disabled with `ENABLE_OSTREE_COMPOSE=0` or `--disable-ostree-compose`, only `rootfs.tar.zst` is produced.
+The rootfs archive also embeds
+`/usr/local/share/dayshield-updates/rootfs-image-layout.json` so other DayShield
+components know the expected on-device image-store layout.
 
-## Rootfs and OSTree behavior
+## GitHub versioning and consumption
 
-- The build installs UI assets under `/usr/local/share/dayshield-ui`
-- `dayshield-core` is installed to `/usr/local/sbin/dayshield-core`
-- OSTree tooling and update helper are installed in the rootfs
-- The build writes a version marker to `/etc/dayshield/version`
-- When OSTree compose is enabled, the rootfs image also contains an OSTree repo at `/ostree/repo` and `/sysroot/ostree/repo`
+Core, UI, and rootfs versions are pulled from GitHub independently.
+
+- `dayshield-core` and `dayshield-ui` release versions are resolved in CI
+- `dayshield-rootfs` publishes its own versioned release artifacts
+- the release manifest is the contract another repo can consume to discover the
+  correct rootfs archive and squashfs image for a given rootfs version
+
+Recommended updater behavior:
+
+1. Read current rootfs version from `/etc/dayshield/version`
+2. Fetch the latest rootfs release manifest from GitHub
+3. Compare the running version with the manifest `version`
+4. Download and verify the squashfs artifact referenced by the manifest
+5. Stage it for the initramfs/boot flow without exposing internal redundancy to
+   the user
 
 ## Verification
 
@@ -101,9 +138,15 @@ If OSTree compose is disabled with `ENABLE_OSTREE_COMPOSE=0` or `--disable-ostre
 make verify ROOTFS_DIR=/path/to/extracted/rootfs
 ```
 
-The verification target checks boot artifacts, required directories, systemd units, OSTree layout, and update tooling.
+The verification target checks boot artifacts, required directories, systemd
+units, image-update layout, and bundled update tooling.
 
-## Notes
+## Integration notes
 
-- This repository assembles the appliance runtime rootfs; it does not itself build the backend or frontend sources.
-- The rootfs archive is consumed by installer and ISO pipelines under `dayshield-installer-ui` and `dayshield-iso`.
+- This repository assembles the appliance runtime rootfs; it does not itself
+  build the backend or frontend sources.
+- The rootfs archive remains the installer/ISO input during the migration.
+- The squashfs image and release manifest are the foundation for the new
+  GitHub-hosted, initramfs-driven rootfs update path.
+- Follow-up work in `dayshield-iso`/boot logic and `dayshield-core` will consume
+  the manifest and stage the published rootfs image for seamless system updates.

@@ -16,10 +16,8 @@ OUTPUT="rootfs.tar.zst"
 MIRROR="https://deb.debian.org/debian"
 SECURITY_MIRROR="https://deb.debian.org/debian-security"
 ENABLE_SUITE_UPDATES="1"
-ENABLE_OSTREE_COMPOSE="1"
-OSTREE_REPO_OUTPUT=""
-OSTREE_REF=""
-OSTREE_REF_SET="0"
+ROOTFS_IMAGE_OUTPUT=""
+ROOTFS_MANIFEST_OUTPUT=""
 UI_DIR=""
 CORE_REPO_DIR=""
 UI_REPO_DIR=""
@@ -39,11 +37,12 @@ Options:
                                         Debian security mirror URL (default: https://deb.debian.org/debian-security)
     --enable-suite-updates
                         Include SUITE-updates source for stable-style suites (default: enabled)
-    --disable-ostree-compose
-                        Skip host-side OSTree repo/commit generation (default: enabled)
-    --ostree-repo-output FILE
-                        Output file for archived OSTree repo (default: <output>-ostree-repo.tar.zst)
-    --ostree-ref REF   OSTree ref for commits (default: dayshield/<arch>)
+    --image-output FILE
+                        Output file for the immutable squashfs rootfs image
+                        (default: <output>.squashfs)
+    --manifest-output FILE
+                        Output file for the rootfs release manifest JSON
+                        (default: <output>-manifest.json)
     --source-date-epoch EPOCH
                         Explicit SOURCE_DATE_EPOCH for reproducible builds
   --ui-dir PATH     Built UI output directory to install into /usr/local/share/dayshield-ui (required)
@@ -58,7 +57,7 @@ EOF
 # Parse arguments
 while [ $# -gt 0 ]; do
     case "$1" in
-        --arch|--suite|--output|--mirror|--security-mirror|--ui-dir|--core-repo-dir|--ui-repo-dir|--rootfs-repo-dir|--ostree-repo-output|--ostree-ref|--source-date-epoch)
+        --arch|--suite|--output|--mirror|--security-mirror|--ui-dir|--core-repo-dir|--ui-repo-dir|--rootfs-repo-dir|--image-output|--manifest-output|--source-date-epoch)
             if [ $# -lt 2 ] || [ -z "${2}" ] || [ "${2#--}" != "${2}" ]; then
                 printf 'ERROR: option %s requires a value\n' "$1" >&2
                 exit 1
@@ -69,8 +68,8 @@ while [ $# -gt 0 ]; do
                 --output) OUTPUT="$2" ;;
                 --mirror) MIRROR="$2" ;;
                 --security-mirror) SECURITY_MIRROR="$2" ;;
-                --ostree-repo-output) OSTREE_REPO_OUTPUT="$2" ;;
-                --ostree-ref) OSTREE_REF="$2"; OSTREE_REF_SET="1" ;;
+                --image-output) ROOTFS_IMAGE_OUTPUT="$2" ;;
+                --manifest-output) ROOTFS_MANIFEST_OUTPUT="$2" ;;
                 --source-date-epoch) SOURCE_DATE_EPOCH="$2" ;;
                 --ui-dir) UI_DIR="$2" ;;
                 --core-repo-dir) CORE_REPO_DIR="$2" ;;
@@ -83,10 +82,6 @@ while [ $# -gt 0 ]; do
             ENABLE_SUITE_UPDATES="1"
             shift
             ;;
-        --disable-ostree-compose)
-            ENABLE_OSTREE_COMPOSE="0"
-            shift
-            ;;
         --help)    usage ;;
         *)
             printf 'Unknown option: %s\n' "$1" >&2
@@ -95,8 +90,15 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-if [ "${OSTREE_REF_SET}" != "1" ]; then
-    OSTREE_REF="dayshield/${ARCH}"
+# Auto-detect sibling repos when explicit paths were not provided.
+if [ -z "${CORE_REPO_DIR}" ] && [ -d "${REPO_DIR}/../dayshield-core/.git" ]; then
+    CORE_REPO_DIR="${REPO_DIR}/../dayshield-core"
+fi
+if [ -z "${UI_REPO_DIR}" ] && [ -d "${REPO_DIR}/../dayshield-ui/.git" ]; then
+    UI_REPO_DIR="${REPO_DIR}/../dayshield-ui"
+fi
+if [ -z "${ROOTFS_REPO_DIR}" ] && [ -d "${REPO_DIR}/.git" ]; then
+    ROOTFS_REPO_DIR="${REPO_DIR}"
 fi
 
 if [ -z "${SOURCE_DATE_EPOCH}" ] && command -v git >/dev/null 2>&1 && [ -n "${ROOTFS_REPO_DIR}" ]; then
@@ -140,17 +142,6 @@ if [ ! -f "${UI_DIR}/index.html" ]; then
     exit 1
 fi
 
-# Auto-detect sibling repos when explicit paths were not provided.
-if [ -z "${CORE_REPO_DIR}" ] && [ -d "${REPO_DIR}/../dayshield-core/.git" ]; then
-    CORE_REPO_DIR="${REPO_DIR}/../dayshield-core"
-fi
-if [ -z "${UI_REPO_DIR}" ] && [ -d "${REPO_DIR}/../dayshield-ui/.git" ]; then
-    UI_REPO_DIR="${REPO_DIR}/../dayshield-ui"
-fi
-if [ -z "${ROOTFS_REPO_DIR}" ] && [ -d "${REPO_DIR}/.git" ]; then
-    ROOTFS_REPO_DIR="${REPO_DIR}"
-fi
-
 if [ -n "${CORE_REPO_DIR}" ] && [ ! -d "${CORE_REPO_DIR}/.git" ]; then
     printf 'ERROR: core repo path is not a git repo: %s\n' "${CORE_REPO_DIR}" >&2
     exit 1
@@ -164,7 +155,10 @@ if [ -n "${ROOTFS_REPO_DIR}" ] && [ ! -d "${ROOTFS_REPO_DIR}/.git" ]; then
     exit 1
 fi
 
-for tool in mmdebstrap zstd tar; do
+# All listed host tools are mandatory for the current build contract. The
+# archive remains the installer/ISO input, and every build now also emits the
+# immutable squashfs image plus release manifest used by the image-update flow.
+for tool in mmdebstrap zstd tar mksquashfs sha256sum; do
     if ! command -v "${tool}" >/dev/null 2>&1; then
         printf 'ERROR: required tool not found: %s\n' "${tool}" >&2
         exit 1
@@ -269,11 +263,6 @@ printf '    UI dir       : %s\n' "${UI_DIR:-<none>}"
 printf '    Core repo    : %s\n' "${CORE_REPO_DIR:-<none>}"
 printf '    UI repo      : %s\n' "${UI_REPO_DIR:-<none>}"
 printf '    RootFS repo  : %s\n' "${ROOTFS_REPO_DIR:-<none>}"
-if [ "${ENABLE_OSTREE_COMPOSE}" = "1" ]; then
-    printf '    OSTree ref   : %s\n' "${OSTREE_REF}"
-else
-    printf '    OSTree ref   : disabled\n'
-fi
 printf '\n'
 
 # ── 1. Run mmdebstrap ────────────────────────────────────────────────────────
@@ -382,10 +371,10 @@ else
     printf '    ERROR: /boot directory not found in rootfs\n'
     exit 1
 fi
-# ── 5c. Create kernel module symlinks for OSTree 2025+ detection ─────────────
-# OSTree 2025+ uses /usr/lib/modules/<version>/vmlinuz as the primary kernel
-# detection path.  Debian places the kernel at /boot/vmlinuz-<version> with no
-# symlink in the modules directory, so we create it here.
+# ── 5c. Create kernel module symlinks for initramfs-driven boot flows ────────
+# Debian places the kernel at /boot/vmlinuz-<version> with no symlink in the
+# modules directory, so create stable references used by downstream boot/update
+# tooling.
 printf '==> Step 5c: creating kernel module symlinks\n'
 for _kmod_dir in "${ROOTFS_DIR}/usr/lib/modules"/*/; do
     [ -d "${_kmod_dir}" ] || continue
@@ -407,98 +396,54 @@ printf '==> Step 6: cleanup\n'
 env ROOTFS_DIR="${ROOTFS_DIR}" \
     sh "${SCRIPT_DIR}/cleanup.sh"
 
-printf '==> Step 6b: validate OSTree update tooling\n'
-if [ ! -x "${ROOTFS_DIR}/usr/bin/ostree" ]; then
-    printf '    ERROR: missing executable /usr/bin/ostree in rootfs\n' >&2
+printf '==> Step 6b: validate rootfs update tooling\n'
+if [ ! -x "${ROOTFS_DIR}/usr/local/lib/dayshield/rootfs-update.sh" ]; then
+    printf '    ERROR: missing executable /usr/local/lib/dayshield/rootfs-update.sh in rootfs\n' >&2
     exit 1
 fi
-if [ ! -x "${ROOTFS_DIR}/usr/local/lib/dayshield/ostree-update.sh" ]; then
-    printf '    ERROR: missing executable /usr/local/lib/dayshield/ostree-update.sh in rootfs\n' >&2
-    exit 1
+printf '    Rootfs update tooling present\n'
+
+_base_output="$(basename "${OUTPUT}")"
+case "${_base_output}" in
+    *.tar.zst) _artifact_stem="${_base_output%.tar.zst}" ;;
+    *.tar) _artifact_stem="${_base_output%.tar}" ;;
+    *) _artifact_stem="${_base_output}" ;;
+esac
+[ -n "${_artifact_stem}" ] || _artifact_stem="rootfs"
+
+if [ -z "${ROOTFS_IMAGE_OUTPUT}" ]; then
+    ROOTFS_IMAGE_OUTPUT="$(dirname "${OUTPUT}")/${_artifact_stem}.squashfs"
 fi
-printf '    OSTree update tooling present\n'
+if [ -z "${ROOTFS_MANIFEST_OUTPUT}" ]; then
+    ROOTFS_MANIFEST_OUTPUT="$(dirname "${OUTPUT}")/${_artifact_stem}-manifest.json"
+fi
 
-# ── 7. Compose OSTree repo commit (host-side) ───────────────────────────────
-if [ "${ENABLE_OSTREE_COMPOSE}" = "1" ]; then
-    printf '==> Step 7: composing OSTree repo\n'
-    if ! command -v ostree >/dev/null 2>&1; then
-        printf 'ERROR: required tool not found: ostree (needed for OSTree compose)\n' >&2
-        printf '       Install ostree or run with --disable-ostree-compose\n' >&2
-        exit 1
-    fi
-    if [ -z "${OSTREE_REPO_OUTPUT}" ]; then
-        _base_output="$(basename "${OUTPUT}")"
-        case "${_base_output}" in
-            *.tar.zst) _base_output="${_base_output%.tar.zst}" ;;
-            *.tar) _base_output="${_base_output%.tar}" ;;
-        esac
-        [ -n "${_base_output}" ] || _base_output="rootfs"
-        OSTREE_REPO_OUTPUT="$(dirname "${OUTPUT}")/${_base_output}-ostree-repo.tar.zst"
-    fi
-    OSTREE_OUTPUT_DIR="$(dirname "${OSTREE_REPO_OUTPUT}")"
-    if [ "${OSTREE_OUTPUT_DIR}" != "." ] && [ ! -d "${OSTREE_OUTPUT_DIR}" ]; then
-        mkdir -p "${OSTREE_OUTPUT_DIR}"
-    fi
-    OSTREE_REPO_OUTPUT_ABS="$(cd "$(dirname "${OSTREE_REPO_OUTPUT}")" && pwd)/$(basename "${OSTREE_REPO_OUTPUT}")"
-    OSTREE_REPO_DIR="${BUILD_DIR}/ostree-repo"
-    OSTREE_IMPORT_DIR="${BUILD_DIR}/ostree-import-rootfs"
-    rm -rf "${OSTREE_REPO_DIR}"
-    mkdir -p "${OSTREE_REPO_DIR}"
-    rm -rf "${OSTREE_IMPORT_DIR}"
-    mkdir -p "${OSTREE_IMPORT_DIR}"
-
-    # Commit from a staging copy with special nodes physically removed.
-    # This avoids `Not a regular file or symlink` failures across OSTree builds.
-    cp -a "${ROOTFS_DIR}/." "${OSTREE_IMPORT_DIR}/"
-    _skip_count="$(find "${OSTREE_IMPORT_DIR}" \
-        -mindepth 1 \
-        \( -type b -o -type c -o -type p -o -type s \) \
-        | wc -l | tr -d '[:space:]')"
-    if [ "${_skip_count}" -gt 0 ]; then
-        printf '    Skipping %s special filesystem nodes for OSTree compose\n' "${_skip_count}"
-    fi
-    find "${OSTREE_IMPORT_DIR}" \
-        -mindepth 1 \
-        \( -type b -o -type c -o -type p -o -type s \) \
-        -delete
-
-    ostree --repo="${OSTREE_REPO_DIR}" init --mode=archive-z2
-    ostree --repo="${OSTREE_REPO_DIR}" commit \
-        --branch="${OSTREE_REF}" \
-        --tree="dir=${OSTREE_IMPORT_DIR}" \
-        --subject="DayShield rootfs ${_rootfs_tag}" \
-        --timestamp="${SOURCE_DATE_UTC}" \
-        --add-metadata-string="dayshield.version=${_rootfs_tag}"
-    ostree --repo="${OSTREE_REPO_DIR}" summary -u
-    OSTREE_COMMIT="$(ostree --repo="${OSTREE_REPO_DIR}" rev-parse "${OSTREE_REF}")"
-    mkdir -p "${ROOTFS_DIR}/usr/local/share/dayshield-updates"
-    cat > "${ROOTFS_DIR}/usr/local/share/dayshield-updates/ostree-build-manifest.json" <<EOF
+mkdir -p "${ROOTFS_DIR}/usr/local/share/dayshield-updates"
+cat > "${ROOTFS_DIR}/usr/local/share/dayshield-updates/rootfs-image-layout.json" <<EOF
 {
-  "ref": "${OSTREE_REF}",
-  "commit": "${OSTREE_COMMIT}",
-  "version": "${_rootfs_tag}"
+  "schema_version": 1,
+  "component": "rootfs",
+  "version": "${_rootfs_tag}",
+  "boot_mode": "initramfs-image",
+  "version_file": "/etc/dayshield/version",
+  "image_store": {
+    "directory": "/boot/dayshield/images",
+    "metadata_directory": "/boot/dayshield/metadata",
+    "workspace_directory": "/var/lib/dayshield-updates",
+    "current_link": "/boot/dayshield/current",
+    "previous_link": "/boot/dayshield/previous",
+    "candidate_link": "/boot/dayshield/next"
+  },
+  "artifacts": {
+    "archive": "$(basename "${OUTPUT}")",
+    "image": "$(basename "${ROOTFS_IMAGE_OUTPUT}")",
+    "manifest": "$(basename "${ROOTFS_MANIFEST_OUTPUT}")"
+  }
 }
 EOF
-    tar \
-        --sort=name \
-        --mtime="@${SOURCE_DATE_EPOCH}" \
-        --owner=0 \
-        --group=0 \
-        --numeric-owner \
-        -C "${OSTREE_REPO_DIR}" \
-        -cf - \
-        . \
-        | zstd -T0 -19 --force -o "${OSTREE_REPO_OUTPUT_ABS}"
-    printf '    OSTree commit : %s\n' "${OSTREE_COMMIT}"
-    printf '    OSTree artifact: %s\n' "${OSTREE_REPO_OUTPUT}"
-    printf '    Installing OSTree repo into live rootfs image\n'
-    mkdir -p "${ROOTFS_DIR}/ostree/repo" "${ROOTFS_DIR}/sysroot/ostree/repo"
-    cp -a "${OSTREE_REPO_DIR}/." "${ROOTFS_DIR}/ostree/repo/"
-    cp -a "${OSTREE_REPO_DIR}/." "${ROOTFS_DIR}/sysroot/ostree/repo/"
-fi
 
-# ── 8. Package the rootfs ───────────────────────────────────────
-printf '==> Step 8: packaging rootfs -> %s\n' "${OUTPUT}"
+# ── 7. Package the rootfs archive ─────────────────────────────────────────────
+printf '==> Step 7: packaging rootfs archive -> %s\n' "${OUTPUT}"
 OUTPUT_DIR="$(dirname "${OUTPUT}")"
 if [ "${OUTPUT_DIR}" != "." ] && [ ! -d "${OUTPUT_DIR}" ]; then
     mkdir -p "${OUTPUT_DIR}"
@@ -515,4 +460,72 @@ tar \
     . \
     | zstd -T0 -19 --force -o "${OUTPUT_ABS}"
 
+# ── 8. Build immutable squashfs artifact ──────────────────────────────────────
+printf '==> Step 8: building immutable rootfs image -> %s\n' "${ROOTFS_IMAGE_OUTPUT}"
+IMAGE_OUTPUT_DIR="$(dirname "${ROOTFS_IMAGE_OUTPUT}")"
+if [ "${IMAGE_OUTPUT_DIR}" != "." ] && [ ! -d "${IMAGE_OUTPUT_DIR}" ]; then
+    mkdir -p "${IMAGE_OUTPUT_DIR}"
+fi
+ROOTFS_IMAGE_OUTPUT_ABS="$(cd "$(dirname "${ROOTFS_IMAGE_OUTPUT}")" && pwd)/$(basename "${ROOTFS_IMAGE_OUTPUT}")"
+MKSQUASHFS_LOG="${BUILD_DIR}/mksquashfs.log"
+if mksquashfs "${ROOTFS_DIR}" "${ROOTFS_IMAGE_OUTPUT_ABS}" \
+    -noappend \
+    -comp zstd \
+    -processors 1 \
+    -mkfs-time "${SOURCE_DATE_EPOCH}" \
+    -all-time "${SOURCE_DATE_EPOCH}" \
+    -root-owned \
+    >"${MKSQUASHFS_LOG}" 2>&1; then
+    sed 's/^/    /' "${MKSQUASHFS_LOG}"
+else
+    sed 's/^/    /' "${MKSQUASHFS_LOG}" >&2
+    printf '    ERROR: failed to build squashfs image\n' >&2
+    exit 1
+fi
+
+# ── 9. Emit host-side release manifest ────────────────────────────────────────
+printf '==> Step 9: writing release manifest -> %s\n' "${ROOTFS_MANIFEST_OUTPUT}"
+MANIFEST_OUTPUT_DIR="$(dirname "${ROOTFS_MANIFEST_OUTPUT}")"
+if [ "${MANIFEST_OUTPUT_DIR}" != "." ] && [ ! -d "${MANIFEST_OUTPUT_DIR}" ]; then
+    mkdir -p "${MANIFEST_OUTPUT_DIR}"
+fi
+ROOTFS_MANIFEST_OUTPUT_ABS="$(cd "$(dirname "${ROOTFS_MANIFEST_OUTPUT}")" && pwd)/$(basename "${ROOTFS_MANIFEST_OUTPUT}")"
+ARCHIVE_SHA256="$(sha256sum "${OUTPUT_ABS}" | awk '{print $1}')"
+IMAGE_SHA256="$(sha256sum "${ROOTFS_IMAGE_OUTPUT_ABS}" | awk '{print $1}')"
+ARCHIVE_SIZE="$(wc -c < "${OUTPUT_ABS}" | tr -d '[:space:]')"
+IMAGE_SIZE="$(wc -c < "${ROOTFS_IMAGE_OUTPUT_ABS}" | tr -d '[:space:]')"
+cat > "${ROOTFS_MANIFEST_OUTPUT_ABS}" <<EOF
+{
+  "schema_version": 1,
+  "component": "rootfs",
+  "version": "${_rootfs_tag}",
+  "architecture": "${ARCH}",
+  "suite": "${SUITE}",
+  "build_timestamp": "${SOURCE_DATE_UTC}",
+  "version_file": "/etc/dayshield/version",
+  "update_strategy": {
+    "type": "initramfs-image",
+    "image_format": "squashfs",
+    "image_store_directory": "/boot/dayshield/images",
+    "workspace_directory": "/var/lib/dayshield-updates"
+  },
+  "artifacts": {
+    "archive": {
+      "name": "$(basename "${OUTPUT}")",
+      "format": "tar+zstd",
+      "sha256": "${ARCHIVE_SHA256}",
+      "size": ${ARCHIVE_SIZE}
+    },
+    "image": {
+      "name": "$(basename "${ROOTFS_IMAGE_OUTPUT}")",
+      "format": "squashfs",
+      "sha256": "${IMAGE_SHA256}",
+      "size": ${IMAGE_SIZE}
+    }
+  }
+}
+EOF
+
 printf '==> Done: %s\n' "${OUTPUT}"
+printf '           %s\n' "${ROOTFS_IMAGE_OUTPUT}"
+printf '           %s\n' "${ROOTFS_MANIFEST_OUTPUT}"

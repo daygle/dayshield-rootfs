@@ -8,9 +8,8 @@ OUTPUT       ?= rootfs.tar.zst
 MIRROR       ?= https://deb.debian.org/debian
 SECURITY_MIRROR ?= https://deb.debian.org/debian-security
 ENABLE_SUITE_UPDATES ?= 1
-ENABLE_OSTREE_COMPOSE ?= 1
-OSTREE_REPO_OUTPUT ?=
-OSTREE_REF ?= dayshield/$(ARCH)
+ROOTFS_IMAGE_OUTPUT ?=
+ROOTFS_MANIFEST_OUTPUT ?=
 UI_DIR       ?=
 CORE_REPO_DIR ?=
 UI_REPO_DIR   ?=
@@ -31,9 +30,8 @@ rootfs:
 		--mirror "$(MIRROR)" \
 		--security-mirror "$(SECURITY_MIRROR)" \
 		$(if $(filter 1 true yes TRUE YES,$(ENABLE_SUITE_UPDATES)),--enable-suite-updates) \
-		$(if $(filter-out 1 true yes TRUE YES,$(ENABLE_OSTREE_COMPOSE)),--disable-ostree-compose) \
-		$(if $(OSTREE_REPO_OUTPUT),--ostree-repo-output "$(OSTREE_REPO_OUTPUT)") \
-		$(if $(OSTREE_REF),--ostree-ref "$(OSTREE_REF)") \
+		$(if $(ROOTFS_IMAGE_OUTPUT),--image-output "$(ROOTFS_IMAGE_OUTPUT)") \
+		$(if $(ROOTFS_MANIFEST_OUTPUT),--manifest-output "$(ROOTFS_MANIFEST_OUTPUT)") \
 		$(if $(UI_DIR),--ui-dir "$(UI_DIR)") \
 		$(if $(CORE_REPO_DIR),--core-repo-dir "$(CORE_REPO_DIR)") \
 		$(if $(UI_REPO_DIR),--ui-repo-dir "$(UI_REPO_DIR)") \

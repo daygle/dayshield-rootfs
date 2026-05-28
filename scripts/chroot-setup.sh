@@ -37,7 +37,7 @@ cat > "${ROOTFS_DIR}/etc/fstab" <<'EOF'
 # NOTE: The installer replaces these entries with UUID= lines for both
 #       DAYSHIELD_ROOT (the deployment root filesystem mounted at /) and
 #       DAYSHIELD_STATE (/var persistent state)
-#       to support OSTree-style immutable rootfs + mutable runtime data separation.
+#       to support immutable rootfs + mutable runtime data separation.
 #
 # <file system>         <mount point>  <type>  <options>          <dump>  <pass>
 LABEL=DAYSHIELD_ROOT    /              ext4    defaults,noatime   0       1
@@ -200,9 +200,9 @@ mkdir -p \
     "${ROOTFS_DIR}/var/lib/dayshield/config" \
     "${ROOTFS_DIR}/var/lib/dayshield/crowdsec" \
     "${ROOTFS_DIR}/var/lib/dayshield/acme"
-# nft-ifaces.conf lives in /var (OSTree-immune) so rootfs updates never clobber
-# user interface assignments. The /etc symlink below makes nftables find it at
-# the path it has always included.
+# nft-ifaces.conf lives in /var so system-image refreshes never clobber user
+# interface assignments. The /etc symlink below makes nftables find it at the
+# path it has always included.
 cat > "${ROOTFS_DIR}/var/lib/dayshield/config/nft-ifaces.conf" <<'EOF'
 # /var/lib/dayshield/config/nft-ifaces.conf — interface definitions for nftables.
 # Written by the installer / console wizard when interfaces are assigned.
@@ -211,44 +211,16 @@ define WAN_IF = lo
 define LAN_IF = lo
 EOF
 
-printf '  -> Creating OSTree sysroot and writable state layout\n'
-# /sysroot/ostree/repo is the canonical OSTree sysroot location.
-# /ostree/repo is kept for compatibility with tooling expecting that path.
-# Both receive a minimal valid repo skeleton so `ostree admin status` does not
-# fail with "opendir(objects): No such file or directory" on fresh installs.
-for _repo_dir in \
-    "${ROOTFS_DIR}/sysroot/ostree/repo" \
-    "${ROOTFS_DIR}/ostree/repo"
-do
-    mkdir -p \
-        "${_repo_dir}/objects" \
-        "${_repo_dir}/tmp" \
-        "${_repo_dir}/refs/heads" \
-        "${_repo_dir}/refs/remotes" \
-        "${_repo_dir}/state" \
-        "${_repo_dir}/extensions"
-    cat > "${_repo_dir}/config" <<'OSTREE_CONFIG'
-[core]
-repo_version=1
-mode=bare
-OSTREE_CONFIG
-done
+printf '  -> Creating image-based update layout\n'
 mkdir -p \
-    "${ROOTFS_DIR}/ostree/deploy" \
-    "${ROOTFS_DIR}/var/ostree" \
-    "${ROOTFS_DIR}/var/lib/dayshield/ostree" \
-    "${ROOTFS_DIR}/etc/ostree/remotes.d" \
+    "${ROOTFS_DIR}/boot/dayshield/images" \
+    "${ROOTFS_DIR}/boot/dayshield/metadata" \
+    "${ROOTFS_DIR}/var/lib/dayshield/images" \
     "${ROOTFS_DIR}/usr/local/share/dayshield-updates"
-cat > "${ROOTFS_DIR}/etc/ostree/remotes.d/dayshield.conf" <<'EOF'
-[remote "dayshield"]
-# Installer/finalizer should replace this placeholder with the production update endpoint
-# (for example: sed -i 's|@DAYSHIELD_OSTREE_REMOTE_URL@|https://updates.example.com/ostree/repo|').
-url=@DAYSHIELD_OSTREE_REMOTE_URL@
-gpg-verify=true
-EOF
 cat > "${ROOTFS_DIR}/usr/local/share/dayshield-updates/README.txt" <<'EOF'
-This directory stores OSTree update metadata generated during rootfs builds.
-It is consumed by DayShield core/UI update workflows.
+This directory stores rootfs image metadata generated during rootfs builds.
+DayShield core/UI consume the versioned manifests and image artifacts published
+from GitHub releases to stage seamless rootfs updates.
 EOF
 
 printf '  -> Creating cloudflared runtime directories\n'
@@ -350,7 +322,7 @@ cp "${CONFIG_DIR}/sshd_config" "${ROOTFS_DIR}/etc/ssh/sshd_config"
 printf '  -> Copying config/dayshield skeleton\n'
 cp -r "${CONFIG_DIR}/dayshield/config/." "${ROOTFS_DIR}/etc/dayshield/config/"
 cp -r "${CONFIG_DIR}/dayshield/certs/."  "${ROOTFS_DIR}/etc/dayshield/certs/"
-# nft-ifaces.conf is stored in /var (OSTree-immune); expose it under /etc via
+# nft-ifaces.conf is stored in /var (image-update safe); expose it under /etc via
 # a symlink so /etc/nftables.conf can include it at its canonical path.
 ln -sf /var/lib/dayshield/config/nft-ifaces.conf \
     "${ROOTFS_DIR}/etc/dayshield/config/nft-ifaces.conf"
