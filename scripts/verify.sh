@@ -122,8 +122,7 @@ else
     fail "missing rootfs image layout manifest: /usr/local/share/dayshield-updates/rootfs-image-layout.json"
 fi
 
-if grep -Eq '"boot_mode"[[:space:]]*:[[:space:]]*"initramfs-image"' "${ROOTFS_LAYOUT_MANIFEST}" 2>/dev/null || \
-   grep -Eq '"type"[[:space:]]*:[[:space:]]*"initramfs-image"' "${ROOTFS_LAYOUT_MANIFEST}" 2>/dev/null; then
+if grep -Eq '"boot_mode"[[:space:]]*:[[:space:]]*"initramfs-image"' "${ROOTFS_LAYOUT_MANIFEST}" 2>/dev/null; then
     ok "rootfs image layout manifest declares initramfs-image semantics"
 else
     fail "rootfs image layout manifest is missing initramfs-image semantics"
