@@ -34,7 +34,11 @@ enable_service() {
 enable_service sysinit.target nftables.service
 
 # ── Multi-user services ───────────────────────────────────────────────────────
+# systemd-networkd MUST be enabled here — every install needs working WAN/LAN
+# and we don't want to depend on installer-ui's compensating symlink, which
+# has been observed to not stick in some scenarios.
 for svc in \
+    systemd-networkd.service \
     unbound.service \
     dayshield-disable-offloads.service \
     suricata.service \
@@ -44,6 +48,12 @@ for svc in \
 do
     enable_service multi-user.target "${svc}"
 done
+
+# Also enable the networkd socket so socket-activated services using
+# systemd-networkd are reachable.  The systemd-networkd unit file's
+# [Install] section pulls this in via Also=, but our manual symlink
+# approach doesn't honour Also=, so we wire it explicitly.
+enable_service sockets.target systemd-networkd.socket
 
 # console-wizard.service is installer-only and remains installed as a unit file,
 # but the installed rootfs must not enable it by default.  The post-login
