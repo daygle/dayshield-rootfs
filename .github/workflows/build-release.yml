@@ -96,25 +96,31 @@ jobs:
           ASSET_SHA256="${ASSET}.sha256"
           UI_WORK_DIR="${GITHUB_WORKSPACE}/ui-artifact"
 
+          download_release_asset() {
+            local repo="$1" ref="$2" name="$3" dest="$4" response="" url=""
+            response="$(curl -fsSL \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${repo}/releases/tags/${ref}")"
+            url="$(printf '%s' "${response}" | jq -r --arg name "${name}" '.assets[] | select(.name == $name) | .browser_download_url' | head -n1)"
+            if [ -z "${url}" ] || [ "${url}" = "null" ]; then
+              echo "ERROR: missing release asset ${name} in ${repo}@${ref}" >&2
+              echo "Available assets:" >&2
+              printf '%s' "${response}" | jq -r '.assets[].name' >&2 || true
+              exit 1
+            fi
+            curl -fL "${url}" -o "${dest}"
+          }
+
           rm -rf "${UI_WORK_DIR}"
           mkdir -p "${UI_WORK_DIR}"
 
-          gh release download "${UI_REF}" \
-            --repo daygle/dayshield-ui \
-            --pattern "${ASSET}" \
-            --pattern "${ASSET_SHA256}" \
-            --dir "${UI_WORK_DIR}"
-
-          if [ ! -f "${UI_WORK_DIR}/${ASSET_SHA256}" ]; then
-            echo "ERROR: missing checksum file ${ASSET_SHA256} for UI release ${UI_REF}" >&2
-            exit 1
-          fi
+          download_release_asset daygle/dayshield-ui "${UI_REF}" "${ASSET}" "${UI_WORK_DIR}/${ASSET}"
+          download_release_asset daygle/dayshield-ui "${UI_REF}" "${ASSET_SHA256}" "${UI_WORK_DIR}/${ASSET_SHA256}"
 
           (cd "${UI_WORK_DIR}" && sha256sum -c "${ASSET_SHA256}")
 
           tar --zstd -xf "${UI_WORK_DIR}/${ASSET}" -C "${UI_WORK_DIR}"
-
-      # ─────────────────────────────────────────────────────────────────────────
       # Fetch core binary from dayshield-core release
       # ─────────────────────────────────────────────────────────────────────────
       - name: Download dayshield-core release binary
@@ -123,13 +129,29 @@ jobs:
           CORE_REF="${{ inputs.core_ref || steps.tags.outputs.core_tag }}"
           ASSET="core-${CORE_REF}.tar.zst"
           WORK_DIR="$(mktemp -d)"
+          release_json="$(curl -fsSL \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/daygle/dayshield-core/releases/tags/${CORE_REF}")"
 
-          gh release download "${CORE_REF}" \
-            --repo daygle/dayshield-core \
-            --pattern "${ASSET}" \
-            --pattern "${ASSET}.sha256" \
-            --pattern "checksums.txt" \
-            --dir "${WORK_DIR}"
+          download_release_asset() {
+            local name="$1" required="$2" url=""
+            url="$(printf '%s' "${release_json}" | jq -r --arg name "${name}" '.assets[] | select(.name == $name) | .browser_download_url' | head -n1)"
+            if [ -z "${url}" ] || [ "${url}" = "null" ]; then
+              if [ "${required}" = "required" ]; then
+                echo "ERROR: missing release asset ${name} in daygle/dayshield-core@${CORE_REF}" >&2
+                echo "Available assets:" >&2
+                printf '%s' "${release_json}" | jq -r '.assets[].name' >&2 || true
+                exit 1
+              fi
+              return 1
+            fi
+            curl -fL "${url}" -o "${WORK_DIR}/${name}"
+          }
+
+          download_release_asset "${ASSET}" required
+          download_release_asset "${ASSET}.sha256" optional || true
+          download_release_asset "checksums.txt" optional || true
 
           if [ -f "${WORK_DIR}/${ASSET}.sha256" ]; then
             (cd "${WORK_DIR}" && sha256sum -c "${ASSET}.sha256")
@@ -147,8 +169,6 @@ jobs:
 
           tar --zstd -xf "${WORK_DIR}/${ASSET}" -C "${WORK_DIR}"
           install -m 0755 "${WORK_DIR}/dayshield-core" rootfs/dayshield-core
-
-      # ─────────────────────────────────────────────────────────────────────────
       # Build rootfs
       # ─────────────────────────────────────────────────────────────────────────
       - name: Install rootfs build dependencies
@@ -250,6 +270,8 @@ jobs:
       # ─────────────────────────────────────────────────────────────────────────
       - name: Create GitHub Release
         working-directory: rootfs
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${{ steps.version.outputs.tag }}"
           ARTIFACT="${{ steps.version.outputs.artifact }}"
