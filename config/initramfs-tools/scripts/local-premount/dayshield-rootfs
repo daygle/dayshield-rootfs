@@ -49,7 +49,27 @@ BOOT_ATTEMPT_LIMIT=2
 # running kernel's modules, hardware drivers fail to load on the next boot
 # and the system hangs at e.g. "snd_hda_intel: no codecs found" with no
 # further progress.  Kernel updates therefore require a fresh install for now.
+#
+# Preserve list — paths whose runtime state must survive a rootfs update.
+# --exclude'd files are NEITHER transferred from source NOR deleted from dest
+# when --delete is active, so existing runtime state is left untouched.
+#
+# The single --include rule for /etc/dayshield/version comes first so the
+# build-stamped version file IS transferred (replacing the runtime copy),
+# while every other file under /etc/dayshield/ is treated as runtime state
+# and preserved by the following wildcard exclude.
+#
+# Categories:
+#   * Identity & users  — root password, hostname, machine-id, user db
+#   * SSH host keys      — preserve identity across reboots
+#   * DayShield state    — everything under /etc/dayshield/ except version
+#   * Service runtime configs that DayShield manages
+#   * Kernel modules     — must match the running kernel from /boot
+#   * Virtual mounts + STATE partition
+#
 PRESERVE_EXCLUDES="
+--include=/etc/dayshield/version
+--exclude=/etc/dayshield/**
 --exclude=/etc/fstab
 --exclude=/etc/machine-id
 --exclude=/etc/hostname
@@ -63,21 +83,41 @@ PRESERVE_EXCLUDES="
 --exclude=/etc/group-
 --exclude=/etc/subuid
 --exclude=/etc/subgid
+--exclude=/etc/sudoers.d
 --exclude=/etc/ssh/ssh_host_*
+--exclude=/etc/ssh/sshd_config
 --exclude=/etc/wireguard
---exclude=/etc/dayshield/admin.json
---exclude=/etc/dayshield/auth
---exclude=/etc/dayshield/certs
---exclude=/etc/dayshield/config
---exclude=/etc/dayshield/system.json
---exclude=/etc/dayshield/updates_settings.json
+--exclude=/etc/timezone
+--exclude=/etc/localtime
+--exclude=/etc/locale.conf
+--exclude=/etc/default/locale
+--exclude=/etc/default/keyboard
+--exclude=/etc/default/grub
+--exclude=/etc/default/grub.d
+--exclude=/etc/grub.d
+--exclude=/etc/sysctl.d/99-dayshield-runtime.conf
+--exclude=/etc/systemd/resolved.conf.d
+--exclude=/etc/systemd/journald.conf.d/99-dayshield-runtime.conf
 --exclude=/etc/systemd/network
+--exclude=/etc/systemd/timesyncd.conf
+--exclude=/etc/chrony/chrony.conf
 --exclude=/etc/nftables.d
 --exclude=/etc/unbound/dayshield.d
+--exclude=/etc/unbound/dayshield-managed
 --exclude=/etc/kea
+--exclude=/etc/ppp/peers
+--exclude=/etc/ppp/pap-secrets
+--exclude=/etc/ppp/chap-secrets
+--exclude=/etc/dhcp/dhclient-exit-hooks.d
+--exclude=/etc/dhcp/dhclient6-pd-*.conf
+--exclude=/etc/radvd.conf
 --exclude=/etc/crowdsec
 --exclude=/etc/cloudflared
+--exclude=/etc/default/cloudflared
 --exclude=/etc/letsencrypt
+--exclude=/etc/suricata/rules/local.rules
+--exclude=/etc/suricata/rules/disabled.rules
+--exclude=/etc/suricata/suricata.yaml
 --exclude=/etc/dayshield-state
 --exclude=/usr/lib/modules
 --exclude=/lib/modules
@@ -233,6 +273,20 @@ if ! mount -t ext4 "${ROOT}" "${SYSROOT_MNT}" 2>/dev/null; then
     log "failed to mount root partition ${ROOT}; refusing to apply"
     umount "${SQUASH_MNT}" 2>/dev/null || true
     exit 0
+fi
+
+# Detect if the squashfs ships a different kernel than the one we are booting.
+# We do not touch /boot during rsync (kernel + initrd updates are out of scope
+# for the in-place image-based flow), so a mismatch here means the user is
+# missing kernel improvements until they reinstall from a newer ISO.  We log a
+# clear warning so /boot/dayshield/last-update.log captures the situation.
+new_kver="$(ls -1 "${SQUASH_MNT}/usr/lib/modules" 2>/dev/null | head -n1 || true)"
+running_kver="$(uname -r 2>/dev/null || true)"
+if [ -n "${new_kver}" ] && [ -n "${running_kver}" ] && [ "${new_kver}" != "${running_kver}" ]; then
+    log "WARNING: squashfs ships kernel ${new_kver} but running kernel is ${running_kver}"
+    log "         (the new kernel will NOT be activated by this in-place update —"
+    log "          /boot is intentionally untouched; reinstall from a newer ISO to"
+    log "          upgrade the kernel itself)"
 fi
 
 log "applying ${squashfs_rel} via rsync --delete to ${ROOT}"
