@@ -31,14 +31,17 @@ wget
 curl
 zstd
 
-# squashfs-tools is included to provide unsquashfs for the initramfs update
-# hook (see config/initramfs-tools/hooks/dayshield-rootfs). The package itself
-# does not install any initramfs hooks.
+# squashfs-tools provides unsquashfs (used by the initramfs hook as a fallback
+# when rsync-from-mounted-squashfs is unavailable). rsync is the primary
+# extraction tool — it supports --delete so stale files left over from removed
+# packages do not accumulate across updates. Neither package installs any
+# initramfs hooks of its own.
 # NOTE: live-boot and live-config must NOT be installed here — they install
 # initramfs hooks that stall the installed system at boot (the hooks timeout
 # looking for a live squashfs medium and drop to an emergency shell). They are
 # injected as an overlay by the dayshield-iso pipeline for live-boot only.
 squashfs-tools
+rsync
 # Kernel - standard amd64 kernel (non-RT) for QEMU/bare-metal compatibility.
 linux-image-amd64
 

@@ -1,13 +1,18 @@
 [Unit]
 Description=DayShield rootfs boot success signal
 Documentation=https://github.com/daygle/dayshield-rootfs
-After=local-fs.target
-ConditionPathExists=/var/lib/dayshield/rootfs-update/pending.json
+After=local-fs.target dayshield.service
+Requires=local-fs.target
 
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/dayshield-core signal-boot-success
 RemainAfterExit=yes
+# Failures here must not block multi-user.target — we still want the system
+# to come up so the operator can debug.  signal_boot_success itself returns
+# success even when there is nothing to promote.
+SuccessExitStatus=0
+TimeoutStartSec=30s
 
 [Install]
 WantedBy=multi-user.target

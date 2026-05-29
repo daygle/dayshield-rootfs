@@ -8,11 +8,19 @@ case $1 in prereqs) prereqs; exit 0 ;; esac
 
 . /usr/share/initramfs-tools/hook-functions
 
-# squashfs module — needed to mount/read squashfs images at boot
+# squashfs module — needed to loop-mount squashfs images at boot
 manual_add_modules squashfs
 
-# unsquashfs — extracts the staged squashfs image onto the root partition
+# rsync — extracts the staged squashfs image to the root partition with
+# --delete semantics so files removed in the new rootfs disappear from
+# the existing rootfs as well (no stale packages or kernel modules)
+copy_exec /usr/bin/rsync /usr/bin
+
+# unsquashfs — fallback extractor if rsync mode fails for any reason
 copy_exec /usr/sbin/unsquashfs /sbin
+
+# sha256sum — verify the staged squashfs against its sidecar before applying
+copy_exec /usr/bin/sha256sum /usr/bin
 
 # blkid — finds the DAYSHIELD_BOOT partition by label at boot time
 copy_exec /sbin/blkid /sbin

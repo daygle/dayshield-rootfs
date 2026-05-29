@@ -1,21 +1,31 @@
 #!/bin/sh
-# Boot-time initramfs script: apply a pending DayShield rootfs image update.
+# Boot-time initramfs script: apply (or auto-revert) a DayShield rootfs image
+# update.  Runs at local-premount, before mountroot() mounts the root partition.
 #
-# Runs at the local-premount stage — before the root partition is mounted by
-# mountroot().  If /boot/dayshield/next is a symlink to a squashfs image, that
-# image is extracted over the root partition so the system boots into the
-# updated rootfs.
+# Behaviour
+# ---------
 #
-# On success:
-#   - /boot/dayshield/next symlink is removed
-#   - /boot/dayshield/current symlink is advanced to the new image
-#   - /boot/dayshield/previous symlink is set to the old current
-#   - Normal boot continues; dayshield-boot-success.service promotes
-#     pending.json -> current.json after the first healthy boot
+# Boot counter at /boot/dayshield/boot-attempts is incremented at the start of
+# every boot and reset to 0 by /usr/local/sbin/dayshield-core signal-boot-success
+# once userspace has come up healthily.  When the counter reaches 3 consecutive
+# failed boots AND a /boot/dayshield/previous symlink exists, the previous
+# version is forcibly re-applied and /boot/dayshield/recovered is written so
+# the running system can surface the recovery to the user.
 #
-# On failure (extraction error, missing image, missing partition):
-#   - /boot/dayshield/next is left intact so the update is retried next boot
-#   - The existing rootfs is booted unchanged
+# When /boot/dayshield/next is a symlink to a squashfs image under
+# /boot/dayshield/images/, the squashfs is verified against its .sha256
+# sidecar, mounted read-only, and rsync'd onto the root partition with
+# --delete (so files removed in the new rootfs are removed from disk too).
+# A short list of paths is preserved across the update (UUID-pinned fstab,
+# SSH host keys, WireGuard configs, DayShield certificates, machine-id,
+# DayShield admin credentials and runtime config).
+#
+# All non-trivial actions are appended to /boot/dayshield/last-update.log
+# on the boot partition so failures are diagnosable from journalctl -b after
+# the next successful boot.
+#
+# All exit paths must leave the boot partition unmounted and the root
+# partition unmounted so initramfs's mountroot() can do its job.
 
 PREREQ=""
 prereqs() { echo "$PREREQ"; }
@@ -26,25 +36,118 @@ case $1 in prereqs) prereqs; exit 0 ;; esac
 BOOT_LABEL="DAYSHIELD_BOOT"
 BOOT_MNT="/run/dayshield-boot"
 SYSROOT_MNT="/run/dayshield-sysroot"
+SQUASH_MNT="/run/dayshield-squash"
+LOG_FILE="${BOOT_MNT}/dayshield/last-update.log"
+BOOT_ATTEMPT_LIMIT=3
 
-# ── Locate and mount the boot partition ──────────────────────────────────────
+# Paths preserved across rootfs updates.  rsync skips both transfer AND delete
+# for these, so user / runtime state survives even though --delete is in effect.
+PRESERVE_EXCLUDES="
+--exclude=/etc/fstab
+--exclude=/etc/machine-id
+--exclude=/etc/ssh/ssh_host_*
+--exclude=/etc/wireguard
+--exclude=/etc/dayshield/admin.json
+--exclude=/etc/dayshield/auth
+--exclude=/etc/dayshield/certs
+--exclude=/etc/dayshield/config
+--exclude=/etc/dayshield/system.json
+--exclude=/etc/dayshield/updates_settings.json
+--exclude=/var
+--exclude=/boot
+--exclude=/proc
+--exclude=/sys
+--exclude=/dev
+--exclude=/run
+--exclude=/tmp
+--exclude=/mnt
+--exclude=/media
+--exclude=/lost+found
+"
+
+log() {
+    # Append a timestamped line to the persistent log on the BOOT partition
+    # AND to the initramfs console (so it appears in the boot log too).
+    msg="$*"
+    ts="$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || echo unknown)"
+    printf '[%s] %s\n' "${ts}" "${msg}" >&2
+    if [ -d "${BOOT_MNT}/dayshield" ]; then
+        printf '[%s] %s\n' "${ts}" "${msg}" >> "${LOG_FILE}" 2>/dev/null || true
+    fi
+}
+
+cleanup() {
+    umount "${SQUASH_MNT}" 2>/dev/null || true
+    umount "${SYSROOT_MNT}" 2>/dev/null || true
+    umount "${BOOT_MNT}" 2>/dev/null || true
+    rmdir "${SQUASH_MNT}" "${SYSROOT_MNT}" "${BOOT_MNT}" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
+# ── Locate and mount the boot partition rw ───────────────────────────────────
 
 boot_dev="$(blkid -L "${BOOT_LABEL}" 2>/dev/null || true)"
 if [ -z "${boot_dev}" ]; then
+    # No DAYSHIELD_BOOT partition (this rootfs may not be installed via the
+    # DayShield installer yet — e.g. a fresh ISO live boot).  Nothing to do.
     exit 0
 fi
 
 mkdir -p "${BOOT_MNT}"
-if ! mount -t ext4 -o ro "${boot_dev}" "${BOOT_MNT}" 2>/dev/null; then
-    log_warning_msg "DayShield: could not mount boot partition (${boot_dev}); skipping update check"
+if ! mount -t ext4 "${boot_dev}" "${BOOT_MNT}" 2>/dev/null; then
+    log_warning_msg "DayShield: could not mount boot partition (${boot_dev}); skipping update flow"
     exit 0
 fi
+
+mkdir -p "${BOOT_MNT}/dayshield"
+
+# ── Boot counter management ──────────────────────────────────────────────────
+
+attempts=0
+if [ -f "${BOOT_MNT}/dayshield/boot-attempts" ]; then
+    attempts="$(cat "${BOOT_MNT}/dayshield/boot-attempts" 2>/dev/null || echo 0)"
+    case "${attempts}" in
+        ''|*[!0-9]*) attempts=0 ;;
+    esac
+fi
+
+# ── Auto-revert when too many consecutive boots have failed ──────────────────
+
+if [ "${attempts}" -ge "${BOOT_ATTEMPT_LIMIT}" ] \
+   && [ -L "${BOOT_MNT}/dayshield/previous" ] \
+   && [ ! -L "${BOOT_MNT}/dayshield/next" ]; then
+    # We have failed BOOT_ATTEMPT_LIMIT times in a row AND have a known-good
+    # previous version AND no fresh activation is already pending.  Force the
+    # previous image to be re-applied by setting it as `next`.
+    failed_target="$(readlink "${BOOT_MNT}/dayshield/current" 2>/dev/null || echo unknown)"
+    previous_target="$(readlink "${BOOT_MNT}/dayshield/previous" 2>/dev/null || echo unknown)"
+    log "auto-revert triggered after ${attempts} failed boots (failed=${failed_target}, reverting to ${previous_target})"
+
+    ln -sfn "${previous_target}" "${BOOT_MNT}/dayshield/next"
+    # Mark the recovery so the booted system can surface it to the user
+    cat > "${BOOT_MNT}/dayshield/recovered" <<EOF
+failed_target=${failed_target}
+reverted_to=${previous_target}
+reverted_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || echo unknown)
+attempts=${attempts}
+EOF
+    # Clear previous so we do not loop-revert if this previous also fails
+    rm -f "${BOOT_MNT}/dayshield/previous"
+    # Reset the counter — the revert attempt itself starts at 0
+    attempts=0
+fi
+
+# Increment counter for this boot.  signal-boot-success will reset it to 0
+# from userspace once the boot is confirmed healthy.
+new_attempts=$((attempts + 1))
+echo "${new_attempts}" > "${BOOT_MNT}/dayshield/boot-attempts" 2>/dev/null || true
+sync
 
 # ── Check for a pending image ─────────────────────────────────────────────────
 
 next_link="${BOOT_MNT}/dayshield/next"
 if [ ! -L "${next_link}" ]; then
-    umount "${BOOT_MNT}"
+    # No update to apply; just continue normal boot
     exit 0
 fi
 
@@ -52,53 +155,107 @@ squashfs_rel="$(readlink "${next_link}")"
 squashfs_path="${BOOT_MNT}/dayshield/${squashfs_rel}"
 
 if [ ! -f "${squashfs_path}" ]; then
-    log_warning_msg "DayShield: queued image not found (${squashfs_path}); booting existing rootfs"
-    umount "${BOOT_MNT}"
+    log "queued image not found: ${squashfs_path}; removing next symlink and booting current"
+    rm -f "${next_link}"
+    sync
     exit 0
 fi
 
-# ── Apply the squashfs to the root partition ──────────────────────────────────
+# ── Verify squashfs SHA-256 against the sidecar ──────────────────────────────
+
+sha_file="${squashfs_path}.sha256"
+if [ ! -f "${sha_file}" ]; then
+    log "no SHA-256 sidecar at ${sha_file}; refusing to apply ${squashfs_rel}"
+    rm -f "${next_link}"
+    sync
+    exit 0
+fi
+
+expected_sha="$(awk '{print $1; exit}' "${sha_file}" 2>/dev/null | tr -d '[:space:]')"
+actual_sha="$(sha256sum "${squashfs_path}" 2>/dev/null | awk '{print $1; exit}' | tr -d '[:space:]')"
+
+if [ -z "${expected_sha}" ] || [ -z "${actual_sha}" ] || [ "${expected_sha}" != "${actual_sha}" ]; then
+    log "SHA-256 mismatch for ${squashfs_rel} (expected=${expected_sha}, actual=${actual_sha}); refusing to apply"
+    rm -f "${next_link}"
+    sync
+    exit 0
+fi
+
+log "SHA-256 verified for ${squashfs_rel}"
+
+# ── Apply the squashfs to the root partition with rsync --delete ─────────────
 
 if [ -z "${ROOT}" ]; then
-    log_warning_msg "DayShield: root device unknown; skipping update application"
-    umount "${BOOT_MNT}"
+    log "root device variable ROOT is empty; cannot apply update"
     exit 0
 fi
-
-log_begin_msg "DayShield: applying rootfs update (${squashfs_rel})"
 
 modprobe squashfs 2>/dev/null || true
 
-mkdir -p "${SYSROOT_MNT}"
+mkdir -p "${SYSROOT_MNT}" "${SQUASH_MNT}"
+
+if ! mount -t squashfs -o ro,loop "${squashfs_path}" "${SQUASH_MNT}" 2>/dev/null; then
+    log "failed to loop-mount ${squashfs_path}; refusing to apply"
+    rm -f "${next_link}"
+    sync
+    exit 0
+fi
+
 if ! mount -t ext4 "${ROOT}" "${SYSROOT_MNT}" 2>/dev/null; then
-    log_failure_msg "DayShield: could not mount root partition (${ROOT}); aborting update"
-    umount "${BOOT_MNT}"
+    log "failed to mount root partition ${ROOT}; refusing to apply"
+    umount "${SQUASH_MNT}" 2>/dev/null || true
     exit 0
 fi
 
-if ! unsquashfs -f -d "${SYSROOT_MNT}" "${squashfs_path}" >/dev/null 2>&1; then
-    log_failure_msg "DayShield: image extraction failed; booting existing rootfs"
-    umount "${SYSROOT_MNT}"
-    umount "${BOOT_MNT}"
+log "applying ${squashfs_rel} via rsync --delete to ${ROOT}"
+
+# rsync arguments:
+#   -a   archive (preserve perms, ownership, timestamps, symlinks)
+#   -H   preserve hardlinks
+#   -A   preserve ACLs (squashfs may carry them)
+#   -X   preserve xattrs (squashfs preserves security.capability et al.)
+#   --delete   remove files in dest not present in src (the whole point)
+#   --numeric-ids   do not look up names — uses /etc/passwd in dest which we are rewriting
+# shellcheck disable=SC2086
+if ! rsync -aHAX --delete --numeric-ids ${PRESERVE_EXCLUDES} \
+        "${SQUASH_MNT}/" "${SYSROOT_MNT}/" >> "${LOG_FILE}" 2>&1; then
+    log "rsync extraction failed; root partition may be in an inconsistent state"
+    sync
+    umount "${SQUASH_MNT}" 2>/dev/null || true
+    umount "${SYSROOT_MNT}" 2>/dev/null || true
+    # Leave next in place so we retry on the next boot — though if rsync
+    # genuinely failed, the next boot will likely fail too and the boot counter
+    # will eventually auto-revert.
     exit 0
 fi
 
-umount "${SYSROOT_MNT}"
+sync
+umount "${SQUASH_MNT}" 2>/dev/null || true
+umount "${SYSROOT_MNT}" 2>/dev/null || true
 
-# ── Advance the boot symlinks ─────────────────────────────────────────────────
+log "rsync extraction complete for ${squashfs_rel}"
 
-umount "${BOOT_MNT}"
-if mount -t ext4 -o rw "${boot_dev}" "${BOOT_MNT}" 2>/dev/null; then
-    image_name="$(basename "${squashfs_path}")"
-    dayshield_dir="${BOOT_MNT}/dayshield"
+# ── Advance the boot symlinks ────────────────────────────────────────────────
+
+dayshield_dir="${BOOT_MNT}/dayshield"
+image_name="$(basename "${squashfs_path}")"
+
+# When this is an auto-revert (recovered marker just written), clear previous
+# rather than advancing it to the failed image we are reverting away from.
+if [ -f "${dayshield_dir}/recovered" ]; then
+    rm -f "${dayshield_dir}/previous"
+else
     if [ -L "${dayshield_dir}/current" ]; then
         prev_target="$(readlink "${dayshield_dir}/current")"
         ln -sfn "${prev_target}" "${dayshield_dir}/previous"
     fi
-    ln -sfn "images/${image_name}" "${dayshield_dir}/current"
-    rm -f "${dayshield_dir}/next"
-    sync
-    umount "${BOOT_MNT}"
 fi
+ln -sfn "images/${image_name}" "${dayshield_dir}/current"
+rm -f "${dayshield_dir}/next"
 
-log_end_msg 0
+# Reset boot counter to 1 — we just successfully applied a fresh image, so
+# this boot is attempt 1 of the new image, not a continuation of failed boots
+echo 1 > "${dayshield_dir}/boot-attempts"
+sync
+
+log "symlinks advanced (current=${image_name}); boot counter reset to 1"
