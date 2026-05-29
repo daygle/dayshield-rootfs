@@ -38,10 +38,17 @@ BOOT_MNT="/run/dayshield-boot"
 SYSROOT_MNT="/run/dayshield-sysroot"
 SQUASH_MNT="/run/dayshield-squash"
 LOG_FILE="${BOOT_MNT}/dayshield/last-update.log"
-BOOT_ATTEMPT_LIMIT=3
+BOOT_ATTEMPT_LIMIT=2
 
 # Paths preserved across rootfs updates.  rsync skips both transfer AND delete
 # for these, so user / runtime state survives even though --delete is in effect.
+#
+# Kernel modules are preserved because the running kernel is still the one
+# loaded from /boot (which we also exclude — see the comment in build-rootfs.sh
+# about why /boot updates are dangerous).  If we let --delete remove the
+# running kernel's modules, hardware drivers fail to load on the next boot
+# and the system hangs at e.g. "snd_hda_intel: no codecs found" with no
+# further progress.  Kernel updates therefore require a fresh install for now.
 PRESERVE_EXCLUDES="
 --exclude=/etc/fstab
 --exclude=/etc/machine-id
@@ -53,6 +60,8 @@ PRESERVE_EXCLUDES="
 --exclude=/etc/dayshield/config
 --exclude=/etc/dayshield/system.json
 --exclude=/etc/dayshield/updates_settings.json
+--exclude=/usr/lib/modules
+--exclude=/lib/modules
 --exclude=/var
 --exclude=/boot
 --exclude=/proc
