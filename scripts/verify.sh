@@ -214,6 +214,22 @@ else
    fail "dayshield.service missing StateDirectory=dayshield-updates"
 fi
 
+if [ -x "${ROOTFS_DIR}/usr/sbin/tc" ] || [ -x "${ROOTFS_DIR}/sbin/tc" ]; then
+    ok "tc traffic-control utility is installed for QoS"
+else
+    fail "missing tc traffic-control utility (iproute2) for QoS"
+fi
+
+if [ -f "${DS_BASE_SVC}" ] && \
+   grep -Eq 'CapabilityBoundingSet=.*CAP_NET_ADMIN' "${DS_BASE_SVC}"; then
+    ok "dayshield.service retains CAP_NET_ADMIN for QoS traffic control"
+elif [ -f "${DS_ENGINE_PATHS}" ] && \
+   grep -Eq 'CapabilityBoundingSet=.*CAP_NET_ADMIN' "${DS_ENGINE_PATHS}"; then
+    ok "dayshield.service retains CAP_NET_ADMIN for QoS traffic control"
+else
+    fail "dayshield.service missing CAP_NET_ADMIN for QoS traffic control"
+fi
+
 if [ -f "${DS_ENGINE_PATHS}" ] && \
    grep -Eq '^[[:space:]]*ReadWritePaths[[:space:]]*=[[:space:]]*/etc/kea[[:space:]]*$' "${DS_ENGINE_PATHS}"; then
     ok "dayshield.service can write the packaged Kea compatibility config path"

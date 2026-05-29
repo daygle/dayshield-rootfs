@@ -11,6 +11,7 @@ git
 dash
 dbus
 e2fsprogs
+# iproute2 provides ip and tc for interface and QoS management.
 iproute2
 iputils-ping
 kmod

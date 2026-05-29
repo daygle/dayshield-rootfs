@@ -478,6 +478,7 @@ cat > "${target}/etc/dayshield/config/config.json" <<EOF
         }
     ],
     "nat": null,
+    "qos": null,
     "dns": null,
     "vpn_tunnels": [],
     "crowdsec_policies": [],
