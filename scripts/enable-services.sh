@@ -40,11 +40,15 @@ for svc in \
     suricata.service \
     ssh.service \
     dayshield.service \
-    console-wizard.service \
     dayshield-boot-success.service
 do
     enable_service multi-user.target "${svc}"
 done
+
+# console-wizard.service is installer-only and remains installed as a unit file,
+# but the installed rootfs must not enable it by default.  The post-login
+# profile hook launches the menu on installed systems without stealing tty1
+# from getty during normal boots or image-update reboots.
 
 # Optional services (acme, wireguard, crowdsec) are intentionally not enabled
 # by default. They should be enabled by DayShield only after valid runtime

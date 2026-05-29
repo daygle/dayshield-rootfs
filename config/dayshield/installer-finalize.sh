@@ -29,6 +29,18 @@ PY
     fi
     awk -F. 'NF==4{for(i=1;i<=4;i++) if($i !~ /^[0-9]+$/ || $i>255) exit 1; exit 0} {exit 1}' <<< "${ip}"
 }
+_fin_json_string() {
+    local value="$1"
+    if command -v python3 >/dev/null 2>&1; then
+        python3 - "${value}" <<'PY'
+import json
+import sys
+print(json.dumps(sys.argv[1]))
+PY
+        return "$?"
+    fi
+    printf '"%s"' "$(printf '%s' "${value}" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+}
 
 if [[ "$#" -ne 12 ]]; then
     _fin_err "usage: $0 <target> <hostname> <password> <wan_iface> <wan_type> <wan_pppoe_user> <wan_pppoe_pass> <lan_iface> <lan_ip> <lan_prefix> <dhcp_start> <dhcp_end>"
@@ -441,12 +453,45 @@ EOF
 # DayShield core config.json
 # Generate a stable UUID for the seeded LAN accept rule.
 _lan_rule_uuid="$(cat /proc/sys/kernel/random/uuid 2>/dev/null || printf 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee')"
+_wan_interface_json=""
+if [[ -n "${wan_iface}" ]]; then
+    _wan_mode_json='"dhcp"'
+    _wan_dhcp4='true'
+    _wan_mtu='1500'
+    _wan_pppoe_user_json='null'
+    _wan_pppoe_pass_json='null'
+    if [[ "${wan_type}" == "pppoe" ]]; then
+        _wan_mode_json='"pppoe"'
+        _wan_dhcp4='false'
+        _wan_mtu='1492'
+        _wan_pppoe_user_json="$(_fin_json_string "${wan_pppoe_user}")"
+        _wan_pppoe_pass_json="$(_fin_json_string "${wan_pppoe_pass}")"
+    fi
+    _wan_interface_json="$(cat <<EOF
+        {
+            "name": "${wan_iface}",
+            "description": "WAN",
+            "addresses": [],
+            "mtu": ${_wan_mtu},
+            "enabled": true,
+            "dhcp4": ${_wan_dhcp4},
+            "dhcp6": false,
+            "vlan": null,
+            "wan_mode": ${_wan_mode_json},
+            "pppoe_username": ${_wan_pppoe_user_json},
+            "pppoe_password": ${_wan_pppoe_pass_json},
+            "gateway": null
+        },
+EOF
+)"
+fi
 
 cat > "${target}/etc/dayshield/config/config.json" <<EOF
 {
     "hostname": "${hostname}",
     "domain": null,
     "interfaces": [
+${_wan_interface_json}
         {
             "name": "${lan_iface}",
             "description": "LAN",
@@ -537,6 +582,7 @@ CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE CAP_SYS_ADM
 EOF
 ln -sf /dev/null "${target}/etc/systemd/system/systemd-resolved.service" 2>/dev/null || true
 ln -sf /dev/null "${target}/etc/systemd/system/unbound-resolvconf.service" 2>/dev/null || true
+rm -f "${target}/etc/systemd/system/multi-user.target.wants/console-wizard.service" 2>/dev/null || true
 printf 'nameserver 127.0.0.1\n' > "${target}/etc/resolv.conf"
 chmod 644 "${target}/etc/resolv.conf"
 

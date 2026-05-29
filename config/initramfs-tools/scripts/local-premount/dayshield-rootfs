@@ -54,10 +54,10 @@ BOOT_ATTEMPT_LIMIT=2
 # --exclude'd files are NEITHER transferred from source NOR deleted from dest
 # when --delete is active, so existing runtime state is left untouched.
 #
-# The single --include rule for /etc/dayshield/version comes first so the
-# build-stamped version file IS transferred (replacing the runtime copy),
-# while every other file under /etc/dayshield/ is treated as runtime state
-# and preserved by the following wildcard exclude.
+# The include rules for /etc/dayshield/ and /etc/dayshield/version come first
+# so rsync traverses the directory and transfers the build-stamped version file
+# (replacing the runtime copy), while every other file under /etc/dayshield/ is
+# treated as runtime state and preserved by the following wildcard exclude.
 #
 # Categories:
 #   * Identity & users  — root password, hostname, machine-id, user db
@@ -68,6 +68,7 @@ BOOT_ATTEMPT_LIMIT=2
 #   * Virtual mounts + STATE partition
 #
 PRESERVE_EXCLUDES="
+--include=/etc/dayshield/
 --include=/etc/dayshield/version
 --exclude=/etc/dayshield/**
 --exclude=/etc/fstab
@@ -309,6 +310,25 @@ if ! rsync -aHAX --delete --numeric-ids ${PRESERVE_EXCLUDES} \
     # genuinely failed, the next boot will likely fail too and the boot counter
     # will eventually auto-revert.
     exit 0
+fi
+
+source_version=""
+target_version=""
+if [ -f "${SQUASH_MNT}/etc/dayshield/version" ]; then
+    source_version="$(awk 'NF {print $1; exit}' "${SQUASH_MNT}/etc/dayshield/version" 2>/dev/null || true)"
+    if [ -n "${source_version}" ]; then
+        mkdir -p "${SYSROOT_MNT}/etc/dayshield"
+        cp -f "${SQUASH_MNT}/etc/dayshield/version" "${SYSROOT_MNT}/etc/dayshield/version" 2>/dev/null || true
+    fi
+    target_version="$(awk 'NF {print $1; exit}' "${SYSROOT_MNT}/etc/dayshield/version" 2>/dev/null || true)"
+    if [ -n "${source_version}" ] && [ "${target_version}" != "${source_version}" ]; then
+        log "ERROR: rootfs version stamp mismatch after extraction (image=${source_version}, target=${target_version:-missing})"
+        log "leaving ${squashfs_rel} queued; current symlink will not be advanced"
+        sync
+        umount "${SQUASH_MNT}" 2>/dev/null || true
+        umount "${SYSROOT_MNT}" 2>/dev/null || true
+        exit 0
+    fi
 fi
 
 sync
