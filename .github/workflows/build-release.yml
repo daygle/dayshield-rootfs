@@ -89,8 +89,6 @@ jobs:
       # Fetch UI artifact from dayshield-ui release
       # ─────────────────────────────────────────────────────────────────────────
       - name: Download dayshield-ui release artifact
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           UI_REF="${{ inputs.ui_ref || steps.tags.outputs.ui_tag }}"
@@ -120,8 +118,6 @@ jobs:
       # Fetch core binary from dayshield-core release
       # ─────────────────────────────────────────────────────────────────────────
       - name: Download dayshield-core release binary
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           CORE_REF="${{ inputs.core_ref || steps.tags.outputs.core_tag }}"
@@ -254,8 +250,6 @@ jobs:
       # ─────────────────────────────────────────────────────────────────────────
       - name: Create GitHub Release
         working-directory: rootfs
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${{ steps.version.outputs.tag }}"
           ARTIFACT="${{ steps.version.outputs.artifact }}"
