@@ -46,6 +46,7 @@ linux-image-amd64
 # Networking
 nftables
 ethtool
+isc-dhcp-client
 kea-dhcp4-server
 kea-dhcp6-server
 radvd
