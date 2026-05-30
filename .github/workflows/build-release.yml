@@ -93,6 +93,12 @@ jobs:
         with:
           ref: ${{ steps.version.outputs.tag }}
           path: rootfs
+          # Full history + tags so `git describe --tags --abbrev=0` (used by
+          # scripts/build-rootfs.sh to stamp /etc/dayshield/version) resolves
+          # the release tag correctly.  Without this it returns empty and the
+          # filename fallback can mis-stamp the version.
+          fetch-depth: 0
+          fetch-tags: true
 
       # ─────────────────────────────────────────────────────────────────────────
       # Fetch UI artifact from dayshield-ui release
@@ -195,14 +201,21 @@ jobs:
 
       - name: Build rootfs
         working-directory: rootfs
+        env:
+          # Explicit version override consumed by scripts/build-rootfs.sh
+          # when stamping /etc/dayshield/version.  Belt-and-braces: the
+          # script also derives from OUTPUT and git describe, but passing
+          # the release tag directly removes any chance of mis-stamping.
+          DAYSHIELD_ROOTFS_VERSION: ${{ steps.version.outputs.tag }}
         run: |
           ENABLE_SUITE_UPDATES=1
 
-          sudo make rootfs \
+          sudo -E make rootfs \
             OUTPUT="${{ steps.version.outputs.artifact }}" \
             ROOTFS_IMAGE_OUTPUT="${{ steps.version.outputs.artifact_image }}" \
             ROOTFS_MANIFEST_OUTPUT="${{ steps.version.outputs.artifact_manifest }}" \
             ENABLE_SUITE_UPDATES="${ENABLE_SUITE_UPDATES}" \
+            DAYSHIELD_ROOTFS_VERSION="${DAYSHIELD_ROOTFS_VERSION}" \
             UI_DIR="${GITHUB_WORKSPACE}/ui-artifact/dist" \
             ROOTFS_REPO_DIR="${GITHUB_WORKSPACE}/rootfs"
 

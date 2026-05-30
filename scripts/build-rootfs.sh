@@ -297,17 +297,27 @@ env ROOTFS_DIR="${ROOTFS_DIR}" \
     sh "${SCRIPT_DIR}/chroot-setup.sh"
 
 print_step "stamp-version"
+# Resolve the version to stamp into /etc/dayshield/version.  Order:
+#   1. DAYSHIELD_ROOTFS_VERSION env var — explicit override (CI can set this
+#      from ${{ github.ref_name }} for absolute certainty).
+#   2. Output filename — for an artifact named rootfs-v1.0.1.tar.zst we
+#      extract "1.0.1" here.  This is deterministic regardless of git state.
+#   3. git describe — final fallback for local development builds.
 _rootfs_tag=""
-if command -v git >/dev/null 2>&1 && [ -n "${ROOTFS_REPO_DIR}" ]; then
-    _rootfs_tag="$(git -C "${ROOTFS_REPO_DIR}" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || true)"
+if [ -n "${DAYSHIELD_ROOTFS_VERSION:-}" ]; then
+    _rootfs_tag="${DAYSHIELD_ROOTFS_VERSION#v}"
 fi
 if [ -z "${_rootfs_tag}" ]; then
     _derived="$(basename "${OUTPUT}" | sed 's/^rootfs-//;s/\.tar\.zst$//')"
     case "${_derived}" in
-        rootfs|"") _rootfs_tag="unknown" ;;
+        rootfs|"") ;;
         *) _rootfs_tag="${_derived#v}" ;;
     esac
 fi
+if [ -z "${_rootfs_tag}" ] && command -v git >/dev/null 2>&1 && [ -n "${ROOTFS_REPO_DIR}" ]; then
+    _rootfs_tag="$(git -C "${ROOTFS_REPO_DIR}" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || true)"
+fi
+[ -n "${_rootfs_tag}" ] || _rootfs_tag="unknown"
 mkdir -p "${ROOTFS_DIR}/etc/dayshield"
 printf '%s\n' "${_rootfs_tag}" > "${ROOTFS_DIR}/etc/dayshield/version"
 printf '    Version: %s\n' "${_rootfs_tag}"
