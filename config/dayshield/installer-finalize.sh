@@ -220,7 +220,7 @@ fi
 # Use the binary in the target rootfs to hash and write the credentials so the
 # same code/parameters are used at install time and at runtime.
 if chroot "${target}" /usr/local/sbin/dayshield-core init-admin "${password}" >/dev/null 2>&1; then
-    chmod 600 "${target}/etc/dayshield/admin.json" 2>/dev/null || true
+    chmod 600 "${target}/var/lib/dayshield/admin.json" 2>/dev/null || true
     _fin_info "DayShield admin credentials initialised"
 else
     _fin_err "dayshield-core init-admin failed; management UI will not be accessible"
@@ -256,9 +256,9 @@ if [[ -f "${target}/etc/suricata/suricata.yaml" ]] && [[ -n "${_suricata_iface}"
     fi
 fi
 
-# DayShield network.conf
-mkdir -p "${target}/etc/dayshield"
-cat > "${target}/etc/dayshield/network.conf" <<EOF
+# DayShield network.conf - written to /var so it survives A/B rootfs updates.
+mkdir -p "${target}/var/lib/dayshield"
+cat > "${target}/var/lib/dayshield/network.conf" <<EOF
 WAN_IFACE=${wan_iface}
 WAN_TYPE=${wan_type}
 LAN_IFACE=${lan_iface}
@@ -337,10 +337,14 @@ IPv6AcceptRA=no
 LinkLocalAddressing=no
 EOF
 
-# Kea DHCPv4
-mkdir -p "${target}/etc/dayshield" "${target}/etc/kea" "${target}/var/lib/kea" "${target}/var/log/kea" "${target}/var/log/dayshield"
+# Kea DHCPv4 — canonical config lives on /var so DHCP survives A/B rootfs
+# updates.  /etc/kea/ gets a copy because the Kea daemon reads from there.
+mkdir -p \
+    "${target}/etc/kea" "${target}/var/lib/kea" \
+    "${target}/var/log/kea" "${target}/var/log/dayshield" \
+    "${target}/var/lib/dayshield/kea"
 chmod 755 "${target}/etc/kea"
-cat > "${target}/etc/dayshield/kea-dhcp4.conf" <<EOF
+cat > "${target}/var/lib/dayshield/kea/kea-dhcp4.conf" <<EOF
 {
   "Dhcp4": {
     "interfaces-config": {
@@ -370,11 +374,11 @@ cat > "${target}/etc/dayshield/kea-dhcp4.conf" <<EOF
   }
 }
 EOF
-chmod 644 "${target}/etc/dayshield/kea-dhcp4.conf"
-cp "${target}/etc/dayshield/kea-dhcp4.conf" "${target}/etc/kea/kea-dhcp4.conf"
+chmod 644 "${target}/var/lib/dayshield/kea/kea-dhcp4.conf"
+cp "${target}/var/lib/dayshield/kea/kea-dhcp4.conf" "${target}/etc/kea/kea-dhcp4.conf"
 chmod 644 "${target}/etc/kea/kea-dhcp4.conf"
 
-cat > "${target}/etc/dayshield/kea-dhcp6.conf" <<'EOF'
+cat > "${target}/var/lib/dayshield/kea/kea-dhcp6.conf" <<'EOF'
 {
   "Dhcp6": {
     "interfaces-config": {
@@ -398,8 +402,8 @@ cat > "${target}/etc/dayshield/kea-dhcp6.conf" <<'EOF'
   }
 }
 EOF
-chmod 644 "${target}/etc/dayshield/kea-dhcp6.conf"
-cp "${target}/etc/dayshield/kea-dhcp6.conf" "${target}/etc/kea/kea-dhcp6.conf"
+chmod 644 "${target}/var/lib/dayshield/kea/kea-dhcp6.conf"
+cp "${target}/var/lib/dayshield/kea/kea-dhcp6.conf" "${target}/etc/kea/kea-dhcp6.conf"
 chmod 644 "${target}/etc/kea/kea-dhcp6.conf"
 
 # Unbound DNS
@@ -486,7 +490,8 @@ EOF
 )"
 fi
 
-cat > "${target}/etc/dayshield/config/config.json" <<EOF
+mkdir -p "${target}/var/lib/dayshield/config"
+cat > "${target}/var/lib/dayshield/config/config.json" <<EOF
 {
     "hostname": "${hostname}",
     "domain": null,

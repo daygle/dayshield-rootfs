@@ -71,11 +71,11 @@ FIRST_SETUP_DONE=""
 ORIG_CONSOLE_LOGLEVEL=""
 MANAGEMENT_HTTPS_ENABLED="false"
 
-# Associative arrays populated from core config JSON (/etc/dayshield/config/config.json)
+# Associative arrays populated from core config JSON (/var/lib/dayshield/config/config.json)
 declare -A _CORE_IFACE_ROLE=()
 declare -A _CORE_IFACE_DESC=()
 _CORE_CONFIG_LOADED=0
-DAYSHIELD_CORE_CONFIG="/etc/dayshield/config/config.json"
+DAYSHIELD_CORE_CONFIG="/var/lib/dayshield/config/config.json"
 
 _is_valid_iface_name() {
     [[ "$1" =~ ^[a-zA-Z0-9_.-]+$ ]]
@@ -101,7 +101,8 @@ _console_quiet_exit() {
 }
 
 _load_state() {
-    local state_file="/etc/dayshield/console-state"
+    # Persist on /var so wizard answers survive A/B rootfs updates.
+    local state_file="/var/lib/dayshield/console-state"
     local owner perms key value_b64 value
     if [[ ! -f "${state_file}" ]]; then
         return
@@ -182,11 +183,11 @@ _load_state() {
 
 _save_state() {
     local state_file tmp_file old_umask
-    state_file="/etc/dayshield/console-state"
-    mkdir -p /etc/dayshield
+    state_file="/var/lib/dayshield/console-state"
+    mkdir -p /var/lib/dayshield
     old_umask="$(umask)"
     umask 077
-    tmp_file="$(mktemp -p /etc/dayshield console-state.XXXXXX)"
+    tmp_file="$(mktemp -p /var/lib/dayshield console-state.XXXXXX)"
     {
         printf 'WAN_IFACE=%s\n' "$(printf '%s' "${WAN_IFACE}" | base64 | tr -d '\n')"
         printf 'WAN_TYPE=%s\n' "$(printf '%s' "${WAN_TYPE}" | base64 | tr -d '\n')"
@@ -371,11 +372,11 @@ _ipv4_to_int() {
 }
 
 _apply_lan_dhcp_config() {
-    local kea_conf="/etc/dayshield/kea-dhcp4.conf"
+    local kea_conf="/var/lib/dayshield/kea/kea-dhcp4.conf"
     local kea_compat_conf="/etc/kea/kea-dhcp4.conf"
 
     if [[ "${LAN_DHCP_ENABLE}" == "yes" ]] && [[ -n "${LAN_IFACE}" ]] && [[ -n "${LAN_IP}" ]] && [[ -n "${LAN_DHCP_START}" ]] && [[ -n "${LAN_DHCP_END}" ]]; then
-        mkdir -p /etc/dayshield /etc/kea /var/log/kea /var/lib/kea
+        mkdir -p /var/lib/dayshield/kea /etc/kea /var/log/kea /var/lib/kea
         chmod 755 /etc/kea
 
         # Compute network address for Kea subnet (e.g. 192.168.1.0/24)
@@ -448,7 +449,7 @@ EOF
     cp "${kea_conf}" "${kea_compat_conf}"
     chmod 644 "${kea_compat_conf}"
 
-    cat > "/etc/dayshield/kea-dhcp6.conf" <<'EOF'
+    cat > "/var/lib/dayshield/kea/kea-dhcp6.conf" <<'EOF'
 {
   "Dhcp6": {
     "interfaces-config": {
@@ -472,7 +473,7 @@ EOF
   }
 }
 EOF
-    cp "/etc/dayshield/kea-dhcp6.conf" "/etc/kea/kea-dhcp6.conf"
+    cp "/var/lib/dayshield/kea/kea-dhcp6.conf" "/etc/kea/kea-dhcp6.conf"
     chmod 644 "/etc/kea/kea-dhcp6.conf"
 
     systemctl enable kea-dhcp4-server >/dev/null 2>&1 || true

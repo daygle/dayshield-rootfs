@@ -124,9 +124,12 @@ ConditionPathExists=/etc/kea/kea-dhcp6.conf
 ConfigurationDirectoryMode=755
 EOF
 
-mkdir -p "${ROOTFS_DIR}/etc/dayshield" "${ROOTFS_DIR}/etc/kea" "${ROOTFS_DIR}/var/log/kea" "${ROOTFS_DIR}/var/log/dayshield" "${ROOTFS_DIR}/var/lib/kea"
+mkdir -p \
+    "${ROOTFS_DIR}/etc/dayshield" "${ROOTFS_DIR}/etc/kea" \
+    "${ROOTFS_DIR}/var/log/kea" "${ROOTFS_DIR}/var/log/dayshield" \
+    "${ROOTFS_DIR}/var/lib/kea" "${ROOTFS_DIR}/var/lib/dayshield/kea"
 chmod 755 "${ROOTFS_DIR}/etc/kea"
-cat > "${ROOTFS_DIR}/etc/dayshield/kea-dhcp4.conf" <<'EOF'
+cat > "${ROOTFS_DIR}/var/lib/dayshield/kea/kea-dhcp4.conf" <<'EOF'
 {
   "Dhcp4": {
     "interfaces-config": {
@@ -150,11 +153,11 @@ cat > "${ROOTFS_DIR}/etc/dayshield/kea-dhcp4.conf" <<'EOF'
   }
 }
 EOF
-chmod 644 "${ROOTFS_DIR}/etc/dayshield/kea-dhcp4.conf"
-cp "${ROOTFS_DIR}/etc/dayshield/kea-dhcp4.conf" "${ROOTFS_DIR}/etc/kea/kea-dhcp4.conf"
+chmod 644 "${ROOTFS_DIR}/var/lib/dayshield/kea/kea-dhcp4.conf"
+cp "${ROOTFS_DIR}/var/lib/dayshield/kea/kea-dhcp4.conf" "${ROOTFS_DIR}/etc/kea/kea-dhcp4.conf"
 chmod 644 "${ROOTFS_DIR}/etc/kea/kea-dhcp4.conf"
 
-cat > "${ROOTFS_DIR}/etc/dayshield/kea-dhcp6.conf" <<'EOF'
+cat > "${ROOTFS_DIR}/var/lib/dayshield/kea/kea-dhcp6.conf" <<'EOF'
 {
   "Dhcp6": {
     "interfaces-config": {
@@ -178,17 +181,17 @@ cat > "${ROOTFS_DIR}/etc/dayshield/kea-dhcp6.conf" <<'EOF'
   }
 }
 EOF
-chmod 644 "${ROOTFS_DIR}/etc/dayshield/kea-dhcp6.conf"
-cp "${ROOTFS_DIR}/etc/dayshield/kea-dhcp6.conf" "${ROOTFS_DIR}/etc/kea/kea-dhcp6.conf"
+chmod 644 "${ROOTFS_DIR}/var/lib/dayshield/kea/kea-dhcp6.conf"
+cp "${ROOTFS_DIR}/var/lib/dayshield/kea/kea-dhcp6.conf" "${ROOTFS_DIR}/etc/kea/kea-dhcp6.conf"
 chmod 644 "${ROOTFS_DIR}/etc/kea/kea-dhcp6.conf"
 
 # ── DayShield directory layout ───────────────────────────────────────────────
+# Only build-time artefacts live under /etc/dayshield/ (version stamp,
+# kernel-cmdline placeholder, sshd/unbound/kea seed configs).  All
+# persistent runtime config — config.json, certs, admin creds, etc. —
+# lives under /var/lib/dayshield/ so it survives every rootfs A/B update.
 printf '  -> Creating /etc/dayshield directory tree\n'
-mkdir -p \
-    "${ROOTFS_DIR}/etc/dayshield/config" \
-    "${ROOTFS_DIR}/etc/dayshield/certs" \
-    "${ROOTFS_DIR}/etc/dayshield/logs"
-chmod 700 "${ROOTFS_DIR}/etc/dayshield/certs"
+mkdir -p "${ROOTFS_DIR}/etc/dayshield/logs"
 
 printf '  -> Creating /etc/wireguard directory\n'
 mkdir -p "${ROOTFS_DIR}/etc/wireguard"
@@ -203,9 +206,19 @@ mkdir -p \
 printf '  -> Creating /var/lib/dayshield directory tree\n'
 mkdir -p \
     "${ROOTFS_DIR}/var/lib/dayshield/aliases" \
+    "${ROOTFS_DIR}/var/lib/dayshield/ai" \
+    "${ROOTFS_DIR}/var/lib/dayshield/backups" \
+    "${ROOTFS_DIR}/var/lib/dayshield/captive_portal" \
+    "${ROOTFS_DIR}/var/lib/dayshield/certs" \
     "${ROOTFS_DIR}/var/lib/dayshield/config" \
     "${ROOTFS_DIR}/var/lib/dayshield/crowdsec" \
-    "${ROOTFS_DIR}/var/lib/dayshield/acme"
+    "${ROOTFS_DIR}/var/lib/dayshield/acme" \
+    "${ROOTFS_DIR}/var/lib/dayshield/dynamic_dns" \
+    "${ROOTFS_DIR}/var/lib/dayshield/kea" \
+    "${ROOTFS_DIR}/var/lib/dayshield/rulesets" \
+    "${ROOTFS_DIR}/var/lib/dayshield/unbound"
+chmod 700 "${ROOTFS_DIR}/var/lib/dayshield/certs"
+chmod 700 "${ROOTFS_DIR}/var/lib/dayshield/backups"
 # nft-ifaces.conf lives in /var so system-image refreshes never clobber user
 # interface assignments. The /etc symlink below makes nftables find it at the
 # path it has always included.
@@ -324,14 +337,11 @@ printf '  -> Installing hardened sshd_config\n'
 mkdir -p "${ROOTFS_DIR}/etc/ssh"
 cp "${CONFIG_DIR}/sshd_config" "${ROOTFS_DIR}/etc/ssh/sshd_config"
 
-# Copy DayShield config/certs placeholders
+# Copy DayShield config/certs placeholders to the persistent /var location.
 printf '  -> Copying config/dayshield skeleton\n'
-cp -r "${CONFIG_DIR}/dayshield/config/." "${ROOTFS_DIR}/etc/dayshield/config/"
-cp -r "${CONFIG_DIR}/dayshield/certs/."  "${ROOTFS_DIR}/etc/dayshield/certs/"
-# nft-ifaces.conf is stored in /var (image-update safe); expose it under /etc via
-# a symlink so /etc/nftables.conf can include it at its canonical path.
-ln -sf /var/lib/dayshield/config/nft-ifaces.conf \
-    "${ROOTFS_DIR}/etc/dayshield/config/nft-ifaces.conf"
+mkdir -p "${ROOTFS_DIR}/var/lib/dayshield/config" "${ROOTFS_DIR}/var/lib/dayshield/certs"
+cp -r "${CONFIG_DIR}/dayshield/config/." "${ROOTFS_DIR}/var/lib/dayshield/config/" 2>/dev/null || true
+cp -r "${CONFIG_DIR}/dayshield/certs/."  "${ROOTFS_DIR}/var/lib/dayshield/certs/"  2>/dev/null || true
 
 # ── systemd-networkd-wait-online - don't block boot ──────────────────────────
 # In installer mode there are no configured interfaces yet (wizard hasn't run),
