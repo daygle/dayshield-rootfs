@@ -28,22 +28,28 @@ ff02::2     ip6-allrouters
 EOF
 
 # ── /etc/fstab ────────────────────────────────────────────────────────────────
-# A minimal fstab must exist so systemd-remount-fs.service and local-fs.target
-# can operate correctly on the installed system. The installer is expected to
-# replace the LABEL values with real partition UUIDs after partitioning.
-printf '  -> Writing placeholder /etc/fstab\n'
+# Default fstab used by A/B rootfs updates.  Labels MUST match what the
+# installer (both installer-ui and the iso console installer) creates:
+#   DS_EFI         - EFI System Partition
+#   DAYSHIELD_BOOT - shared /boot partition (kernels + grub for both slots)
+#   DS_ROOT_A,B    - root slot partitions (mounted via kernel root= cmdline)
+#   DS_STATE       - /var (persistent across rootfs updates)
+#
+# Root mounts as /dev/root — systemd-fstab-generator resolves this from the
+# kernel's `root=LABEL=DS_ROOT_<A|B>` argument that GRUB passes per slot,
+# so the SAME fstab works in both slots.
+printf '  -> Writing /etc/fstab\n'
 cat > "${ROOTFS_DIR}/etc/fstab" <<'EOF'
 # /etc/fstab: static file system information.
-# NOTE: The installer replaces these entries with UUID= lines for both
-#       DAYSHIELD_ROOT (the deployment root filesystem mounted at /) and
-#       DAYSHIELD_STATE (/var persistent state)
-#       to support immutable rootfs + mutable runtime data separation.
+# Root is determined by the kernel root= cmdline (set by GRUB per A/B slot);
+# this entry is for fsck pass-ordering only.
 #
-# <file system>         <mount point>  <type>  <options>          <dump>  <pass>
-LABEL=DAYSHIELD_ROOT    /              ext4    defaults,noatime   0       1
-LABEL=DAYSHIELD_STATE   /var           ext4    defaults,noatime   0       2
-LABEL=DAYSHIELD_BOOT    /boot          ext4    defaults,noatime   0       2
-LABEL=DS_EFI            /boot/efi      vfat    umask=0077         0       2
+# <file system>          <mount point>  <type>  <options>          <dump>  <pass>
+/dev/root                /              ext4    defaults,noatime   0       1
+LABEL=DAYSHIELD_BOOT     /boot          ext4    defaults,noatime   0       2
+LABEL=DS_EFI             /boot/efi      vfat    umask=0077         0       2
+LABEL=DS_STATE           /var           ext4    defaults,noatime   0       2
+tmpfs                    /tmp           tmpfs   defaults,nosuid,nodev  0   0
 EOF
 
 # ── Journald persistence ─────────────────────────────────────────────────────
