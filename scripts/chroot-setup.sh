@@ -307,6 +307,72 @@ else
     printf '    Installed cloudflared from %s\n' "${_url}"
 fi
 
+# ── Caddy reverse proxy ───────────────────────────────────────────────────────
+printf '  -> Creating caddy system user and runtime directories\n'
+chroot "${ROOTFS_DIR}" getent group caddy >/dev/null 2>&1 || \
+    chroot "${ROOTFS_DIR}" groupadd --system caddy
+chroot "${ROOTFS_DIR}" getent passwd caddy >/dev/null 2>&1 || \
+    chroot "${ROOTFS_DIR}" useradd --system --gid caddy \
+        --home-dir /var/lib/caddy --shell /usr/sbin/nologin \
+        --comment "Caddy reverse proxy" caddy
+mkdir -p \
+    "${ROOTFS_DIR}/etc/caddy" \
+    "${ROOTFS_DIR}/var/lib/caddy"
+# /etc/caddy stays root-owned: dayshield-core (root) writes the Caddyfile and
+# the service only needs to read it. The data dir holds private key material
+# (ACME account + issued certs), so restrict it to the caddy user (0700).
+chroot "${ROOTFS_DIR}" chown caddy:caddy /var/lib/caddy
+chroot "${ROOTFS_DIR}" chmod 700 /var/lib/caddy
+
+printf '  -> Installing caddy binary from configured source\n'
+mkdir -p "${ROOTFS_DIR}/usr/bin"
+CADDY_TARGET="${ROOTFS_DIR}/usr/bin/caddy"
+_CADDY_DEFAULT_URL="https://caddyserver.com/api/download?os=linux&arch=amd64"
+if [ -n "${CADDY_PATH:-}" ] && [ -f "${CADDY_PATH}" ]; then
+    cp "${CADDY_PATH}" "${CADDY_TARGET}"
+    chmod 755 "${CADDY_TARGET}"
+    printf '    Installed caddy from CADDY_PATH=%s\n' "${CADDY_PATH}"
+elif [ -f "${CONFIG_DIR}/caddy/caddy" ]; then
+    cp "${CONFIG_DIR}/caddy/caddy" "${CADDY_TARGET}"
+    chmod 755 "${CADDY_TARGET}"
+    printf '    Installed caddy from config/caddy/caddy\n'
+else
+    _caddy_url="${CADDY_URL:-${_CADDY_DEFAULT_URL}}"
+    # Set CADDY_CHECKSUM_URL to a file containing the expected SHA256 to verify.
+    _caddy_cksum_url="${CADDY_CHECKSUM_URL:-}"
+    printf '    Downloading caddy from %s\n' "${_caddy_url}"
+    _caddy_tmp="$(mktemp)"
+    if ! wget -qO "${_caddy_tmp}" "${_caddy_url}"; then
+        printf 'ERROR: failed to download caddy from %s\n' "${_caddy_url}" >&2
+        rm -f "${_caddy_tmp}"
+        exit 1
+    fi
+    if [ -n "${_caddy_cksum_url}" ]; then
+        _caddy_cksum_tmp="$(mktemp)"
+        if wget -qO "${_caddy_cksum_tmp}" "${_caddy_cksum_url}"; then
+            _caddy_expected="$(awk '{print $1}' "${_caddy_cksum_tmp}")"
+            if [ -n "${_caddy_expected}" ]; then
+                _caddy_actual="$(sha256sum "${_caddy_tmp}" | awk '{print $1}')"
+                if [ "${_caddy_actual}" != "${_caddy_expected}" ]; then
+                    printf 'ERROR: caddy SHA256 mismatch\n  expected: %s\n  actual:   %s\n' "${_caddy_expected}" "${_caddy_actual}" >&2
+                    rm -f "${_caddy_tmp}" "${_caddy_cksum_tmp}"
+                    exit 1
+                fi
+                printf '    SHA256 verified: %s\n' "${_caddy_actual}"
+            else
+                printf 'WARNING: caddy checksum file empty; skipping verification\n' >&2
+            fi
+        else
+            printf 'WARNING: could not fetch caddy checksums from %s; skipping verification\n' "${_caddy_cksum_url}" >&2
+        fi
+        rm -f "${_caddy_cksum_tmp}"
+    fi
+    cp "${_caddy_tmp}" "${CADDY_TARGET}"
+    rm -f "${_caddy_tmp}"
+    chmod 755 "${CADDY_TARGET}"
+    printf '    Installed caddy from %s\n' "${_caddy_url}"
+fi
+
 # ── Install base configs ──────────────────────────────────────────────────────
 printf '  -> Installing sysctl.conf\n'
 cp "${CONFIG_DIR}/sysctl.conf" "${ROOTFS_DIR}/etc/sysctl.d/99-dayshield.conf"
@@ -378,6 +444,7 @@ for unit in \
     suricata.service \
     crowdsec.service \
     cloudflared.service \
+    caddy.service \
     wireguard.service \
     acme.service \
     acme.timer \

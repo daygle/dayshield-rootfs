@@ -89,6 +89,8 @@ for dir in \
     /var/lib/dayshield/images \
     /etc/cloudflared \
     /var/lib/cloudflared \
+    /etc/caddy \
+    /var/lib/caddy \
     /etc/unbound \
     /etc/nftables \
     /etc/kea \
