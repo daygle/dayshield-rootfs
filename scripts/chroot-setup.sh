@@ -318,7 +318,11 @@ chroot "${ROOTFS_DIR}" getent passwd caddy >/dev/null 2>&1 || \
 mkdir -p \
     "${ROOTFS_DIR}/etc/caddy" \
     "${ROOTFS_DIR}/var/lib/caddy"
-chroot "${ROOTFS_DIR}" chown -R caddy:caddy /var/lib/caddy /etc/caddy
+# /etc/caddy stays root-owned: dayshield-core (root) writes the Caddyfile and
+# the service only needs to read it. The data dir holds private key material
+# (ACME account + issued certs), so restrict it to the caddy user (0700).
+chroot "${ROOTFS_DIR}" chown caddy:caddy /var/lib/caddy
+chroot "${ROOTFS_DIR}" chmod 700 /var/lib/caddy
 
 printf '  -> Installing caddy binary from configured source\n'
 mkdir -p "${ROOTFS_DIR}/usr/bin"
