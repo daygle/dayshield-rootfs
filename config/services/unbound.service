@@ -8,8 +8,10 @@ ConditionKernelCommandLine=!installer
 
 [Service]
 Type=notify
-# Bootstrap DNSSEC trust anchor on first boot (noop if already present)
-ExecStartPre=/bin/sh -c 'mkdir -p /var/lib/unbound && if [ -x /usr/sbin/unbound-anchor ]; then /usr/sbin/unbound-anchor -a /var/lib/unbound/root.key || true; elif [ ! -s /var/lib/unbound/root.key ] && [ -f /usr/share/dns/root.key ]; then cp /usr/share/dns/root.key /var/lib/unbound/root.key || true; fi'
+# Bootstrap DNSSEC trust anchor only when missing. If the file is corrupt
+# (duplicate root-zone entries from a double unbound-anchor run across an A/B
+# update), remove it so unbound-anchor regenerates a clean copy.
+ExecStartPre=/bin/sh -c 'mkdir -p /var/lib/unbound; key=/var/lib/unbound/root.key; if [ -f "$key" ]; then cnt=$(grep -c "^\\. " "$key" 2>/dev/null || echo 0); if [ "${cnt:-0}" -gt 1 ]; then rm -f "$key"; fi; fi; if [ ! -s "$key" ]; then if [ -x /usr/sbin/unbound-anchor ]; then /usr/sbin/unbound-anchor -a "$key" || true; elif [ -f /usr/share/dns/root.key ]; then cp /usr/share/dns/root.key "$key" || true; fi; fi'
 ExecStartPre=/bin/sh -c 'chown -R unbound:unbound /var/lib/unbound 2>/dev/null || true'
 ExecStart=/usr/sbin/unbound -d
 ExecReload=/bin/kill -HUP $MAINPID
