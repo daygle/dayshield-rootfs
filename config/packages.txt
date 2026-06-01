@@ -73,6 +73,9 @@ suricata
 # crowdsec   # available via crowdsec APT repository, added post-build
 # cloudflared # installed from upstream release during rootfs build
 
+# Reverse proxy
+# caddy # installed from upstream release during rootfs build (see chroot-setup.sh)
+
 # TLS / certificates
 openssl
 certbot
