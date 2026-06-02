@@ -70,7 +70,8 @@ dns-root-data
 suricata
 
 # Firewall / threat intelligence
-# crowdsec   # available via crowdsec APT repository, added post-build
+# crowdsec   # installed from the official CrowdSec APT repository during the
+#            # rootfs build (see chroot-setup.sh); dayshield-core is the bouncer.
 # cloudflared # installed from upstream release during rootfs build
 
 # Reverse proxy

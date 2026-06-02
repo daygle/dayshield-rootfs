@@ -294,6 +294,7 @@ print_step "chroot-setup.sh"
 env ROOTFS_DIR="${ROOTFS_DIR}" \
     CONFIG_DIR="${CONFIG_DIR}" \
     REPO_DIR="${REPO_DIR}" \
+    SUITE="${SUITE}" \
     sh "${SCRIPT_DIR}/chroot-setup.sh"
 
 print_step "stamp-version"

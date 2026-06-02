@@ -1,6 +1,11 @@
 # Build output
 rootfs.tar.zst
 *.tar.zst
+*.squashfs
+*-manifest.json
+*.sha256
+# Core binary staged into the repo root before a build
+/dayshield-core
 
 # Local logs and temporary files
 /logs/
