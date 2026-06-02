@@ -487,6 +487,18 @@ else
     fail "missing crowdsec config.yaml"
 fi
 
+# The CrowdSec daemon binary is installed from the CrowdSec APT repo during the
+# build (unless CROWDSEC_SKIP was set). crowdsec.service is guarded by
+# ConditionPathExists=/usr/bin/crowdsec, so a missing binary leaves the engine
+# inert rather than failing — but the default build is expected to ship it.
+if [ -x "${ROOTFS_DIR}/usr/bin/crowdsec" ]; then
+    ok "crowdsec daemon installed (/usr/bin/crowdsec)"
+else
+    printf '  [WARN] crowdsec daemon not installed (/usr/bin/crowdsec missing);\n'
+    printf '         the CrowdSec engine will stay inert. Expected only when the\n'
+    printf '         rootfs was built with CROWDSEC_SKIP set.\n'
+fi
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 printf '\n'
 printf '==> Verification complete: %d passed, %d failed\n' "${PASS}" "${FAIL}"

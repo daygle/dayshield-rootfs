@@ -398,6 +398,95 @@ cp "${CONFIG_DIR}/suricata.yaml" "${ROOTFS_DIR}/etc/suricata/suricata.yaml"
 printf '  -> Creating /etc/chrony directory (for NTP timesyncd/chrony config)\n'
 mkdir -p "${ROOTFS_DIR}/etc/chrony"
 
+# ── CrowdSec security engine ──────────────────────────────────────────────────
+# CrowdSec is distributed as a Debian package (daemon + cscli + hub parsers)
+# from the official CrowdSec APT repository. dayshield-core acts as the bouncer
+# and queries the local LAPI, so the rootfs only needs the daemon present; the
+# service is left disabled (see enable-services.sh) for dayshield-core to
+# manage once a valid runtime configuration exists. Override the source with
+# CROWDSEC_DEB_PATH (a local .deb), CROWDSEC_APT_{URL,KEY_URL,SUITE}, or set
+# CROWDSEC_SKIP=1 to skip installation entirely.
+
+# Run the package's apt/dpkg work with the pseudo-filesystems mounted so
+# maintainer scripts behave, and tear them down on every exit path.
+_crowdsec_mount() {
+    mount -t proc  proc     "${ROOTFS_DIR}/proc"    2>/dev/null || true
+    mount -t sysfs sysfs    "${ROOTFS_DIR}/sys"     2>/dev/null || true
+    mount --bind   /dev     "${ROOTFS_DIR}/dev"     2>/dev/null || true
+    mount --bind   /dev/pts "${ROOTFS_DIR}/dev/pts" 2>/dev/null || true
+}
+_crowdsec_umount() {
+    umount "${ROOTFS_DIR}/dev/pts" 2>/dev/null || true
+    umount "${ROOTFS_DIR}/dev"     2>/dev/null || true
+    umount "${ROOTFS_DIR}/sys"     2>/dev/null || true
+    umount "${ROOTFS_DIR}/proc"    2>/dev/null || true
+}
+
+# Returns non-zero on any failure; the caller reports and aborts the build.
+_install_crowdsec() {
+    # Package maintainer scripts must not start services inside the chroot.
+    cat > "${ROOTFS_DIR}/usr/sbin/policy-rc.d" <<'EOF'
+#!/bin/sh
+exit 101
+EOF
+    chmod 755 "${ROOTFS_DIR}/usr/sbin/policy-rc.d"
+
+    if [ -n "${CROWDSEC_DEB_PATH:-}" ] && [ -f "${CROWDSEC_DEB_PATH}" ]; then
+        cp "${CROWDSEC_DEB_PATH}" "${ROOTFS_DIR}/tmp/crowdsec.deb"
+        chroot "${ROOTFS_DIR}" apt-get install -y --no-install-recommends /tmp/crowdsec.deb || return 1
+        rm -f "${ROOTFS_DIR}/tmp/crowdsec.deb"
+        printf '    Installed CrowdSec from CROWDSEC_DEB_PATH=%s\n' "${CROWDSEC_DEB_PATH}"
+    else
+        _cs_suite="${CROWDSEC_APT_SUITE:-${SUITE:-stable}}"
+        _cs_repo_url="${CROWDSEC_APT_URL:-https://packagecloud.io/crowdsec/crowdsec/debian}"
+        _cs_key_url="${CROWDSEC_APT_KEY_URL:-https://packagecloud.io/crowdsec/crowdsec/gpgkey}"
+        mkdir -p "${ROOTFS_DIR}/etc/apt/keyrings"
+        wget -qO "${ROOTFS_DIR}/etc/apt/keyrings/crowdsec.asc" "${_cs_key_url}" || {
+            printf 'ERROR: failed to fetch CrowdSec APT signing key from %s\n' "${_cs_key_url}" >&2
+            return 1
+        }
+        chmod 644 "${ROOTFS_DIR}/etc/apt/keyrings/crowdsec.asc"
+        printf 'deb [signed-by=/etc/apt/keyrings/crowdsec.asc] %s %s main\n' \
+            "${_cs_repo_url}" "${_cs_suite}" \
+            > "${ROOTFS_DIR}/etc/apt/sources.list.d/crowdsec.list"
+        chroot "${ROOTFS_DIR}" apt-get update || {
+            printf 'ERROR: apt-get update failed after adding the CrowdSec repo (suite=%s); override with CROWDSEC_APT_SUITE\n' "${_cs_suite}" >&2
+            return 1
+        }
+        chroot "${ROOTFS_DIR}" apt-get install -y --no-install-recommends crowdsec || {
+            printf 'ERROR: failed to install crowdsec package from %s (%s)\n' "${_cs_repo_url}" "${_cs_suite}" >&2
+            return 1
+        }
+        printf '    Installed CrowdSec from %s (%s)\n' "${_cs_repo_url}" "${_cs_suite}"
+    fi
+
+    [ -x "${ROOTFS_DIR}/usr/bin/crowdsec" ] || {
+        printf 'ERROR: crowdsec binary missing after install (/usr/bin/crowdsec)\n' >&2
+        return 1
+    }
+}
+
+if [ -n "${CROWDSEC_SKIP:-}" ]; then
+    printf '  -> Skipping CrowdSec install (CROWDSEC_SKIP set)\n'
+else
+    printf '  -> Installing CrowdSec security engine\n'
+    _crowdsec_mount
+    _crowdsec_rc=0
+    _install_crowdsec || _crowdsec_rc=1
+    rm -f "${ROOTFS_DIR}/usr/sbin/policy-rc.d"
+    _crowdsec_umount
+    if [ "${_crowdsec_rc}" -ne 0 ]; then
+        exit 1
+    fi
+    # Keep the DayShield contract: optional engines stay disabled at build time
+    # and dayshield-core enables crowdsec once the bouncer/LAPI is configured.
+    # Undo any enablement the package maintainer scripts may have created.
+    rm -f "${ROOTFS_DIR}/etc/systemd/system/multi-user.target.wants/crowdsec.service"
+fi
+
+# DayShield's config.yaml is authoritative and must overwrite the package
+# default; it references the profiles/credentials/simulation files the package
+# ships under /etc/crowdsec.
 printf '  -> Installing crowdsec.yaml\n'
 mkdir -p "${ROOTFS_DIR}/etc/crowdsec"
 cp "${CONFIG_DIR}/crowdsec.yaml" "${ROOTFS_DIR}/etc/crowdsec/config.yaml"
