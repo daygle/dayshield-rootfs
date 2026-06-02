@@ -399,12 +399,13 @@ printf '  -> Creating /etc/chrony directory (for NTP timesyncd/chrony config)\n'
 mkdir -p "${ROOTFS_DIR}/etc/chrony"
 
 # ── CrowdSec security engine ──────────────────────────────────────────────────
-# CrowdSec is distributed as a Debian package (daemon + cscli + hub parsers)
-# from the official CrowdSec APT repository. dayshield-core acts as the bouncer
-# and queries the local LAPI, so the rootfs only needs the daemon present; the
-# service is left disabled (see enable-services.sh) for dayshield-core to
-# manage once a valid runtime configuration exists. Override the source with
-# CROWDSEC_DEB_PATH (a local .deb), CROWDSEC_APT_{URL,KEY_URL,SUITE}, or set
+# CrowdSec is available as a Debian package (daemon + cscli + hub parsers).
+# dayshield-core acts as the bouncer and queries the local LAPI, so the rootfs
+# only needs the daemon present; the service is left disabled (see
+# enable-services.sh) for dayshield-core to manage once a valid runtime
+# configuration exists. By default, install from the configured Debian suite.
+# Override the source with CROWDSEC_DEB_PATH (a local .deb),
+# CROWDSEC_APT_{URL,KEY_URL,SUITE} for an external APT repository, or set
 # CROWDSEC_SKIP=1 to skip installation entirely.
 
 # Run the package's apt/dpkg work with the pseudo-filesystems mounted so
@@ -436,7 +437,10 @@ EOF
         chroot "${ROOTFS_DIR}" apt-get install -y --no-install-recommends /tmp/crowdsec.deb || return 1
         rm -f "${ROOTFS_DIR}/tmp/crowdsec.deb"
         printf '    Installed CrowdSec from CROWDSEC_DEB_PATH=%s\n' "${CROWDSEC_DEB_PATH}"
-    else
+    elif [ -n "${CROWDSEC_APT_URL:-}" ] || [ -n "${CROWDSEC_APT_KEY_URL:-}" ] || [ -n "${CROWDSEC_APT_SUITE:-}" ]; then
+        # External APT sources are opt-in. Packagecloud does not publish every
+        # Debian suite immediately, so the default path below stays on the
+        # Debian archive configured by mmdebstrap.
         _cs_suite="${CROWDSEC_APT_SUITE:-${SUITE:-stable}}"
         _cs_repo_url="${CROWDSEC_APT_URL:-https://packagecloud.io/crowdsec/crowdsec/debian}"
         _cs_key_url="${CROWDSEC_APT_KEY_URL:-https://packagecloud.io/crowdsec/crowdsec/gpgkey}"
@@ -450,7 +454,7 @@ EOF
             "${_cs_repo_url}" "${_cs_suite}" \
             > "${ROOTFS_DIR}/etc/apt/sources.list.d/crowdsec.list"
         chroot "${ROOTFS_DIR}" apt-get update || {
-            printf 'ERROR: apt-get update failed after adding the CrowdSec repo (suite=%s); override with CROWDSEC_APT_SUITE\n' "${_cs_suite}" >&2
+            printf 'ERROR: apt-get update failed after adding the CrowdSec repo (suite=%s); adjust CROWDSEC_APT_SUITE or unset CROWDSEC_APT_* to use Debian packages\n' "${_cs_suite}" >&2
             return 1
         }
         chroot "${ROOTFS_DIR}" apt-get install -y --no-install-recommends crowdsec || {
@@ -458,6 +462,18 @@ EOF
             return 1
         }
         printf '    Installed CrowdSec from %s (%s)\n' "${_cs_repo_url}" "${_cs_suite}"
+    else
+        _cs_suite="${SUITE:-unknown}"
+        chroot "${ROOTFS_DIR}" apt-get update || {
+            printf 'ERROR: apt-get update failed before installing CrowdSec from Debian suite %s\n' "${_cs_suite}" >&2
+            return 1
+        }
+        chroot "${ROOTFS_DIR}" apt-get install -y --no-install-recommends crowdsec || {
+            printf 'ERROR: failed to install crowdsec package from Debian suite %s\n' "${_cs_suite}" >&2
+            printf '       Set CROWDSEC_APT_* for an external repo or CROWDSEC_DEB_PATH for a local package.\n' >&2
+            return 1
+        }
+        printf '    Installed CrowdSec from Debian suite %s\n' "${_cs_suite}"
     fi
 
     [ -x "${ROOTFS_DIR}/usr/bin/crowdsec" ] || {
