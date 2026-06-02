@@ -271,9 +271,12 @@ else
     fi
     printf '    Downloading cloudflared from %s\n' "${_url}"
     _cf_tmp="$(mktemp)"
+    # shellcheck disable=SC2064
+    trap "rm -f '${_cf_tmp}'" EXIT
     if ! wget -qO "${_cf_tmp}" "${_url}"; then
         printf 'ERROR: failed to download cloudflared from %s\n' "${_url}" >&2
         rm -f "${_cf_tmp}"
+        trap - EXIT
         exit 1
     fi
     if [ -n "${_cksum_url}" ]; then
@@ -303,6 +306,7 @@ else
     fi
     cp "${_cf_tmp}" "${CLOUDFLARED_TARGET}"
     rm -f "${_cf_tmp}"
+    trap - EXIT
     chmod 755 "${CLOUDFLARED_TARGET}"
     printf '    Installed cloudflared from %s\n' "${_url}"
 fi
@@ -342,9 +346,12 @@ else
     _caddy_cksum_url="${CADDY_CHECKSUM_URL:-}"
     printf '    Downloading caddy from %s\n' "${_caddy_url}"
     _caddy_tmp="$(mktemp)"
+    # shellcheck disable=SC2064
+    trap "rm -f '${_caddy_tmp}'" EXIT
     if ! wget -qO "${_caddy_tmp}" "${_caddy_url}"; then
         printf 'ERROR: failed to download caddy from %s\n' "${_caddy_url}" >&2
         rm -f "${_caddy_tmp}"
+        trap - EXIT
         exit 1
     fi
     if [ -n "${_caddy_cksum_url}" ]; then
@@ -369,6 +376,7 @@ else
     fi
     cp "${_caddy_tmp}" "${CADDY_TARGET}"
     rm -f "${_caddy_tmp}"
+    trap - EXIT
     chmod 755 "${CADDY_TARGET}"
     printf '    Installed caddy from %s\n' "${_caddy_url}"
 fi
