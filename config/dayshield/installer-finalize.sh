@@ -228,8 +228,8 @@ else
 fi
 
 # nftables interface mapping — written to /var so system-image refreshes
-# never clobber user interface assignments. /etc/dayshield/config/nft-ifaces.conf
-# is a symlink to this file (created during rootfs build).
+# never clobber user interface assignments. /etc/nftables.conf includes this
+# file directly from /var.
 _effective_wan_if="${wan_iface:-lo}"
 [[ "${wan_type}" == "pppoe" ]] && _effective_wan_if="ppp0"
 mkdir -p "${target}/var/lib/dayshield/config"

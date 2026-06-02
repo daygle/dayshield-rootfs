@@ -487,8 +487,8 @@ EOF
 }
 
 _apply_nftables_config() {
-    # Write to /var (image-update safe); /etc/dayshield/config/nft-ifaces.conf is a
-    # symlink to this path so nftables finds it at its canonical include path.
+    # Write to /var (image-update safe); /etc/nftables.conf includes this path
+    # directly so the assignments survive every rootfs A/B update.
     local nft_ifaces="/var/lib/dayshield/config/nft-ifaces.conf"
     mkdir -p /var/lib/dayshield/config
     # PPPoE traffic exits via ppp0, not the physical WAN interface.

@@ -77,15 +77,15 @@ fi
 # ── Required directories ──────────────────────────────────────────────────────
 banner "Required directories"
 for dir in \
-    /etc/dayshield/config \
-    /etc/dayshield/certs \
     /etc/dayshield/logs \
     /boot/dayshield/images \
     /boot/dayshield/metadata \
     /var/lib/dayshield/aliases \
     /var/lib/dayshield/config \
+    /var/lib/dayshield/certs \
     /var/lib/dayshield/crowdsec \
     /var/lib/dayshield/acme \
+    /var/lib/dayshield/unbound \
     /var/lib/dayshield/images \
     /etc/cloudflared \
     /var/lib/cloudflared \
@@ -130,18 +130,17 @@ else
     fail "rootfs image layout manifest is missing initramfs-image semantics"
 fi
 
-# nft-ifaces.conf must be a symlink in /etc pointing to /var so image-based
-# updates cannot clobber user interface assignments.
-_nft_symlink="${ROOTFS_DIR}/etc/dayshield/config/nft-ifaces.conf"
-if [ -L "${_nft_symlink}" ]; then
-    ok "nft-ifaces.conf is a symlink in /etc/dayshield/config/ (image-update safe)"
-else
-    fail "/etc/dayshield/config/nft-ifaces.conf must be a symlink to /var/lib/dayshield/config/nft-ifaces.conf"
-fi
+# nft-ifaces.conf lives under /var so image-based updates cannot clobber user
+# interface assignments. nftables.conf includes it directly from /var.
 if [ -f "${ROOTFS_DIR}/var/lib/dayshield/config/nft-ifaces.conf" ]; then
     ok "nft-ifaces.conf placeholder exists in /var/lib/dayshield/config/"
 else
     fail "missing /var/lib/dayshield/config/nft-ifaces.conf placeholder"
+fi
+if grep -Eq '^[[:space:]]*include[[:space:]]+"/var/lib/dayshield/config/nft-ifaces.conf"' "${ROOTFS_DIR}/etc/nftables.conf" 2>/dev/null; then
+    ok "nftables.conf includes nft-ifaces.conf from the persistent /var path"
+else
+    fail "nftables.conf does not include /var/lib/dayshield/config/nft-ifaces.conf"
 fi
 
 # ── Required service unit files ───────────────────────────────────────────────
@@ -434,6 +433,22 @@ if [ -f "${UNBOUND_CONF}" ]; then
         ok "unbound IPv6 disabled by default (do-ip6: no)"
     else
         fail "unbound do-ip6 not set to no"
+    fi
+    # Every include: target must exist or unbound fails to start / validate.
+    _missing_include=""
+    while IFS= read -r _inc; do
+        [ -n "${_inc}" ] || continue
+        case "${_inc}" in
+            *[*?]*) continue ;;  # globbed includes may legitimately match nothing
+        esac
+        [ -e "${ROOTFS_DIR}${_inc}" ] || _missing_include="${_inc}"
+    done <<EOF
+$(sed -n 's/^[[:space:]]*include:[[:space:]]*"\(.*\)".*/\1/p' "${UNBOUND_CONF}")
+EOF
+    if [ -z "${_missing_include}" ]; then
+        ok "all unbound include: targets exist"
+    else
+        fail "unbound include target missing: ${_missing_include}"
     fi
     # Validate config if unbound-checkconf is available
     if command -v unbound-checkconf >/dev/null 2>&1; then

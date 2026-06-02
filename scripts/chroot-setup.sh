@@ -220,8 +220,8 @@ mkdir -p \
 chmod 700 "${ROOTFS_DIR}/var/lib/dayshield/certs"
 chmod 700 "${ROOTFS_DIR}/var/lib/dayshield/backups"
 # nft-ifaces.conf lives in /var so system-image refreshes never clobber user
-# interface assignments. The /etc symlink below makes nftables find it at the
-# path it has always included.
+# interface assignments. nftables.conf includes this path directly, so no
+# /etc symlink is required.
 cat > "${ROOTFS_DIR}/var/lib/dayshield/config/nft-ifaces.conf" <<'EOF'
 # /var/lib/dayshield/config/nft-ifaces.conf — interface definitions for nftables.
 # Written by the installer / console wizard when interfaces are assigned.
@@ -384,9 +384,12 @@ cp "${CONFIG_DIR}/nftables.conf" "${ROOTFS_DIR}/etc/nftables.conf"
 printf '  -> Installing unbound.conf\n'
 mkdir -p "${ROOTFS_DIR}/etc/unbound"
 cp "${CONFIG_DIR}/unbound.conf" "${ROOTFS_DIR}/etc/unbound/unbound.conf"
-# Base unbound.conf includes this DayShield-managed file. Keep it present so
-# config validation and first boot do not fail before the DNS engine rewrites it.
-: > "${ROOTFS_DIR}/etc/dayshield/unbound.conf"
+# Base unbound.conf includes this DayShield-managed file from /var so DNS
+# settings survive every rootfs A/B update. Keep an empty placeholder present
+# so config validation and first boot do not fail before the DNS engine
+# rewrites it. The path MUST match the include in config/unbound.conf.
+mkdir -p "${ROOTFS_DIR}/var/lib/dayshield/unbound"
+: > "${ROOTFS_DIR}/var/lib/dayshield/unbound/dayshield.conf"
 
 printf '  -> Installing suricata.yaml\n'
 mkdir -p "${ROOTFS_DIR}/etc/suricata"
