@@ -477,6 +477,11 @@ cp "${CONFIG_DIR}/dayshield/disable-offloads.sh" \
     "${ROOTFS_DIR}/usr/local/lib/dayshield/disable-offloads.sh"
 chmod 755 "${ROOTFS_DIR}/usr/local/lib/dayshield/disable-offloads.sh"
 
+printf '  -> Installing unbound trust-anchor prepare helper\n'
+cp "${CONFIG_DIR}/dayshield/unbound-anchor-prepare.sh" \
+    "${ROOTFS_DIR}/usr/local/lib/dayshield/unbound-anchor-prepare.sh"
+chmod 755 "${ROOTFS_DIR}/usr/local/lib/dayshield/unbound-anchor-prepare.sh"
+
 # Post-login menu hook for installed system (root local console logins only)
 printf '  -> Installing console login profile hook\n'
 mkdir -p "${ROOTFS_DIR}/etc/profile.d"
