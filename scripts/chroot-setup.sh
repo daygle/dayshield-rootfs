@@ -281,6 +281,8 @@ else
     fi
     if [ -n "${_cksum_url}" ]; then
         _cksum_tmp="$(mktemp)"
+        # shellcheck disable=SC2064
+        trap "rm -f '${_cf_tmp}' '${_cksum_tmp}'" EXIT
         if wget -qO "${_cksum_tmp}" "${_cksum_url}"; then
             # .sha256 files contain "hash  filename" or just "hash"
             _cf_expected="$(awk '{print $1}' "${_cksum_tmp}")"
@@ -356,6 +358,8 @@ else
     fi
     if [ -n "${_caddy_cksum_url}" ]; then
         _caddy_cksum_tmp="$(mktemp)"
+        # shellcheck disable=SC2064
+        trap "rm -f '${_caddy_tmp}' '${_caddy_cksum_tmp}'" EXIT
         if wget -qO "${_caddy_cksum_tmp}" "${_caddy_cksum_url}"; then
             _caddy_expected="$(awk '{print $1}' "${_caddy_cksum_tmp}")"
             if [ -n "${_caddy_expected}" ]; then
