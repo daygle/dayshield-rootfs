@@ -232,13 +232,6 @@ else
 fi
 
 if [ -f "${DS_ENGINE_PATHS}" ] && \
-   grep -Eq '^[[:space:]]*ReadWritePaths[[:space:]]*=[[:space:]]*/etc/kea[[:space:]]*$' "${DS_ENGINE_PATHS}"; then
-    ok "dayshield.service can write the packaged Kea compatibility config path"
-else
-    fail "dayshield.service sandbox missing ReadWritePaths=/etc/kea"
-fi
-
-if [ -f "${DS_ENGINE_PATHS}" ] && \
    grep -Eq '^[[:space:]]*ReadWritePaths[[:space:]]*=[[:space:]]*/etc/ssh[[:space:]]*$' "${DS_ENGINE_PATHS}"; then
     ok "dayshield.service can write SSH runtime config"
 else
@@ -268,36 +261,18 @@ fi
 
 KEA4_GUARD="${ROOTFS_DIR}/etc/systemd/system/kea-dhcp4-server.service.d/dayshield-guard.conf"
 if [ -f "${KEA4_GUARD}" ] && \
-   grep -Eq '^[[:space:]]*ConditionPathExists[[:space:]]*=[[:space:]]*/etc/kea/kea-dhcp4\.conf[[:space:]]*$' "${KEA4_GUARD}"; then
-    ok "kea-dhcp4-server is guarded on the packaged compatibility config path"
+   grep -Eq '^[[:space:]]*ConditionPathExists[[:space:]]*=[[:space:]]*/var/lib/dayshield/kea/kea-dhcp4\.conf[[:space:]]*$' "${KEA4_GUARD}"; then
+    ok "kea-dhcp4-server is guarded on the canonical DayShield config path"
 else
-    fail "kea-dhcp4-server missing guard for /etc/kea/kea-dhcp4.conf"
+    fail "kea-dhcp4-server missing guard for /var/lib/dayshield/kea/kea-dhcp4.conf"
 fi
 
 KEA6_GUARD="${ROOTFS_DIR}/etc/systemd/system/kea-dhcp6-server.service.d/dayshield-guard.conf"
 if [ -f "${KEA6_GUARD}" ] && \
-   grep -Eq '^[[:space:]]*ConditionPathExists[[:space:]]*=[[:space:]]*/etc/kea/kea-dhcp6\.conf[[:space:]]*$' "${KEA6_GUARD}"; then
-    ok "kea-dhcp6-server is guarded on the packaged compatibility config path"
+   grep -Eq '^[[:space:]]*ConditionPathExists[[:space:]]*=[[:space:]]*/var/lib/dayshield/kea/kea-dhcp6\.conf[[:space:]]*$' "${KEA6_GUARD}"; then
+    ok "kea-dhcp6-server is guarded on the canonical DayShield config path"
 else
-    fail "kea-dhcp6-server missing guard for /etc/kea/kea-dhcp6.conf"
-fi
-
-INSTALLER_FINALIZE="${ROOTFS_DIR}/usr/local/lib/dayshield/installer-finalize.sh"
-if [ -f "${INSTALLER_FINALIZE}" ] && \
-   grep -Eq 'cp[[:space:]]+.*etc/dayshield/kea-dhcp4\.conf.*etc/kea/kea-dhcp4\.conf' "${INSTALLER_FINALIZE}"; then
-    ok "installer finalization mirrors Kea DHCPv4 config to packaged path"
-else
-    fail "installer finalization does not mirror /etc/dayshield/kea-dhcp4.conf to /etc/kea/kea-dhcp4.conf"
-fi
-
-CONSOLE_WIZARD="${ROOTFS_DIR}/usr/local/bin/dayshield-console"
-if [ -f "${CONSOLE_WIZARD}" ] && \
-   grep -q '/etc/dayshield/kea-dhcp4.conf' "${CONSOLE_WIZARD}" && \
-   grep -q '/etc/kea/kea-dhcp4.conf' "${CONSOLE_WIZARD}" && \
-   grep -Eq 'cp[[:space:]]+.*kea_conf.*kea_compat_conf' "${CONSOLE_WIZARD}"; then
-    ok "console wizard mirrors Kea DHCPv4 config to packaged path"
-else
-    fail "console wizard does not mirror /etc/dayshield/kea-dhcp4.conf to /etc/kea/kea-dhcp4.conf"
+    fail "kea-dhcp6-server missing guard for /var/lib/dayshield/kea/kea-dhcp6.conf"
 fi
 
 # ── dayshield-core binary ─────────────────────────────────────────────────────

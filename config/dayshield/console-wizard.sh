@@ -373,11 +373,9 @@ _ipv4_to_int() {
 
 _apply_lan_dhcp_config() {
     local kea_conf="/var/lib/dayshield/kea/kea-dhcp4.conf"
-    local kea_compat_conf="/etc/kea/kea-dhcp4.conf"
 
     if [[ "${LAN_DHCP_ENABLE}" == "yes" ]] && [[ -n "${LAN_IFACE}" ]] && [[ -n "${LAN_IP}" ]] && [[ -n "${LAN_DHCP_START}" ]] && [[ -n "${LAN_DHCP_END}" ]]; then
-        mkdir -p /var/lib/dayshield/kea /etc/kea /var/log/kea /var/lib/kea
-        chmod 755 /etc/kea
+        mkdir -p /var/lib/dayshield/kea /var/log/kea /var/lib/kea
 
         # Compute network address for Kea subnet (e.g. 192.168.1.0/24)
         local prefix="${LAN_PREFIX:-24}"
@@ -446,8 +444,6 @@ _apply_lan_dhcp_config() {
 }
 EOF
     chmod 644 "${kea_conf}"
-    cp "${kea_conf}" "${kea_compat_conf}"
-    chmod 644 "${kea_compat_conf}"
 
     cat > "/var/lib/dayshield/kea/kea-dhcp6.conf" <<'EOF'
 {
@@ -473,9 +469,6 @@ EOF
   }
 }
 EOF
-    cp "/var/lib/dayshield/kea/kea-dhcp6.conf" "/etc/kea/kea-dhcp6.conf"
-    chmod 644 "/etc/kea/kea-dhcp6.conf"
-
     systemctl enable kea-dhcp4-server >/dev/null 2>&1 || true
     systemctl restart kea-dhcp4-server >/dev/null 2>&1 || true
     systemctl disable kea-dhcp6-server >/dev/null 2>&1 || true

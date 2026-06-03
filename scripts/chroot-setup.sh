@@ -100,17 +100,16 @@ ln -sf /dev/null "${ROOTFS_DIR}/etc/systemd/system/unbound-resolvconf.service"
 mkdir -p "${ROOTFS_DIR}/etc/systemd/system-generators"
 ln -sf /dev/null "${ROOTFS_DIR}/etc/systemd/system-generators/systemd-ssh-generator"
 
-# Kea DHCP should only start when the packaged config path it actually reads
-# exists. DayShield keeps /etc/dayshield/*.conf as canonical, but the distro
-# Kea units still load /etc/kea/*.conf and will fail hard if the compatibility
-# file is missing.
+# Kea DHCP should only start when the canonical DayShield config path exists.
 mkdir -p "${ROOTFS_DIR}/etc/systemd/system/kea-dhcp4-server.service.d"
 cat > "${ROOTFS_DIR}/etc/systemd/system/kea-dhcp4-server.service.d/dayshield-guard.conf" <<'EOF'
 [Unit]
 ConditionKernelCommandLine=!installer
-ConditionPathExists=/etc/kea/kea-dhcp4.conf
+ConditionPathExists=/var/lib/dayshield/kea/kea-dhcp4.conf
 
 [Service]
+ExecStart=
+ExecStart=/usr/sbin/kea-dhcp4 -c /var/lib/dayshield/kea/kea-dhcp4.conf
 ConfigurationDirectoryMode=755
 EOF
 
@@ -118,17 +117,18 @@ mkdir -p "${ROOTFS_DIR}/etc/systemd/system/kea-dhcp6-server.service.d"
 cat > "${ROOTFS_DIR}/etc/systemd/system/kea-dhcp6-server.service.d/dayshield-guard.conf" <<'EOF'
 [Unit]
 ConditionKernelCommandLine=!installer
-ConditionPathExists=/etc/kea/kea-dhcp6.conf
+ConditionPathExists=/var/lib/dayshield/kea/kea-dhcp6.conf
 
 [Service]
+ExecStart=
+ExecStart=/usr/sbin/kea-dhcp6 -c /var/lib/dayshield/kea/kea-dhcp6.conf
 ConfigurationDirectoryMode=755
 EOF
 
 mkdir -p \
-    "${ROOTFS_DIR}/etc/dayshield" "${ROOTFS_DIR}/etc/kea" \
+    "${ROOTFS_DIR}/etc/dayshield" \
     "${ROOTFS_DIR}/var/log/kea" "${ROOTFS_DIR}/var/log/dayshield" \
     "${ROOTFS_DIR}/var/lib/kea" "${ROOTFS_DIR}/var/lib/dayshield/kea"
-chmod 755 "${ROOTFS_DIR}/etc/kea"
 cat > "${ROOTFS_DIR}/var/lib/dayshield/kea/kea-dhcp4.conf" <<'EOF'
 {
   "Dhcp4": {
@@ -154,8 +154,6 @@ cat > "${ROOTFS_DIR}/var/lib/dayshield/kea/kea-dhcp4.conf" <<'EOF'
 }
 EOF
 chmod 644 "${ROOTFS_DIR}/var/lib/dayshield/kea/kea-dhcp4.conf"
-cp "${ROOTFS_DIR}/var/lib/dayshield/kea/kea-dhcp4.conf" "${ROOTFS_DIR}/etc/kea/kea-dhcp4.conf"
-chmod 644 "${ROOTFS_DIR}/etc/kea/kea-dhcp4.conf"
 
 cat > "${ROOTFS_DIR}/var/lib/dayshield/kea/kea-dhcp6.conf" <<'EOF'
 {
@@ -182,8 +180,6 @@ cat > "${ROOTFS_DIR}/var/lib/dayshield/kea/kea-dhcp6.conf" <<'EOF'
 }
 EOF
 chmod 644 "${ROOTFS_DIR}/var/lib/dayshield/kea/kea-dhcp6.conf"
-cp "${ROOTFS_DIR}/var/lib/dayshield/kea/kea-dhcp6.conf" "${ROOTFS_DIR}/etc/kea/kea-dhcp6.conf"
-chmod 644 "${ROOTFS_DIR}/etc/kea/kea-dhcp6.conf"
 
 # ── DayShield directory layout ───────────────────────────────────────────────
 # Only build-time artefacts live under /etc/dayshield/ (version stamp,
