@@ -258,13 +258,18 @@ fi
 
 # DayShield network.conf - written to /var so it survives A/B rootfs updates.
 mkdir -p "${target}/var/lib/dayshield"
+if [[ -n "${dhcp_start}" && -n "${dhcp_end}" ]]; then
+    lan_dhcp_enable=yes
+else
+    lan_dhcp_enable=no
+fi
 cat > "${target}/var/lib/dayshield/network.conf" <<EOF
 WAN_IFACE=${wan_iface}
 WAN_TYPE=${wan_type}
 LAN_IFACE=${lan_iface}
 LAN_IP=${lan_ip}
 LAN_PREFIX=${lan_prefix}
-LAN_DHCP_ENABLE=yes
+LAN_DHCP_ENABLE=${lan_dhcp_enable}
 LAN_DHCP_START=${dhcp_start}
 LAN_DHCP_END=${dhcp_end}
 EOF

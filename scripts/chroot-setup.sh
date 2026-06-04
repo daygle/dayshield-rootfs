@@ -580,6 +580,10 @@ printf '  -> Installing dayshield-console\n'
 cp "${CONFIG_DIR}/dayshield/console-wizard.sh" \
     "${ROOTFS_DIR}/usr/local/bin/dayshield-console"
 chmod 755 "${ROOTFS_DIR}/usr/local/bin/dayshield-console"
+mkdir -p "${ROOTFS_DIR}/usr/local/lib/dayshield"
+cp "${CONFIG_DIR}/dayshield/console-wizard.sh" \
+    "${ROOTFS_DIR}/usr/local/lib/dayshield/console-wizard.sh"
+chmod 755 "${ROOTFS_DIR}/usr/local/lib/dayshield/console-wizard.sh"
 
 # Shared installer finalization path for console/web installers
 printf '  -> Installing shared installer finalization script\n'
