@@ -34,9 +34,15 @@ fi
 if [ ! -s "$ANCHOR" ]; then
     if [ -x /usr/sbin/unbound-anchor ]; then
         /usr/sbin/unbound-anchor -a "$ANCHOR" || true
-    elif [ -f /usr/share/dns/root.key ]; then
-        cp /usr/share/dns/root.key "$ANCHOR" || true
     fi
+fi
+
+# If unbound-anchor was unavailable or failed (e.g. no network on first boot),
+# seed from the static key shipped by the dns-root-data package. This must be a
+# separate check — not an elif — so it runs even when unbound-anchor exists but
+# exits non-zero.
+if [ ! -s "$ANCHOR" ] && [ -f /usr/share/dns/root.key ]; then
+    cp /usr/share/dns/root.key "$ANCHOR" || true
 fi
 
 chown -R unbound:unbound /var/lib/unbound 2>/dev/null || true
