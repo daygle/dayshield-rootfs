@@ -136,20 +136,20 @@ print(network.network_address)
 PY
     )"
 else
-    lan_net="$({
-        awk -v ip="${lan_ip}" -v prefix="${lan_prefix}" 'BEGIN {
+    lan_net="$({{
+        awk -v ip="${lan_ip}" -v prefix="${lan_prefix}" 'BEGIN {{
             split(ip, oct, ".")
-            if (length(oct) != 4) {
+            if (length(oct) != 4) {{
                 exit 1
-            }
-            for (i = 1; i <= 4; i++) {
-                if (oct[i] !~ /^[0-9]+$/ || oct[i] < 0 || oct[i] > 255) {
+            }}
+            for (i = 1; i <= 4; i++) {{
+                if (oct[i] !~ /^[0-9]+$/ || oct[i] < 0 || oct[i] > 255) {{
                     exit 1
-                }
-            }
-            if (prefix < 0 || prefix > 32) {
+                }}
+            }}
+            if (prefix < 0 || prefix > 32) {{
                 exit 1
-            }
+            }}
 
             ipn = oct[1] * 16777216 + oct[2] * 65536 + oct[3] * 256 + oct[4]
             block = (prefix == 32) ? 1 : (2 ^ (32 - prefix))
@@ -160,11 +160,11 @@ else
             o3 = int(net / 256) % 256
             o4 = net % 256
             printf "%d.%d.%d.%d", o1, o2, o3, o4
-        }'
-    })" || {
+        }}'
+    }})" || {{
         _fin_err "failed to calculate LAN network for ${lan_ip}/${lan_prefix}"
         exit 1
-    }
+    }}
 fi
 subnet_cidr="${lan_net}/${lan_prefix}"
 
@@ -338,12 +338,11 @@ LinkLocalAddressing=no
 EOF
 
 # Kea DHCPv4 — canonical config lives on /var so DHCP survives A/B rootfs
-# updates.  /etc/kea/ gets a copy because the Kea daemon reads from there.
+# updates.
 mkdir -p \
-    "${target}/etc/kea" "${target}/var/lib/kea" \
+    "${target}/var/lib/kea" \
     "${target}/var/log/kea" "${target}/var/log/dayshield" \
     "${target}/var/lib/dayshield/kea"
-chmod 755 "${target}/etc/kea"
 cat > "${target}/var/lib/dayshield/kea/kea-dhcp4.conf" <<EOF
 {
   "Dhcp4": {
@@ -375,8 +374,6 @@ cat > "${target}/var/lib/dayshield/kea/kea-dhcp4.conf" <<EOF
 }
 EOF
 chmod 644 "${target}/var/lib/dayshield/kea/kea-dhcp4.conf"
-cp "${target}/var/lib/dayshield/kea/kea-dhcp4.conf" "${target}/etc/kea/kea-dhcp4.conf"
-chmod 644 "${target}/etc/kea/kea-dhcp4.conf"
 
 cat > "${target}/var/lib/dayshield/kea/kea-dhcp6.conf" <<'EOF'
 {
@@ -403,8 +400,6 @@ cat > "${target}/var/lib/dayshield/kea/kea-dhcp6.conf" <<'EOF'
 }
 EOF
 chmod 644 "${target}/var/lib/dayshield/kea/kea-dhcp6.conf"
-cp "${target}/var/lib/dayshield/kea/kea-dhcp6.conf" "${target}/etc/kea/kea-dhcp6.conf"
-chmod 644 "${target}/etc/kea/kea-dhcp6.conf"
 
 # Unbound DNS
 mkdir -p "${target}/etc/unbound" "${target}/var/lib/unbound"
@@ -575,7 +570,6 @@ ReadWritePaths=/etc/unbound
 ReadWritePaths=/etc/chrony
 ReadWritePaths=/etc/systemd
 ReadWritePaths=/etc/suricata
-ReadWritePaths=/etc/kea
 ReadWritePaths=/etc/dhcp
 ReadWritePaths=/var/lib/kea
 ReadWritePaths=/var/lib/dhcp

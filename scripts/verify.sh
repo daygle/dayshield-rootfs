@@ -93,7 +93,6 @@ for dir in \
     /var/lib/caddy \
     /etc/unbound \
     /etc/nftables \
-    /etc/kea \
     /var/lib/kea \
     /var/log/kea \
     /var/log/dayshield \
@@ -266,6 +265,9 @@ if [ -f "${KEA4_GUARD}" ] && \
 else
     fail "kea-dhcp4-server missing guard for /var/lib/dayshield/kea/kea-dhcp4.conf"
 fi
+grep -Eq '^[[:space:]]*ExecStart[[:space:]]*=[[:space:]]*/usr/sbin/kea-dhcp4 -c /var/lib/dayshield/kea/kea-dhcp4\.conf[[:space:]]*$' "${KEA4_GUARD}" && \
+    ok "kea-dhcp4-server drop-in overrides ExecStart to load canonical config" || \
+    fail "kea-dhcp4-server drop-in missing ExecStart override for /var/lib/dayshield/kea/kea-dhcp4.conf"
 
 KEA6_GUARD="${ROOTFS_DIR}/etc/systemd/system/kea-dhcp6-server.service.d/dayshield-guard.conf"
 if [ -f "${KEA6_GUARD}" ] && \
@@ -274,6 +276,9 @@ if [ -f "${KEA6_GUARD}" ] && \
 else
     fail "kea-dhcp6-server missing guard for /var/lib/dayshield/kea/kea-dhcp6.conf"
 fi
+grep -Eq '^[[:space:]]*ExecStart[[:space:]]*=[[:space:]]*/usr/sbin/kea-dhcp6 -c /var/lib/dayshield/kea/kea-dhcp6\.conf[[:space:]]*$' "${KEA6_GUARD}" && \
+    ok "kea-dhcp6-server drop-in overrides ExecStart to load canonical config" || \
+    fail "kea-dhcp6-server drop-in missing ExecStart override for /var/lib/dayshield/kea/kea-dhcp6.conf"
 
 # ── dayshield-core binary ─────────────────────────────────────────────────────
 banner "dayshield-core binary"
