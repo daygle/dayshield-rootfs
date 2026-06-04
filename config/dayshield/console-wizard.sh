@@ -1292,7 +1292,14 @@ _inst_partition() {
     _inst_info "Wiping existing signatures on /dev/${dev} ..."
     wipefs -a "/dev/${dev}" >/dev/null 2>&1 || true
 
-    _inst_info "Creating GPT layout (BIOS + EFI + shared boot + system root + persistent state) ..."
+    # Layout matches the web installer (partition.sh):
+    #   1: BIOS grub  1MiB-2MiB
+    #   2: DS_EFI     2MiB-514MiB     (512 MiB, FAT32)
+    #   3: DAYSHIELD_BOOT 514MiB-2562MiB (2 GiB, ext4, shared /boot)
+    #   4: DS_ROOT_A  2562MiB-7682MiB (5 GiB, ext4, active install slot)
+    #   5: DS_ROOT_B  7682MiB-12802MiB (5 GiB, ext4, rollback slot)
+    #   6: DS_STATE   12802MiB-100%   (ext4, persistent /var)
+    _inst_info "Creating GPT layout (BIOS + EFI + shared boot + A/B root + persistent state) ..."
     if command -v parted >/dev/null 2>&1; then
         parted -s "/dev/${dev}" \
             mklabel gpt \
@@ -1300,9 +1307,10 @@ _inst_partition() {
             set 1 bios_grub on \
             mkpart primary fat32 2MiB 514MiB \
             set 2 esp on \
-            mkpart primary ext4 514MiB 1538MiB \
-            mkpart primary ext4 1538MiB 50% \
-            mkpart primary ext4 50% 100% >/dev/null 2>&1 || { _inst_err "parted failed."; return 1; }
+            mkpart primary ext4 514MiB 2562MiB \
+            mkpart primary ext4 2562MiB 7682MiB \
+            mkpart primary ext4 7682MiB 12802MiB \
+            mkpart primary ext4 12802MiB 100% >/dev/null 2>&1 || { _inst_err "parted failed."; return 1; }
     else
         _inst_err "parted was not found."
         return 1
@@ -1313,7 +1321,7 @@ _inst_partition() {
     local pfx
     case "$dev" in nvme*|mmcblk*) pfx="${dev}p" ;; *) pfx="${dev}" ;; esac
     local waited=0
-    while ! [[ -b "/dev/${pfx}2" ]] || ! [[ -b "/dev/${pfx}3" ]] || ! [[ -b "/dev/${pfx}4" ]] || ! [[ -b "/dev/${pfx}5" ]]; do
+    while ! [[ -b "/dev/${pfx}2" ]] || ! [[ -b "/dev/${pfx}3" ]] || ! [[ -b "/dev/${pfx}4" ]] || ! [[ -b "/dev/${pfx}5" ]] || ! [[ -b "/dev/${pfx}6" ]]; do
         sleep 1; waited=$(( waited + 1 ))
         [[ ${waited} -ge 10 ]] && { _inst_err "Partition nodes did not appear."; return 1; }
     done
@@ -1323,7 +1331,7 @@ _inst_partition() {
 _inst_format() {
     local dev="$1" pfx
     case "$dev" in nvme*|mmcblk*) pfx="${dev}p" ;; *) pfx="${dev}" ;; esac
-    local efi="/dev/${pfx}2" boot="/dev/${pfx}3" sysroot="/dev/${pfx}4" state="/dev/${pfx}5"
+    local efi="/dev/${pfx}2" boot="/dev/${pfx}3" roota="/dev/${pfx}4" rootb="/dev/${pfx}5" state="/dev/${pfx}6"
 
     _inst_info "Formatting ${efi} as FAT32 (EFI) ..."
     mkfs.fat -F32 -n "DS_EFI" "${efi}" >/dev/null 2>&1 || { _inst_err "mkfs.fat failed."; return 1; }
@@ -1332,12 +1340,16 @@ _inst_format() {
     mkfs.ext4 -F -L "DAYSHIELD_BOOT" -O "^64bit,metadata_csum" -m 1 \
         "${boot}" >/dev/null 2>&1 || { _inst_err "mkfs.ext4 boot failed."; return 1; }
 
-    _inst_info "Formatting ${sysroot} as ext4 (system root) ..."
-    mkfs.ext4 -F -L "DAYSHIELD_ROOT" -O "^64bit,metadata_csum" -m 1 \
-        "${sysroot}" >/dev/null 2>&1 || { _inst_err "mkfs.ext4 sysroot failed."; return 1; }
+    _inst_info "Formatting ${roota} as ext4 (root slot A) ..."
+    mkfs.ext4 -F -L "DS_ROOT_A" -O "^64bit,metadata_csum" -m 1 \
+        "${roota}" >/dev/null 2>&1 || { _inst_err "mkfs.ext4 root A failed."; return 1; }
+
+    _inst_info "Formatting ${rootb} as ext4 (root slot B) ..."
+    mkfs.ext4 -F -L "DS_ROOT_B" -O "^64bit,metadata_csum" -m 1 \
+        "${rootb}" >/dev/null 2>&1 || { _inst_err "mkfs.ext4 root B failed."; return 1; }
 
     _inst_info "Formatting ${state} as ext4 (persistent state /var) ..."
-    mkfs.ext4 -F -L "DAYSHIELD_STATE" -O "^64bit,metadata_csum" -m 1 \
+    mkfs.ext4 -F -L "DS_STATE" -O "^64bit,metadata_csum" -m 1 \
         "${state}" >/dev/null 2>&1 || { _inst_err "mkfs.ext4 state failed."; return 1; }
     return 0
 }
@@ -1403,7 +1415,7 @@ _inst_require_rootfs_update_tooling() {
 _inst_install_rootfs() {
     local dev="$1" rootfs="$2" pfx target="/mnt/target"
     case "$dev" in nvme*|mmcblk*) pfx="${dev}p" ;; *) pfx="${dev}" ;; esac
-    local efi="/dev/${pfx}2" boot="/dev/${pfx}3" root="/dev/${pfx}4" state="/dev/${pfx}5"
+    local efi="/dev/${pfx}2" boot="/dev/${pfx}3" root="/dev/${pfx}4" state="/dev/${pfx}6"
 
     _inst_info "Mounting system root partition ..."
     mkdir -p "${target}"
@@ -1474,7 +1486,7 @@ _inst_install_bootloader() {
     local dev="$1" target="/mnt/target"
 
     _inst_info "Binding pseudo-filesystems ..."
-    for fs in proc sys dev dev/pts; do
+    for fs in proc sys dev dev/pts run; do
         mkdir -p "${target}/${fs}"
         mount --bind "/${fs}" "${target}/${fs}" >/dev/null 2>&1 || true
     done
@@ -1520,7 +1532,7 @@ _inst_install_bootloader() {
     chroot "${target}" grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1 || \
         _inst_err "grub-mkconfig warning"
 
-    for fs in dev/pts dev sys proc; do
+    for fs in dev/pts dev sys proc run; do
         umount "${target}/${fs}" 2>/dev/null || true
     done
     return 0
@@ -1549,7 +1561,7 @@ _inst_finalize() {
     local target="/mnt/target"
     _inst_info "Syncing writes ..."
     sync
-    for fs in dev/pts dev sys proc; do
+    for fs in dev/pts dev sys proc run; do
         umount "${target}/${fs}" 2>/dev/null || true
     done
     _inst_info "Unmounting persistent state partition ..."

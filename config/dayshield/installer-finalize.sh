@@ -142,20 +142,20 @@ print(network.network_address)
 PY
     )"
 else
-    lan_net="$({{
-        awk -v ip="${lan_ip}" -v prefix="${lan_prefix}" 'BEGIN {{
+    lan_net="$(
+        awk -v ip="${lan_ip}" -v prefix="${lan_prefix}" 'BEGIN {
             split(ip, oct, ".")
-            if (length(oct) != 4) {{
+            if (length(oct) != 4) {
                 exit 1
-            }}
-            for (i = 1; i <= 4; i++) {{
-                if (oct[i] !~ /^[0-9]+$/ || oct[i] < 0 || oct[i] > 255) {{
+            }
+            for (i = 1; i <= 4; i++) {
+                if (oct[i] !~ /^[0-9]+$/ || oct[i] < 0 || oct[i] > 255) {
                     exit 1
-                }}
-            }}
-            if (prefix < 0 || prefix > 32) {{
+                }
+            }
+            if (prefix < 0 || prefix > 32) {
                 exit 1
-            }}
+            }
 
             ipn = oct[1] * 16777216 + oct[2] * 65536 + oct[3] * 256 + oct[4]
             block = (prefix == 32) ? 1 : (2 ^ (32 - prefix))
@@ -166,11 +166,11 @@ else
             o3 = int(net / 256) % 256
             o4 = net % 256
             printf "%d.%d.%d.%d", o1, o2, o3, o4
-        }}'
-    }})" || {{
+        }'
+    )" || {
         _fin_err "failed to calculate LAN network for ${lan_ip}/${lan_prefix}"
         exit 1
-    }}
+    }
 fi
 subnet_cidr="${lan_net}/${lan_prefix}"
 
@@ -286,10 +286,10 @@ mkdir -p "${netdir}"
 rm -f "${netdir}/10-dayshield-eth.network"
 if [[ -n "${wan_iface}" ]]; then
     if [[ "${wan_type}" == "pppoe" ]]; then
-    ppp_esc_user="${wan_pppoe_user//\\/\\\\}"
-    ppp_esc_user="${ppp_esc_user//\"/\\\"}"
-    ppp_esc_pass="${wan_pppoe_pass//\\/\\\\}"
-    ppp_esc_pass="${ppp_esc_pass//\"/\\\"}"
+        ppp_esc_user="${wan_pppoe_user//\\/\\\\}"
+        ppp_esc_user="${ppp_esc_user//\"/\\\"}"
+        ppp_esc_pass="${wan_pppoe_pass//\\/\\\\}"
+        ppp_esc_pass="${ppp_esc_pass//\"/\\\"}"
         cat > "${netdir}/10-wan.network" <<EOF
 [Match]
 Name=${wan_iface}
@@ -318,7 +318,7 @@ mru 1492
 noipv6
 EOF
         chmod 600 "${target}/etc/ppp/peers/wan"
-    ppp_auth_line="\"${ppp_esc_user}\" * \"${ppp_esc_pass}\" *"
+        ppp_auth_line="\"${ppp_esc_user}\" * \"${ppp_esc_pass}\" *"
         printf '%s\n' "${ppp_auth_line}" > "${target}/etc/ppp/chap-secrets"
         printf '%s\n' "${ppp_auth_line}" > "${target}/etc/ppp/pap-secrets"
         chmod 600 "${target}/etc/ppp/chap-secrets" "${target}/etc/ppp/pap-secrets"
