@@ -469,8 +469,12 @@ server:
 EOF
 
 # DayShield core config.json
-# Generate a stable UUID for the seeded LAN accept rule.
+# Generate stable UUIDs for the seeded LAN accept rule and the DHCP scope.
+# DayShield's config model types these ids as UUIDs (unlike Kea, which uses
+# integer subnet ids), so they must be formatted UUID strings or config.json
+# fails to parse and every startup reconcile bails.
 _lan_rule_uuid="$(cat /proc/sys/kernel/random/uuid 2>/dev/null || printf 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee')"
+_dhcp_scope_uuid="$(cat /proc/sys/kernel/random/uuid 2>/dev/null || printf 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff')"
 _wan_interface_json=""
 if [[ -n "${wan_iface}" ]]; then
     _wan_mode_json='"dhcp"'
@@ -509,7 +513,7 @@ if [[ "${lan_dhcp_enable}" == "yes" ]]; then
     _dhcp_scopes_json="$(cat <<EOF
         [
             {
-                "id": 1,
+                "id": "${_dhcp_scope_uuid}",
                 "subnet": "${lan_ip}/${lan_prefix}",
                 "pool_start": "${dhcp_start}",
                 "pool_end": "${dhcp_end}",
