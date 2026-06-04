@@ -423,16 +423,19 @@ chmod 644 "${target}/var/lib/dayshield/kea/kea-dhcp6.conf"
 # Unbound DNS
 mkdir -p "${target}/etc/unbound" "${target}/var/lib/unbound"
 if ! chroot "${target}" /usr/sbin/unbound-anchor -a /var/lib/unbound/root.key >/dev/null 2>&1; then
-    _fin_warn "unbound-anchor failed; falling back to static trust anchor"
+    _fin_warn "unbound-anchor failed"
 fi
 # If unbound-anchor failed or had no network, seed from the static key shipped
 # by the dns-root-data package so the anchor is always present after install.
-if [[ ! -s "${target}/var/lib/unbound/root.key" ]] && \
-   [[ -f "${target}/usr/share/dns/root.key" ]]; then
-    if cp "${target}/usr/share/dns/root.key" "${target}/var/lib/unbound/root.key" 2>/dev/null; then
-        _fin_info "DNSSEC trust anchor seeded from dns-root-data"
+if [[ ! -s "${target}/var/lib/unbound/root.key" ]]; then
+    if [[ -f "${target}/usr/share/dns/root.key" ]]; then
+        if cp "${target}/usr/share/dns/root.key" "${target}/var/lib/unbound/root.key" 2>/dev/null; then
+            _fin_info "DNSSEC trust anchor seeded from dns-root-data"
+        else
+            _fin_warn "failed to seed DNSSEC trust anchor from dns-root-data; anchor may be missing"
+        fi
     else
-        _fin_warn "failed to seed DNSSEC trust anchor from dns-root-data"
+        _fin_warn "DNSSEC trust anchor missing and dns-root-data not available; unbound will bootstrap on first start"
     fi
 fi
 if ! chroot "${target}" chown -R unbound:unbound /var/lib/unbound 2>/dev/null; then
