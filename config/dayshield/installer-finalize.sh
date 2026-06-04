@@ -109,9 +109,15 @@ if ! [[ "${lan_prefix}" =~ ^[0-9]+$ ]] || [[ "${lan_prefix}" -lt 1 ]] || [[ "${l
     exit 1
 fi
 
-if ! _fin_validate_ipv4 "${dhcp_start}" || ! _fin_validate_ipv4 "${dhcp_end}"; then
-    _fin_err "invalid DHCP pool addresses: ${dhcp_start} - ${dhcp_end}"
-    exit 1
+if [[ -n "${dhcp_start}" || -n "${dhcp_end}" ]]; then
+    if [[ -z "${dhcp_start}" || -z "${dhcp_end}" ]]; then
+        _fin_err "dhcp_start and dhcp_end must both be provided or both empty"
+        exit 1
+    fi
+    if ! _fin_validate_ipv4 "${dhcp_start}" || ! _fin_validate_ipv4 "${dhcp_end}"; then
+        _fin_err "invalid DHCP pool addresses: ${dhcp_start} - ${dhcp_end}"
+        exit 1
+    fi
 fi
 
 if [[ ! -f "${target}/etc/shadow" ]]; then
@@ -348,6 +354,23 @@ mkdir -p \
     "${target}/var/lib/kea" \
     "${target}/var/log/kea" "${target}/var/log/dayshield" \
     "${target}/var/lib/dayshield/kea"
+if [[ "${lan_dhcp_enable}" == "yes" ]]; then
+    _kea_subnet4="$(cat <<EOF
+      {
+        "id": 1,
+        "subnet": "${subnet_cidr}",
+        "pools": [ { "pool": "${dhcp_start} - ${dhcp_end}" } ],
+        "valid-lifetime": 43200,
+        "option-data": [
+          { "name": "routers",             "data": "${lan_ip}" },
+          { "name": "domain-name-servers", "data": "${lan_ip}" }
+        ]
+      }
+EOF
+)"
+else
+    _kea_subnet4=""
+fi
 cat > "${target}/var/lib/dayshield/kea/kea-dhcp4.conf" <<EOF
 {
   "Dhcp4": {
@@ -361,16 +384,7 @@ cat > "${target}/var/lib/dayshield/kea/kea-dhcp4.conf" <<EOF
       "name": "/var/lib/kea/kea-leases4.csv"
     },
     "subnet4": [
-      {
-        "id": 1,
-        "subnet": "${subnet_cidr}",
-        "pools": [ { "pool": "${dhcp_start} - ${dhcp_end}" } ],
-        "valid-lifetime": 43200,
-        "option-data": [
-          { "name": "routers",             "data": "${lan_ip}" },
-          { "name": "domain-name-servers", "data": "${lan_ip}" }
-        ]
-      }
+${_kea_subnet4}
     ],
     "loggers": [
       { "name": "kea-dhcp4", "output_options": [ { "output": "/var/log/kea/kea-dhcp4.log" } ], "severity": "INFO" }
@@ -490,6 +504,27 @@ EOF
 )"
 fi
 
+if [[ "${lan_dhcp_enable}" == "yes" ]]; then
+    _dhcp_enabled='true'
+    _dhcp_scopes_json="$(cat <<EOF
+        [
+            {
+                "id": 1,
+                "subnet": "${lan_ip}/${lan_prefix}",
+                "pool_start": "${dhcp_start}",
+                "pool_end": "${dhcp_end}",
+                "dns_servers": ["${lan_ip}"],
+                "lease_seconds": 43200,
+                "reservations": []
+            }
+        ]
+EOF
+)"
+else
+    _dhcp_enabled='false'
+    _dhcp_scopes_json='[]'
+fi
+
 mkdir -p "${target}/var/lib/dayshield/config"
 cat > "${target}/var/lib/dayshield/config/config.json" <<EOF
 {
@@ -533,19 +568,9 @@ ${_wan_interface_json}
     "vpn_tunnels": [],
     "crowdsec_policies": [],
     "dhcp": {
-        "enabled": true,
+        "enabled": ${_dhcp_enabled},
         "interface": "${lan_iface}",
-        "scopes": [
-            {
-                "id": 1,
-                "subnet": "${lan_ip}/${lan_prefix}",
-                "pool_start": "${dhcp_start}",
-                "pool_end": "${dhcp_end}",
-                "dns_servers": ["${lan_ip}"],
-                "lease_seconds": 43200,
-                "reservations": []
-            }
-        ]
+        "scopes": ${_dhcp_scopes_json}
     },
     "system_settings": {
         "hostname": "${hostname}",
