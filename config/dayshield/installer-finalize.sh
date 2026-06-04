@@ -625,7 +625,10 @@ if grep -qE '(^|[[:space:]])installer([[:space:]]|$)' /proc/cmdline 2>/dev/null;
         if ss -H -ltn 'sport = :8443' 2>/dev/null | grep -q '[0-9]'; then
             # Get the process name(s) listening on 8443
             listeners=$(ss -H -ltnp 'sport = :8443' 2>/dev/null | awk '{print $NF}' | grep -oP 'users:\(\(.*pid=\d+,fd=\d+\)\)' | grep -oP 'pid=\d+' | cut -d= -f2 | xargs -r -n1 ps -p 2>/dev/null | awk 'NR>1{print $4}' | sort | uniq)
-            if ! echo "$listeners" | grep -Eq '(^| )httpd( |$)|(^| )installer-ui-web( |$)'; then
+            # The installer web UI is served by `exec busybox httpd`, so ps reports
+            # the process name as either "busybox" or "httpd" depending on the live
+            # environment's ps implementation. Both are the installer's own server.
+            if ! echo "$listeners" | grep -Eq '(^| )(busybox|httpd|installer-ui-web)( |$)'; then
                 _fin_err "live installer has an active TCP listener on port 8443 (process: $listeners)"
                 exit 1
             fi
