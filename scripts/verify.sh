@@ -93,6 +93,7 @@ for dir in \
     /var/lib/caddy \
     /etc/unbound \
     /etc/nftables \
+    /etc/kea \
     /var/lib/kea \
     /var/log/kea \
     /var/log/dayshield \
@@ -235,6 +236,13 @@ if [ -f "${DS_ENGINE_PATHS}" ] && \
     ok "dayshield.service can write SSH runtime config"
 else
     fail "dayshield.service sandbox missing ReadWritePaths=/etc/ssh"
+fi
+
+if [ -f "${DS_ENGINE_PATHS}" ] && \
+   grep -Eq '^[[:space:]]*ReadWritePaths[[:space:]]*=[[:space:]]*/etc/kea[[:space:]]*$' "${DS_ENGINE_PATHS}"; then
+    ok "dayshield.service can write Kea system config path (/etc/kea)"
+else
+    fail "dayshield.service sandbox missing ReadWritePaths=/etc/kea"
 fi
 
 if [ -f "${DS_ENGINE_PATHS}" ] && \
